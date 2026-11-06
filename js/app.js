@@ -98,7 +98,7 @@
             </div>
           </div>
           <div class="hero-art">
-            <img src="assets/rust-uwu.webp" width="1939" height="811" alt="">
+            <img src="assets/fox-mascot.webp" width="1374" height="1145" alt="">
           </div>
         </div>
       </section>
