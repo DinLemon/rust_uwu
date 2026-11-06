@@ -788,6 +788,20 @@
   }
 
   // ---------- Шпаргалка ----------
+  function showSectionFox(slot, scene) {
+    const img = new Image();
+    img.alt = "";
+    img.decoding = "async";
+    slot.dataset.foxScene = scene;
+    slot.replaceChildren(img);
+    slot.hidden = false;
+    img.addEventListener("load", () => img.classList.add("ready"), { once: true });
+    img.addEventListener("error", () => {
+      if (img.parentElement === slot) slot.hidden = true;
+    }, { once: true });
+    img.src = `assets/fox-${scene}.webp`;
+  }
+
   function viewCheat() {
     setNav("cheat");
     document.title = T.cheatTitle + T.titleSuffix;
@@ -796,10 +810,39 @@
       html += `<h2 style="margin-top:1.6rem">${mi}. ${esc(m.title)}</h2>`;
       m.lessons.forEach((l) => {
         const items = l.cards.filter((c) => c.t === "recap").flatMap((c) => c.items);
-        if (items.length) html += `<h3><a href="#/l/${l.id}/0">${esc(l.title)}</a></h3><ul class="tldr">${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ul>`;
+        if (!items.length) return;
+        html += `<section class="cheat-recap">
+          <div class="cheat-recap-head"><h3><a href="#/l/${l.id}/0">${esc(l.title)}</a></h3>
+            ${T.cheatCopy ? `<button type="button" class="btn btn-quiet btn-sm cheat-copy">${T.cheatCopy}</button>` : ""}</div>
+          <div class="cheat-reaction"><span role="status"></span><div class="section-fox" aria-hidden="true" hidden></div></div>
+          <ul class="tldr">${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ul>
+        </section>`;
       });
     });
     app.innerHTML = html + `</div>`;
+    const cheat = app.querySelector(".cheat");
+    let lastRecap, request = 0;
+    cheat.addEventListener("click", async (event) => {
+      const button = event.target.closest(".cheat-copy");
+      if (!button) return;
+      const recap = button.closest(".cheat-recap");
+      const selected = ++request;
+      if (lastRecap) {
+        lastRecap.querySelector("[role=status]").textContent = "";
+        lastRecap.querySelector(".section-fox").hidden = true;
+      }
+      lastRecap = recap;
+      const status = recap.querySelector("[role=status]");
+      const copiedText = [...recap.querySelectorAll(".tldr li")].map((li) => `- ${li.textContent.trim()}`).join("\n");
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(copiedText);
+        copied = true;
+      } catch { /* У браузера может не быть доступа к буферу обмена. */ }
+      if (selected !== request || !recap.isConnected) return;
+      status.textContent = copied ? T.cheatCopied : T.cheatCopyFailed;
+      if (copied) showSectionFox(recap.querySelector(".section-fox"), "copy");
+    });
   }
 
   // ---------- Словарь ----------
@@ -809,12 +852,34 @@
     const lang = S.settings.lang;
     const terms = ((window.GLOSSARIES || {})[lang] || []).slice().sort((a, b) => a.term.localeCompare(b.term, lang));
     app.innerHTML = `<div class="wrap"><h1>${T.glossTitle}</h1><p class="muted">${T.glossText}</p>
-      <input class="search" type="search" placeholder="${T.glossSearch}" aria-label="${T.glossSearch}"><dl class="gloss"></dl></div>`;
-    const dl = app.querySelector("dl"), q = app.querySelector("input");
+      <input class="search" type="search" placeholder="${T.glossSearch}" aria-label="${T.glossSearch}">
+      <div class="gloss"></div><div class="gloss-empty" hidden>
+        <p class="muted" role="status"></p><div class="section-fox" aria-hidden="true" hidden></div>
+      </div></div>`;
+    const list = app.querySelector(".gloss"), q = app.querySelector("input");
+    const empty = app.querySelector(".gloss-empty");
+    list.addEventListener("toggle", (event) => {
+      if (event.target.open) showSectionFox(event.target.querySelector(".section-fox"), "book");
+    }, true);
     const paint = () => {
       const s = q.value.trim().toLowerCase();
-      dl.innerHTML = terms.filter((t) => !s || (t.term + " " + (t.en || "") + " " + t.def).toLowerCase().includes(s))
-        .map((t) => `<dt>${esc(t.term)} ${t.en && t.en !== t.term ? `<small>${esc(t.en)}</small>` : ""}</dt><dd>${inline(t.def)}</dd>`).join("") || `<p class="muted">${T.glossNone}</p>`;
+      const found = terms.filter((t) => !s || (t.term + " " + (t.en || "") + " " + t.def).toLowerCase().includes(s));
+      if (!found.length) {
+        if (empty.hidden) {
+          list.replaceChildren();
+          empty.hidden = false;
+          empty.querySelector("[role=status]").textContent = T.glossNone;
+          showSectionFox(empty.querySelector(".section-fox"), "search");
+        }
+        return;
+      }
+      empty.hidden = true;
+      empty.querySelector("[role=status]").textContent = "";
+      list.innerHTML = found.map((t) => `<details class="gloss-entry" name="gloss-entry">
+        <summary>${esc(t.term)} ${t.en && t.en !== t.term ? `<small>${esc(t.en)}</small>` : ""}</summary>
+        <div class="gloss-definition"><div>${inline(t.def)}</div>
+          <div class="section-fox" aria-hidden="true" hidden></div></div>
+      </details>`).join("");
     };
     q.oninput = paint; paint();
   }
