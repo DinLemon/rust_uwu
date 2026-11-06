@@ -535,6 +535,7 @@
       if (ok) fb.innerHTML = `<div class="feedback good"><b>${T.gotIt}</b> ${c.explain ? inline(c.explain) : T.taskDone}</div>`;
       else if (res.ok && c.expect != null && norm(res.stdout) !== norm(c.expect)) fb.innerHTML = `<div class="feedback bad"><b>${T.wrongOut}</b> ${T.expected}<pre class="code" style="margin:.4rem 0 0"><code>${esc(c.expect)}</code></pre></div>`;
       else if (res.ok && c.mustContain) fb.innerHTML = `<div class="feedback bad"><b>${T.missing}</b> ${c.mustContain.map((s) => `<code>${esc(s)}</code>`).join(", ")}</div>`;
+      else if (c.tests && !/error(\[E\d+\])?:/.test(res.stderr || "")) fb.innerHTML = `<div class="feedback bad"><b>${T.testsFailed}</b> ${inline(T.testsFailedText)}</div>`;
       else fb.innerHTML = `<div class="feedback bad"><b>${T.noCompile}</b> ${T.noCompileText}</div>`;
     };
   }

@@ -1,0 +1,408 @@
+# MODULE m16 | Smart pointers | Box, Rc and RefCell
+
+## LESSON m16-1 | Box — a value in the heap | 6
+:: goals
+- What a smart pointer is
+- When you need `Box`
+
+:: text A smart pointer
+A **pointer** is the address of a value in memory. A **smart** pointer is an address plus rules: who owns it, when to delete it.
+
+You have already used smart pointers: `String` and `Vec` are like that too.
+
+:: text Box — a box in the storage room
+`Box<T>` puts a value into the heap, and you keep a small address.
+
+```rust
+let b = Box::new(5);
+println!("{}", b); // 5
+```
+When you need Box:
+- a type refers to itself (a tree, a list);
+- a value is very big and you do not want to copy it;
+- you need `Box<dyn Trait>` — different types in one list.
+
+:: code
+A type that contains itself. Without `Box` its size would be infinite.
+```rust
+#[derive(Debug)]
+enum List {
+    Node(i32, Box<List>),
+    End,
+}
+
+use List::{End, Node};
+
+fn sum(list: &List) -> i32 {
+    match list {
+        Node(value, next) => value + sum(next),
+        End => 0,
+    }
+}
+
+fn main() {
+    let list = Node(1, Box::new(Node(2, Box::new(Node(3, Box::new(End))))));
+    println!("{:?}", list);
+    println!("Sum: {}", sum(&list));
+}
+```
+```out
+Node(1, Node(2, Node(3, End)))
+Sum: 6
+```
+`sum` calls itself. This is called **recursion**.
+
+:: quiz
+Why is there a `Box` in `Node(i32, Box<List>)`?
+[ ] To make the list faster => Speed has nothing to do with it.
+[x] So the size of the type is known: a Box is just an address => Correct. Without Box the list would contain itself endlessly.
+[ ] So the list can be changed => Changing needs `mut`, not Box.
+
+:: deep How Box<dyn Trait> works
+`Box<dyn Trait>` stores **two** addresses:
+1. the address of the data itself in the heap;
+2. the address of the **method table** (vtable) for this type.
+
+When you call a method, the program looks in the table and finds the right function. This is called **dynamic dispatch**. It is a bit slower than a normal call, but it lets you keep different types in one list.
+
+```rust
+fn main() {
+    println!("{}", std::mem::size_of::<Box<i32>>());
+    println!("{}", std::mem::size_of::<Box<dyn std::fmt::Debug>>());
+}
+```
+```out
+8
+16
+```
+A normal `Box` is 8 bytes, `Box<dyn ...>` is 16: two addresses.
+
+:: recap
+- A smart pointer is an address plus ownership rules.
+- `Box::new(x)` puts `x` into the heap.
+- Box is needed for recursive types and `dyn Trait`.
+
+## LESSON m16-2 | Rc — a shared owner | 6
+:: goals
+- How to give a value several owners
+- What `Rc` counts
+
+:: text Sometimes there are several owners
+The rule "one owner" sometimes gets in the way. For example, two rooms in a game use the same texture.
+
+`Rc<T>` (reference counting) allows **several owners**. It counts how many there are. When the last one leaves, the value is deleted.
+
+> Analogy: a shared TV in a dormitory. There is a counter of viewers. When the last one leaves, the TV is turned off.
+
+:: code
+```rust
+use std::rc::Rc;
+
+fn main() {
+    let song = Rc::new(String::from("Favorite song"));
+    println!("Owners: {}", Rc::strong_count(&song));
+    let anna = Rc::clone(&song);
+    let bob = Rc::clone(&song);
+    println!("Owners: {}", Rc::strong_count(&song));
+    drop(anna);
+    println!("Owners: {}", Rc::strong_count(&song));
+    println!("{bob}");
+}
+```
+```out
+Owners: 1
+Owners: 3
+Owners: 2
+Favorite song
+```
+`Rc::clone` does not copy the song; it only increases the counter. This is cheap. `drop` deletes a variable early.
+
+:: quiz
+What does `Rc::clone(&x)` do?
+[ ] Copies all the data => No, the data is the same. Only the counter grows.
+[x] Adds one more owner of the same data => Correct.
+[ ] Deletes `x` => The opposite: there are more owners.
+
+:: deep Cycles and Weak
+If two values hold an `Rc` to each other, their counters never reach zero. The memory is never freed — this is a **leak**.
+
+For such links there is `Weak` — a "weak" reference. It does not increase the main counter. You get the value from it with `.upgrade()`: it returns `Some` if the value is still alive, and `None` if it is not.
+
+```rust
+use std::rc::{Rc, Weak};
+
+fn main() {
+    let strong = Rc::new(5);
+    let weak: Weak<i32> = Rc::downgrade(&strong);
+    println!("{:?}", weak.upgrade());
+    drop(strong);
+    println!("{:?}", weak.upgrade());
+}
+```
+```out
+Some(5)
+None
+```
+A typical example: in a tree a parent holds its children with `Rc`, and a child holds its parent with `Weak`.
+
+:: recap
+- `Rc<T>` gives one value several owners.
+- `Rc::clone` is cheap: only counter +1.
+- `Rc` is read-only and works in one thread only.
+
+## LESSON m16-3 | RefCell — changing through shared access | 7
+:: goals
+- What interior mutability is
+- The combination `Rc<RefCell<T>>`
+
+:: text The check happens at run time, not at compile time
+`Rc` only lets you read. What if several owners need to **change** the value?
+
+`RefCell<T>` moves the borrowing check from compile time **to run time**. The rule is the same: many readers or one writer. Break it — and you get a panic.
+
+- `.borrow()` — take for reading;
+- `.borrow_mut()` — take for writing.
+
+:: code
+A shared counter that two players change:
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn main() {
+    let score = Rc::new(RefCell::new(0));
+    let player1 = Rc::clone(&score);
+    let player2 = Rc::clone(&score);
+
+    *player1.borrow_mut() += 10;
+    *player2.borrow_mut() += 5;
+
+    println!("Shared score: {}", score.borrow());
+}
+```
+```out
+Shared score: 15
+```
+
+:: code
+Now let us break the rule: two writers at the same time. Run it.
+```rust
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+    let a = data.borrow_mut();
+    let b = data.borrow_mut();
+    println!("{:?} {:?}", a, b);
+}
+```
+The compiler allows it, but the program panics: `already borrowed`. This is the price of flexibility: the error is caught by running, not by the compiler.
+
+:: quiz
+When does `RefCell` check the borrowing rules?
+[ ] At compile time => Normal references do that. RefCell checks later.
+[x] While the program runs => Correct. Breaking the rule is a panic.
+
+:: text Cell — for simple values
+For `Copy` types (numbers, `bool`) there is the simpler `Cell`. It gives out no references; it just puts and takes a value:
+
+```rust
+use std::cell::Cell;
+let counter = Cell::new(0);
+counter.set(counter.get() + 1);
+```
+`Cell` never panics: there are no references, so there is nothing to break.
+
+:: recap
+- `RefCell<T>` allows changing through shared access, with the check at run time.
+- `Rc<RefCell<T>>` is a shared changeable value in one thread.
+- Try normal references first. Use RefCell when there is no other way.
+
+## LESSON m16-p | Practice: smart pointers | 14 | practice
+:: goals
+- Build recursive types with `Box`
+- Share data with `Rc` and `RefCell`
+- Store different types with `Box<dyn Trait>`
+
+:: task
+A binary tree: a node has a number and two optional children. Complete the function `sum` that adds up all numbers of the tree.
+```rust
+struct Node {
+    value: i32,
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+}
+
+fn sum(node: &Option<Box<Node>>) -> i32 {
+    0
+}
+
+fn leaf(v: i32) -> Option<Box<Node>> {
+    Some(Box::new(Node { value: v, left: None, right: None }))
+}
+
+fn main() {
+    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));
+    println!("{}", sum(&tree));
+}
+```
+```solution
+struct Node {
+    value: i32,
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+}
+
+fn sum(node: &Option<Box<Node>>) -> i32 {
+    match node {
+        Some(n) => n.value + sum(&n.left) + sum(&n.right),
+        None => 0,
+    }
+}
+
+fn leaf(v: i32) -> Option<Box<Node>> {
+    Some(Box::new(Node { value: v, left: None, right: None }))
+}
+
+fn main() {
+    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));
+    println!("{}", sum(&tree));
+}
+```
+```expect
+6
+```
+hint: Check `node` with `match`: for `None` return 0.
+hint: `Some(n) => n.value + sum(&n.left) + sum(&n.right),`
+
+:: task
+A shared log. Two "modules" of a program write into one list through `Rc<RefCell<Vec<String>>>`. Complete the function `log`.
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {
+}
+
+fn main() {
+    let journal = Rc::new(RefCell::new(Vec::new()));
+    let network = Rc::clone(&journal);
+    let disk = Rc::clone(&journal);
+    log(&network, "network connected");
+    log(&disk, "disk ready");
+    println!("{:?}", journal.borrow());
+}
+```
+```solution
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {
+    journal.borrow_mut().push(msg.to_string());
+}
+
+fn main() {
+    let journal = Rc::new(RefCell::new(Vec::new()));
+    let network = Rc::clone(&journal);
+    let disk = Rc::clone(&journal);
+    log(&network, "network connected");
+    log(&disk, "disk ready");
+    println!("{:?}", journal.borrow());
+}
+```
+```expect
+["network connected", "disk ready"]
+```
+hint: To change what is inside a `RefCell`, you need `borrow_mut()`.
+hint: `journal.borrow_mut().push(msg.to_string());`
+
+:: task
+The program panics with `already borrowed`. Fix it: end the first borrow before the second one starts.
+```rust
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+    let mut first = data.borrow_mut();
+    first.push(4);
+    let mut second = data.borrow_mut();
+    second.push(5);
+    drop(second);
+    println!("{:?}", data.borrow());
+}
+```
+```solution
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+    {
+        let mut first = data.borrow_mut();
+        first.push(4);
+    }
+    let mut second = data.borrow_mut();
+    second.push(5);
+    drop(second);
+    println!("{:?}", data.borrow());
+}
+```
+```expect
+[1, 2, 3, 4, 5]
+```
+hint: A borrow ends when the variable `first` disappears.
+hint: Put the two lines with `first` into a separate block `{ ... }`, or write `drop(first);` after `push(4)`.
+
+:: task
+Add up the areas of shapes of different types that are stored in one vector `Vec<Box<dyn Shape>>`.
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Sq(f64);
+struct Rect(f64, f64);
+
+impl Shape for Sq {
+    fn area(&self) -> f64 { self.0 * self.0 }
+}
+impl Shape for Rect {
+    fn area(&self) -> f64 { self.0 * self.1 }
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];
+    let total = 0.0;
+    println!("{total}");
+}
+```
+```solution
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Sq(f64);
+struct Rect(f64, f64);
+
+impl Shape for Sq {
+    fn area(&self) -> f64 { self.0 * self.0 }
+}
+impl Shape for Rect {
+    fn area(&self) -> f64 { self.0 * self.1 }
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];
+    let total: f64 = shapes.iter().map(|s| s.area()).sum();
+    println!("{total}");
+}
+```
+```expect
+19
+```
+hint: Go through the vector and call `area()` on each shape.
+hint: `let total: f64 = shapes.iter().map(|s| s.area()).sum();`
+
+:: recap
+- `Box` is for recursive types and `dyn Trait`.
+- `Rc<RefCell<T>>` is shared changeable data in one thread.
+- A `RefCell` borrow ends when its variable disappears.

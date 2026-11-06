@@ -58,6 +58,25 @@ Node(1, Node(2, Node(3, End)))
 [x] Чтобы размер типа был известен: Box — это просто адрес => Верно. Без Box список вкладывался бы сам в себя бесконечно.
 [ ] Чтобы список можно было менять => Для изменения нужен `mut`, а не Box.
 
+:: deep Как работает Box<dyn Трейт>
+`Box<dyn Трейт>` хранит **два** адреса:
+1. адрес самих данных в куче;
+2. адрес **таблицы методов** (vtable) для этого типа.
+
+Когда ты вызываешь метод, программа смотрит в таблицу и находит нужную функцию. Это называют **динамической диспетчеризацией**. Она чуть медленнее обычного вызова, зато позволяет хранить разные типы в одном списке.
+
+```rust
+fn main() {
+    println!("{}", std::mem::size_of::<Box<i32>>());
+    println!("{}", std::mem::size_of::<Box<dyn std::fmt::Debug>>());
+}
+```
+```out
+8
+16
+```
+Обычный `Box` — 8 байт, `Box<dyn ...>` — 16: два адреса.
+
 :: recap
 - Умный указатель — адрес плюс правила владения.
 - `Box::new(x)` кладёт `x` в кучу.
@@ -103,6 +122,28 @@ fn main() {
 [ ] Копирует данные целиком => Нет, данные одни. Растёт только счётчик.
 [x] Добавляет ещё одного владельца тех же данных => Верно.
 [ ] Удаляет `x` => Наоборот, владельцев становится больше.
+
+:: deep Циклы и Weak
+Если два значения держат `Rc` друг на друга, их счётчики никогда не станут нулём. Память не освободится — это **утечка**.
+
+Для таких связей есть `Weak` — «слабая» ссылка. Она не увеличивает главный счётчик. Получить значение из неё можно через `.upgrade()`: вернётся `Some`, если значение ещё живо, и `None`, если уже нет.
+
+```rust
+use std::rc::{Rc, Weak};
+
+fn main() {
+    let strong = Rc::new(5);
+    let weak: Weak<i32> = Rc::downgrade(&strong);
+    println!("{:?}", weak.upgrade());
+    drop(strong);
+    println!("{:?}", weak.upgrade());
+}
+```
+```out
+Some(5)
+None
+```
+Типичный пример: в дереве родитель держит детей через `Rc`, а ребёнок родителя — через `Weak`.
 
 :: recap
 - `Rc<T>` — несколько владельцев одного значения.
@@ -162,7 +203,206 @@ fn main() {
 [ ] При компиляции => Это делают обычные ссылки. RefCell проверяет позже.
 [x] Во время работы программы => Верно. Нарушение — паника.
 
+:: text Cell — для простых значений
+Для типов `Copy` (числа, `bool`) есть более простой `Cell`. Он не выдаёт ссылок, а просто кладёт и достаёт значение:
+
+```rust
+use std::cell::Cell;
+let counter = Cell::new(0);
+counter.set(counter.get() + 1);
+```
+`Cell` никогда не паникует: ссылок нет, значит, нечего нарушать.
+
 :: recap
 - `RefCell<T>` — менять через общий доступ, проверка при запуске.
 - `Rc<RefCell<T>>` — общее изменяемое значение в одном потоке.
 - Сначала пробуй обычные ссылки. RefCell — когда без него никак.
+
+## LESSON m16-p | Практика: умные указатели | 14 | practice
+:: goals
+- Строить рекурсивные типы через `Box`
+- Делить данные через `Rc` и `RefCell`
+- Хранить разные типы через `Box<dyn Трейт>`
+
+:: task
+Двоичное дерево: у узла есть число и два необязательных потомка. Допиши функцию `sum`, которая складывает все числа дерева.
+```rust
+struct Node {
+    value: i32,
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+}
+
+fn sum(node: &Option<Box<Node>>) -> i32 {
+    0
+}
+
+fn leaf(v: i32) -> Option<Box<Node>> {
+    Some(Box::new(Node { value: v, left: None, right: None }))
+}
+
+fn main() {
+    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));
+    println!("{}", sum(&tree));
+}
+```
+```solution
+struct Node {
+    value: i32,
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+}
+
+fn sum(node: &Option<Box<Node>>) -> i32 {
+    match node {
+        Some(n) => n.value + sum(&n.left) + sum(&n.right),
+        None => 0,
+    }
+}
+
+fn leaf(v: i32) -> Option<Box<Node>> {
+    Some(Box::new(Node { value: v, left: None, right: None }))
+}
+
+fn main() {
+    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));
+    println!("{}", sum(&tree));
+}
+```
+```expect
+6
+```
+hint: Разбери `node` через `match`: для `None` верни 0.
+hint: `Some(n) => n.value + sum(&n.left) + sum(&n.right),`
+
+:: task
+Общий журнал. Два «модуля» программы пишут в один список через `Rc<RefCell<Vec<String>>>`. Допиши функцию `log`.
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {
+}
+
+fn main() {
+    let journal = Rc::new(RefCell::new(Vec::new()));
+    let network = Rc::clone(&journal);
+    let disk = Rc::clone(&journal);
+    log(&network, "сеть подключена");
+    log(&disk, "диск готов");
+    println!("{:?}", journal.borrow());
+}
+```
+```solution
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {
+    journal.borrow_mut().push(msg.to_string());
+}
+
+fn main() {
+    let journal = Rc::new(RefCell::new(Vec::new()));
+    let network = Rc::clone(&journal);
+    let disk = Rc::clone(&journal);
+    log(&network, "сеть подключена");
+    log(&disk, "диск готов");
+    println!("{:?}", journal.borrow());
+}
+```
+```expect
+["сеть подключена", "диск готов"]
+```
+hint: Чтобы изменить содержимое `RefCell`, нужно `borrow_mut()`.
+hint: `journal.borrow_mut().push(msg.to_string());`
+
+:: task
+Программа паникует с `already borrowed`. Почини её: закончи первое заимствование раньше, чем начинается второе.
+```rust
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+    let mut first = data.borrow_mut();
+    first.push(4);
+    let mut second = data.borrow_mut();
+    second.push(5);
+    drop(second);
+    println!("{:?}", data.borrow());
+}
+```
+```solution
+use std::cell::RefCell;
+
+fn main() {
+    let data = RefCell::new(vec![1, 2, 3]);
+    {
+        let mut first = data.borrow_mut();
+        first.push(4);
+    }
+    let mut second = data.borrow_mut();
+    second.push(5);
+    drop(second);
+    println!("{:?}", data.borrow());
+}
+```
+```expect
+[1, 2, 3, 4, 5]
+```
+hint: Заимствование заканчивается, когда переменная `first` исчезает.
+hint: Заключи две строки с `first` в отдельный блок `{ ... }` или напиши `drop(first);` после `push(4)`.
+
+:: task
+Сложи площади фигур разных типов, которые лежат в одном векторе `Vec<Box<dyn Shape>>`.
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Sq(f64);
+struct Rect(f64, f64);
+
+impl Shape for Sq {
+    fn area(&self) -> f64 { self.0 * self.0 }
+}
+impl Shape for Rect {
+    fn area(&self) -> f64 { self.0 * self.1 }
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];
+    let total = 0.0;
+    println!("{total}");
+}
+```
+```solution
+trait Shape {
+    fn area(&self) -> f64;
+}
+
+struct Sq(f64);
+struct Rect(f64, f64);
+
+impl Shape for Sq {
+    fn area(&self) -> f64 { self.0 * self.0 }
+}
+impl Shape for Rect {
+    fn area(&self) -> f64 { self.0 * self.1 }
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];
+    let total: f64 = shapes.iter().map(|s| s.area()).sum();
+    println!("{total}");
+}
+```
+```expect
+19
+```
+hint: Пройди по вектору и вызови `area()` у каждой фигуры.
+hint: `let total: f64 = shapes.iter().map(|s| s.area()).sum();`
+
+:: recap
+- `Box` — для рекурсивных типов и `dyn Трейт`.
+- `Rc<RefCell<T>>` — общие изменяемые данные в одном потоке.
+- Заимствование `RefCell` заканчивается, когда исчезает его переменная.

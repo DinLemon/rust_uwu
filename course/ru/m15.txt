@@ -58,6 +58,16 @@ tests: yes
 [x] Проваливает тест, если `x` не равен 10 => Верно.
 [ ] Печатает `x` => Печатает только при провале, чтобы показать разницу.
 
+:: text Ещё проверки и свои сообщения
+- `assert_ne!(a, b)` — «a **не** должно равняться b».
+- К любой проверке можно добавить своё сообщение. Оно появится при провале:
+
+```rust
+assert!(age >= 18, "возраст {age} меньше 18");
+assert_eq!(total, 100, "сумма должна быть 100");
+```
+Хорошее сообщение экономит время: сразу видно, что пошло не так.
+
 :: recap
 - `#[test] fn имя() { ... }` — тест.
 - `assert_eq!(a, b)`, `assert!(условие)` — проверки.
@@ -131,7 +141,177 @@ hint: Тело функции — одно выражение: `age >= 18`.
 hint: Тест: `#[test] fn twenty() { assert!(is_adult(20)); }`. Для 10 — `assert!(!is_adult(10));`
 explain: Тесты прошли. Так и пишут надёжные программы: функция + проверки.
 
+:: deep Тесты в документации и папка tests
+В Rust есть ещё два вида тестов.
+
+**Документирующие тесты.** Пример кода в комментарии `///` тоже запускается командой `cargo test`. Так документация никогда не устаревает:
+
+```rust
+/// Удваивает число.
+///
+/// ```
+/// assert_eq!(my_crate::double(2), 4);
+/// ```
+pub fn double(x: i32) -> i32 { x * 2 }
+```
+
+**Интеграционные тесты.** Файлы в папке `tests/` рядом с `src/`. Они видят библиотеку так же, как её будут видеть другие программы: только публичные функции.
+
+Итого: модульные тесты (`mod tests`) проверяют детали, интеграционные — работу целиком, документирующие — что примеры верны.
+
 :: recap
 - `#[should_panic]` — тест ждёт панику.
 - Тест может вернуть `Result` и использовать `?`.
 - Пиши тесты на обычные случаи и на граничные: 0, пусто, очень много.
+
+## LESSON m15-p | Практика: тесты | 12 | practice
+:: goals
+- Писать тесты к своим функциям
+- Находить ошибки с помощью тестов
+
+:: task
+Напиши два теста для `max_of`: для `[3, 9, 2]` ответ `9`, для `[-5, -1]` ответ `-1`.
+```rust
+pub fn max_of(items: &[i32]) -> i32 {
+    let mut best = items[0];
+    for &x in items {
+        if x > best {
+            best = x;
+        }
+    }
+    best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}
+```
+```solution
+pub fn max_of(items: &[i32]) -> i32 {
+    let mut best = items[0];
+    for &x in items {
+        if x > best {
+            best = x;
+        }
+    }
+    best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positive() {
+        assert_eq!(max_of(&[3, 9, 2]), 9);
+    }
+
+    #[test]
+    fn negative() {
+        assert_eq!(max_of(&[-5, -1]), -1);
+    }
+}
+```
+tests: yes
+contains: #[test]
+hint: Каждый тест — `#[test] fn имя() { assert_eq!(...); }`
+hint: `assert_eq!(max_of(&[3, 9, 2]), 9);`
+
+:: task
+Тесты уже написаны, но функция с ошибкой. Найди ошибку по сообщению о провале и почини функцию.
+```rust
+pub fn average(items: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for x in items {
+        sum += x;
+    }
+    sum / 2.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn three_items() {
+        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);
+    }
+
+    #[test]
+    fn two_items() {
+        assert_eq!(average(&[4.0, 6.0]), 5.0);
+    }
+}
+```
+```solution
+pub fn average(items: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for x in items {
+        sum += x;
+    }
+    sum / items.len() as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn three_items() {
+        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);
+    }
+
+    #[test]
+    fn two_items() {
+        assert_eq!(average(&[4.0, 6.0]), 5.0);
+    }
+}
+```
+tests: yes
+hint: Тест с двумя числами проходит, а с тремя — нет. Что в функции работает только для двух чисел?
+hint: Делить нужно на количество: `sum / items.len() as f64`.
+
+:: task
+Функция `first_char` паникует на пустой строке. Напиши тест с `#[should_panic]`, который это проверяет.
+```rust
+pub fn first_char(s: &str) -> char {
+    s.chars().next().expect("пустая строка")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}
+```
+```solution
+pub fn first_char(s: &str) -> char {
+    s.chars().next().expect("пустая строка")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn empty_panics() {
+        first_char("");
+    }
+}
+```
+tests: yes
+contains: should_panic
+hint: Два атрибута подряд: `#[test]` и `#[should_panic]`.
+hint: Внутри теста просто вызови `first_char("");`
+
+:: quiz
+Тест упал с сообщением `left: 4, right: 5`. Что это значит?
+[x] Функция вернула 4, а тест ожидал 5 => Верно. `left` — первое значение в `assert_eq!`, `right` — второе.
+[ ] В тесте 4 ошибки из 5 => Это не количество ошибок, а два сравниваемых значения.
+[ ] Тест запускался 4 раза => Числа — это значения, которые не совпали.
+
+:: recap
+- Тесты пишут рядом с кодом, в `#[cfg(test)] mod tests`.
+- Сообщение о провале показывает `left` и `right` — с ним ошибку найти проще.
+- `#[should_panic]` проверяет, что паника случилась.

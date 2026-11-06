@@ -4908,6 +4908,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Ещё проверки и свои сообщения",
+"md": "- `assert_ne!(a, b)` — «a **не** должно равняться b».\n- К любой проверке можно добавить своё сообщение. Оно появится при провале:\n\n```\nassert!(age >= 18, \"возраст {age} меньше 18\");\nassert_eq!(total, 100, \"сумма должна быть 100\");\n```\nХорошее сообщение экономит время: сразу видно, что пошло не так."
+},
+{
 "t": "recap",
 "items": [
 "`#[test] fn имя() { ... }` — тест.",
@@ -4952,6 +4957,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Тесты в документации и папка tests",
+"md": "В Rust есть ещё два вида тестов.\n\n**Документирующие тесты.** Пример кода в комментарии `///` тоже запускается командой `cargo test`. Так документация никогда не устаревает:\n\n```\n/// Удваивает число.\n///\n/// ```\n/// assert_eq!(my_crate::double(2), 4);\n/// ```\npub fn double(x: i32) -> i32 { x * 2 }\n```\n\n**Интеграционные тесты.** Файлы в папке `tests/` рядом с `src/`. Они видят библиотеку так же, как её будут видеть другие программы: только публичные функции.\n\nИтого: модульные тесты (`mod tests`) проверяют детали, интеграционные — работу целиком, документирующие — что примеры верны."
+},
+{
 "t": "recap",
 "items": [
 "`#[should_panic]` — тест ждёт панику.",
@@ -4963,6 +4973,80 @@ window.COURSES = {
 "goals": [
 "Проверить, что функция паникует",
 "Проверять `Result` в тестах"
+]
+},
+{
+"id": "m15-p",
+"title": "Практика: тесты",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"tests": true,
+"mustContain": [
+"#[test]"
+],
+"md": "Напиши два теста для `max_of`: для `[3, 9, 2]` ответ `9`, для `[-5, -1]` ответ `-1`.",
+"code": "pub fn max_of(items: &[i32]) -> i32 {\n    let mut best = items[0];\n    for &x in items {\n        if x > best {\n            best = x;\n        }\n    }\n    best\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n}",
+"solution": "pub fn max_of(items: &[i32]) -> i32 {\n    let mut best = items[0];\n    for &x in items {\n        if x > best {\n            best = x;\n        }\n    }\n    best\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn positive() {\n        assert_eq!(max_of(&[3, 9, 2]), 9);\n    }\n\n    #[test]\n    fn negative() {\n        assert_eq!(max_of(&[-5, -1]), -1);\n    }\n}",
+"hints": [
+"Каждый тест — `#[test] fn имя() { assert_eq!(...); }`",
+"`assert_eq!(max_of(&[3, 9, 2]), 9);`"
+]
+},
+{
+"t": "task",
+"tests": true,
+"md": "Тесты уже написаны, но функция с ошибкой. Найди ошибку по сообщению о провале и почини функцию.",
+"code": "pub fn average(items: &[f64]) -> f64 {\n    let mut sum = 0.0;\n    for x in items {\n        sum += x;\n    }\n    sum / 2.0\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn three_items() {\n        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);\n    }\n\n    #[test]\n    fn two_items() {\n        assert_eq!(average(&[4.0, 6.0]), 5.0);\n    }\n}",
+"solution": "pub fn average(items: &[f64]) -> f64 {\n    let mut sum = 0.0;\n    for x in items {\n        sum += x;\n    }\n    sum / items.len() as f64\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn three_items() {\n        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);\n    }\n\n    #[test]\n    fn two_items() {\n        assert_eq!(average(&[4.0, 6.0]), 5.0);\n    }\n}",
+"hints": [
+"Тест с двумя числами проходит, а с тремя — нет. Что в функции работает только для двух чисел?",
+"Делить нужно на количество: `sum / items.len() as f64`."
+]
+},
+{
+"t": "task",
+"tests": true,
+"mustContain": [
+"should_panic"
+],
+"md": "Функция `first_char` паникует на пустой строке. Напиши тест с `#[should_panic]`, который это проверяет.",
+"code": "pub fn first_char(s: &str) -> char {\n    s.chars().next().expect(\"пустая строка\")\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n}",
+"solution": "pub fn first_char(s: &str) -> char {\n    s.chars().next().expect(\"пустая строка\")\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    #[should_panic]\n    fn empty_panics() {\n        first_char(\"\");\n    }\n}",
+"hints": [
+"Два атрибута подряд: `#[test]` и `#[should_panic]`.",
+"Внутри теста просто вызови `first_char(\"\");`"
+]
+},
+{
+"t": "quiz",
+"md": "Тест упал с сообщением `left: 4, right: 5`. Что это значит?",
+"options": [
+"Функция вернула 4, а тест ожидал 5",
+"В тесте 4 ошибки из 5",
+"Тест запускался 4 раза"
+],
+"answer": 0,
+"why": [
+"Верно. `left` — первое значение в `assert_eq!`, `right` — второе.",
+"Это не количество ошибок, а два сравниваемых значения.",
+"Числа — это значения, которые не совпали."
+]
+},
+{
+"t": "recap",
+"items": [
+"Тесты пишут рядом с кодом, в `#[cfg(test)] mod tests`.",
+"Сообщение о провале показывает `left` и `right` — с ним ошибку найти проще.",
+"`#[should_panic]` проверяет, что паника случилась."
+]
+}
+],
+"practice": true,
+"goals": [
+"Писать тесты к своим функциям",
+"Находить ошибки с помощью тестов"
 ]
 }
 ]
@@ -5010,6 +5094,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Как работает Box<dyn Трейт>",
+"md": "`Box<dyn Трейт>` хранит **два** адреса:\n1. адрес самих данных в куче;\n2. адрес **таблицы методов** (vtable) для этого типа.\n\nКогда ты вызываешь метод, программа смотрит в таблицу и находит нужную функцию. Это называют **динамической диспетчеризацией**. Она чуть медленнее обычного вызова, зато позволяет хранить разные типы в одном списке.\n\nОбычный `Box` — 8 байт, `Box<dyn ...>` — 16: два адреса.",
+"code": "fn main() {\n    println!(\"{}\", std::mem::size_of::<Box<i32>>());\n    println!(\"{}\", std::mem::size_of::<Box<dyn std::fmt::Debug>>());\n}",
+"out": "8\n16"
+},
+{
 "t": "recap",
 "items": [
 "Умный указатель — адрес плюс правила владения.",
@@ -5053,6 +5144,13 @@ window.COURSES = {
 "Верно.",
 "Наоборот, владельцев становится больше."
 ]
+},
+{
+"t": "deep",
+"title": "Циклы и Weak",
+"md": "Если два значения держат `Rc` друг на друга, их счётчики никогда не станут нулём. Память не освободится — это **утечка**.\n\nДля таких связей есть `Weak` — «слабая» ссылка. Она не увеличивает главный счётчик. Получить значение из неё можно через `.upgrade()`: вернётся `Some`, если значение ещё живо, и `None`, если уже нет.\n\nТипичный пример: в дереве родитель держит детей через `Rc`, а ребёнок родителя — через `Weak`.",
+"code": "use std::rc::{Rc, Weak};\n\nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = Rc::downgrade(&strong);\n    println!(\"{:?}\", weak.upgrade());\n    drop(strong);\n    println!(\"{:?}\", weak.upgrade());\n}",
+"out": "Some(5)\nNone"
 },
 {
 "t": "recap",
@@ -5104,6 +5202,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Cell — для простых значений",
+"md": "Для типов `Copy` (числа, `bool`) есть более простой `Cell`. Он не выдаёт ссылок, а просто кладёт и достаёт значение:\n\n```\nuse std::cell::Cell;\nlet counter = Cell::new(0);\ncounter.set(counter.get() + 1);\n```\n`Cell` никогда не паникует: ссылок нет, значит, нечего нарушать."
+},
+{
 "t": "recap",
 "items": [
 "`RefCell<T>` — менять через общий доступ, проверка при запуске.",
@@ -5115,6 +5218,71 @@ window.COURSES = {
 "goals": [
 "Что такое внутренняя изменяемость",
 "Связка `Rc<RefCell<T>>`"
+]
+},
+{
+"id": "m16-p",
+"title": "Практика: умные указатели",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Двоичное дерево: у узла есть число и два необязательных потомка. Допиши функцию `sum`, которая складывает все числа дерева.",
+"code": "struct Node {\n    value: i32,\n    left: Option<Box<Node>>,\n    right: Option<Box<Node>>,\n}\n\nfn sum(node: &Option<Box<Node>>) -> i32 {\n    0\n}\n\nfn leaf(v: i32) -> Option<Box<Node>> {\n    Some(Box::new(Node { value: v, left: None, right: None }))\n}\n\nfn main() {\n    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));\n    println!(\"{}\", sum(&tree));\n}",
+"solution": "struct Node {\n    value: i32,\n    left: Option<Box<Node>>,\n    right: Option<Box<Node>>,\n}\n\nfn sum(node: &Option<Box<Node>>) -> i32 {\n    match node {\n        Some(n) => n.value + sum(&n.left) + sum(&n.right),\n        None => 0,\n    }\n}\n\nfn leaf(v: i32) -> Option<Box<Node>> {\n    Some(Box::new(Node { value: v, left: None, right: None }))\n}\n\nfn main() {\n    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));\n    println!(\"{}\", sum(&tree));\n}",
+"expect": "6",
+"hints": [
+"Разбери `node` через `match`: для `None` верни 0.",
+"`Some(n) => n.value + sum(&n.left) + sum(&n.right),`"
+]
+},
+{
+"t": "task",
+"md": "Общий журнал. Два «модуля» программы пишут в один список через `Rc<RefCell<Vec<String>>>`. Допиши функцию `log`.",
+"code": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {\n}\n\nfn main() {\n    let journal = Rc::new(RefCell::new(Vec::new()));\n    let network = Rc::clone(&journal);\n    let disk = Rc::clone(&journal);\n    log(&network, \"сеть подключена\");\n    log(&disk, \"диск готов\");\n    println!(\"{:?}\", journal.borrow());\n}",
+"solution": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {\n    journal.borrow_mut().push(msg.to_string());\n}\n\nfn main() {\n    let journal = Rc::new(RefCell::new(Vec::new()));\n    let network = Rc::clone(&journal);\n    let disk = Rc::clone(&journal);\n    log(&network, \"сеть подключена\");\n    log(&disk, \"диск готов\");\n    println!(\"{:?}\", journal.borrow());\n}",
+"expect": "[\"сеть подключена\", \"диск готов\"]",
+"hints": [
+"Чтобы изменить содержимое `RefCell`, нужно `borrow_mut()`.",
+"`journal.borrow_mut().push(msg.to_string());`"
+]
+},
+{
+"t": "task",
+"md": "Программа паникует с `already borrowed`. Почини её: закончи первое заимствование раньше, чем начинается второе.",
+"code": "use std::cell::RefCell;\n\nfn main() {\n    let data = RefCell::new(vec![1, 2, 3]);\n    let mut first = data.borrow_mut();\n    first.push(4);\n    let mut second = data.borrow_mut();\n    second.push(5);\n    drop(second);\n    println!(\"{:?}\", data.borrow());\n}",
+"solution": "use std::cell::RefCell;\n\nfn main() {\n    let data = RefCell::new(vec![1, 2, 3]);\n    {\n        let mut first = data.borrow_mut();\n        first.push(4);\n    }\n    let mut second = data.borrow_mut();\n    second.push(5);\n    drop(second);\n    println!(\"{:?}\", data.borrow());\n}",
+"expect": "[1, 2, 3, 4, 5]",
+"hints": [
+"Заимствование заканчивается, когда переменная `first` исчезает.",
+"Заключи две строки с `first` в отдельный блок `{ ... }` или напиши `drop(first);` после `push(4)`."
+]
+},
+{
+"t": "task",
+"md": "Сложи площади фигур разных типов, которые лежат в одном векторе `Vec<Box<dyn Shape>>`.",
+"code": "trait Shape {\n    fn area(&self) -> f64;\n}\n\nstruct Sq(f64);\nstruct Rect(f64, f64);\n\nimpl Shape for Sq {\n    fn area(&self) -> f64 { self.0 * self.0 }\n}\nimpl Shape for Rect {\n    fn area(&self) -> f64 { self.0 * self.1 }\n}\n\nfn main() {\n    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];\n    let total = 0.0;\n    println!(\"{total}\");\n}",
+"solution": "trait Shape {\n    fn area(&self) -> f64;\n}\n\nstruct Sq(f64);\nstruct Rect(f64, f64);\n\nimpl Shape for Sq {\n    fn area(&self) -> f64 { self.0 * self.0 }\n}\nimpl Shape for Rect {\n    fn area(&self) -> f64 { self.0 * self.1 }\n}\n\nfn main() {\n    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];\n    let total: f64 = shapes.iter().map(|s| s.area()).sum();\n    println!(\"{total}\");\n}",
+"expect": "19",
+"hints": [
+"Пройди по вектору и вызови `area()` у каждой фигуры.",
+"`let total: f64 = shapes.iter().map(|s| s.area()).sum();`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`Box` — для рекурсивных типов и `dyn Трейт`.",
+"`Rc<RefCell<T>>` — общие изменяемые данные в одном потоке.",
+"Заимствование `RefCell` заканчивается, когда исчезает его переменная."
+]
+}
+],
+"practice": true,
+"goals": [
+"Строить рекурсивные типы через `Box`",
+"Делить данные через `Rc` и `RefCell`",
+"Хранить разные типы через `Box<dyn Трейт>`"
 ]
 }
 ]
@@ -10423,79 +10591,84 @@ window.COURSES = {
 },
 {
 "id": "m15",
-"title": "Тесты",
-"sub": "Как убедиться, что код работает",
+"title": "Tests",
+"sub": "How to make sure code works",
 "lessons": [
 {
 "id": "m15-1",
-"title": "Первый тест",
+"title": "Your first test",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Тест — автоматическая проверка",
-"md": "**Тест** — маленькая функция, которая проверяет другую функцию. Написал один раз — проверяешь хоть тысячу раз, одной командой.\n\n> Как чек-лист пилота перед взлётом. Скучно, но спасает."
+"title": "A test is an automatic check",
+"md": "A **test** is a small function that checks another function. Write it once — and check a thousand times with one command.\n\n> Analogy: a pilot's checklist before takeoff. Boring, but it saves lives."
 },
 {
 "t": "text",
-"title": "Как выглядит тест",
-"md": "```\n#[test]\nfn two_plus_two() {\n    assert_eq!(add(2, 2), 4);\n}\n```\n- `#[test]` — «это тест».\n- `assert_eq!(a, b)` — «a должно равняться b». Не равно — тест провален.\n- `assert!(условие)` — «условие должно быть правдой»."
+"title": "What a test looks like",
+"md": "```\n#[test]\nfn two_plus_two() {\n    assert_eq!(add(2, 2), 4);\n}\n```\n- `#[test]` means \"this is a test\".\n- `assert_eq!(a, b)` means \"a must equal b\". If not — the test fails.\n- `assert!(condition)` means \"the condition must be true\"."
 },
 {
 "t": "code",
 "tests": true,
-"md": "Здесь нет `main`. Кнопка «Запустить» прогонит тесты.",
+"md": "There is no `main` here. The \"Run\" button runs the tests.",
 "code": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn adds_positive() {\n        assert_eq!(add(2, 3), 5);\n    }\n\n    #[test]\n    fn adds_negative() {\n        assert_eq!(add(-2, -3), -5);\n    }\n}",
-"after": "В выводе будет `test result: ok. 2 passed`. Поменяй `a + b` на `a - b` и запусти снова: увидишь провал и что именно не совпало."
+"after": "The output says `test result: ok. 2 passed`. Change `a + b` to `a - b` and run it again: you will see the failure and exactly what did not match."
 },
 {
 "t": "text",
-"title": "Что за mod tests",
-"md": "- `#[cfg(test)]` — «собирать этот модуль только при тестах». В готовую программу он не попадёт.\n- `use super::*;` — «взять всё из модуля выше». Иначе тесты не увидят `add`.\n\nНа своём компьютере тесты запускают командой `cargo test`."
+"title": "What mod tests is",
+"md": "- `#[cfg(test)]` means \"build this module only when testing\". It does not go into the finished program.\n- `use super::*;` means \"take everything from the module above\". Otherwise the tests do not see `add`.\n\nOn your own computer, tests are run with the command `cargo test`."
 },
 {
 "t": "quiz",
-"md": "Что делает `assert_eq!(x, 10)`?",
+"md": "What does `assert_eq!(x, 10)` do?",
 "options": [
-"Присваивает `x` значение 10",
-"Проваливает тест, если `x` не равен 10",
-"Печатает `x`"
+"It assigns 10 to `x`",
+"It fails the test if `x` is not equal to 10",
+"It prints `x`"
 ],
 "answer": 1,
 "why": [
-"Это проверка, а не присваивание.",
-"Верно.",
-"Печатает только при провале, чтобы показать разницу."
+"It is a check, not an assignment.",
+"Correct.",
+"It prints only on failure, to show the difference."
 ]
+},
+{
+"t": "text",
+"title": "More checks and your own messages",
+"md": "- `assert_ne!(a, b)` means \"a must **not** equal b\".\n- You can add your own message to any check. It appears on failure:\n\n```\nassert!(age >= 18, \"the age {age} is less than 18\");\nassert_eq!(total, 100, \"the total must be 100\");\n```\nA good message saves time: you see right away what went wrong."
 },
 {
 "t": "recap",
 "items": [
-"`#[test] fn имя() { ... }` — тест.",
-"`assert_eq!(a, b)`, `assert!(условие)` — проверки.",
-"Тесты кладут в `#[cfg(test)] mod tests`, запускают `cargo test`."
+"`#[test] fn name() { ... }` is a test.",
+"`assert_eq!(a, b)`, `assert!(condition)` are checks.",
+"Tests go into `#[cfg(test)] mod tests` and run with `cargo test`."
 ]
 }
 ],
 "goals": [
-"Написать тест с `#[test]`",
-"Проверять результат через `assert_eq!`"
+"Write a test with `#[test]`",
+"Check a result with `assert_eq!`"
 ]
 },
 {
 "id": "m15-2",
-"title": "Тесты на ошибки",
+"title": "Tests for errors",
 "min": 6,
 "cards": [
 {
 "t": "text",
 "title": "should_panic",
-"md": "Иногда правильное поведение — паника. Это проверяют атрибутом `#[should_panic]`:\n\n```\n#[test]\n#[should_panic]\nfn divide_by_zero_panics() {\n    divide(1, 0);\n}\n```"
+"md": "Sometimes a panic is the correct behavior. This is checked with the attribute `#[should_panic]`:\n\n```\n#[test]\n#[should_panic]\nfn divide_by_zero_panics() {\n    divide(1, 0);\n}\n```"
 },
 {
 "t": "text",
-"title": "Тест может вернуть Result",
-"md": "Тогда внутри можно использовать `?`. Ошибка = провал теста.\n\n```\n#[test]\nfn parses() -> Result<(), std::num::ParseIntError> {\n    let n: i32 = \"42\".parse()?;\n    assert_eq!(n, 42);\n    Ok(())\n}\n```"
+"title": "A test can return a Result",
+"md": "Then you can use `?` inside it. An error means the test failed.\n\n```\n#[test]\nfn parses() -> Result<(), std::num::ParseIntError> {\n    let n: i32 = \"42\".parse()?;\n    assert_eq!(n, 42);\n    Ok(())\n}\n```"
 },
 {
 "t": "task",
@@ -10503,179 +10676,342 @@ window.COURSES = {
 "mustContain": [
 "#[test]"
 ],
-"explain": "Тесты прошли. Так и пишут надёжные программы: функция + проверки.",
-"md": "Напиши функцию `is_adult(age: u32) -> bool` (взрослый — от 18) и два теста к ней: для 20 и для 10.",
-"code": "pub fn is_adult(age: u32) -> bool {\n    // твой код\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    // твои тесты\n}",
+"explain": "The tests passed. This is how reliable programs are written: a function + checks.",
+"md": "Write a function `is_adult(age: u32) -> bool` (adult means 18 or more) and two tests for it: for 20 and for 10.",
+"code": "pub fn is_adult(age: u32) -> bool {\n    // your code\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    // your tests\n}",
 "solution": "pub fn is_adult(age: u32) -> bool {\n    age >= 18\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn twenty_is_adult() {\n        assert!(is_adult(20));\n    }\n\n    #[test]\n    fn ten_is_not_adult() {\n        assert!(!is_adult(10));\n    }\n}",
 "hints": [
-"Тело функции — одно выражение: `age >= 18`.",
-"Тест: `#[test] fn twenty() { assert!(is_adult(20)); }`. Для 10 — `assert!(!is_adult(10));`"
+"The function body is one expression: `age >= 18`.",
+"A test: `#[test] fn twenty() { assert!(is_adult(20)); }`. For 10 — `assert!(!is_adult(10));`"
+]
+},
+{
+"t": "deep",
+"title": "Tests in documentation and the tests folder",
+"md": "Rust has two more kinds of tests.\n\n**Documentation tests.** A code example in a `///` comment is also run by `cargo test`. That way the documentation never goes out of date:\n\n```\n/// Doubles a number.\n///\n/// ```\n/// assert_eq!(my_crate::double(2), 4);\n/// ```\npub fn double(x: i32) -> i32 { x * 2 }\n```\n\n**Integration tests.** Files in the folder `tests/` next to `src/`. They see the library the same way other programs will see it: only the public functions.\n\nIn total: unit tests (`mod tests`) check the details, integration tests check the whole thing, documentation tests check that the examples are correct."
+},
+{
+"t": "recap",
+"items": [
+"`#[should_panic]` — the test expects a panic.",
+"A test can return a `Result` and use `?`.",
+"Write tests for normal cases and for edge cases: 0, empty, very many."
+]
+}
+],
+"goals": [
+"Check that a function panics",
+"Check a `Result` in tests"
+]
+},
+{
+"id": "m15-p",
+"title": "Practice: tests",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"tests": true,
+"mustContain": [
+"#[test]"
+],
+"md": "Write two tests for `max_of`: for `[3, 9, 2]` the answer is `9`, for `[-5, -1]` the answer is `-1`.",
+"code": "pub fn max_of(items: &[i32]) -> i32 {\n    let mut best = items[0];\n    for &x in items {\n        if x > best {\n            best = x;\n        }\n    }\n    best\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n}",
+"solution": "pub fn max_of(items: &[i32]) -> i32 {\n    let mut best = items[0];\n    for &x in items {\n        if x > best {\n            best = x;\n        }\n    }\n    best\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn positive() {\n        assert_eq!(max_of(&[3, 9, 2]), 9);\n    }\n\n    #[test]\n    fn negative() {\n        assert_eq!(max_of(&[-5, -1]), -1);\n    }\n}",
+"hints": [
+"Each test is `#[test] fn name() { assert_eq!(...); }`",
+"`assert_eq!(max_of(&[3, 9, 2]), 9);`"
+]
+},
+{
+"t": "task",
+"tests": true,
+"md": "The tests are already written, but the function has a bug. Find the bug from the failure message and fix the function.",
+"code": "pub fn average(items: &[f64]) -> f64 {\n    let mut sum = 0.0;\n    for x in items {\n        sum += x;\n    }\n    sum / 2.0\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn three_items() {\n        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);\n    }\n\n    #[test]\n    fn two_items() {\n        assert_eq!(average(&[4.0, 6.0]), 5.0);\n    }\n}",
+"solution": "pub fn average(items: &[f64]) -> f64 {\n    let mut sum = 0.0;\n    for x in items {\n        sum += x;\n    }\n    sum / items.len() as f64\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn three_items() {\n        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);\n    }\n\n    #[test]\n    fn two_items() {\n        assert_eq!(average(&[4.0, 6.0]), 5.0);\n    }\n}",
+"hints": [
+"The test with two numbers passes, but the one with three does not. What in the function works only for two numbers?",
+"Divide by the count: `sum / items.len() as f64`."
+]
+},
+{
+"t": "task",
+"tests": true,
+"mustContain": [
+"should_panic"
+],
+"md": "The function `first_char` panics on an empty string. Write a test with `#[should_panic]` that checks this.",
+"code": "pub fn first_char(s: &str) -> char {\n    s.chars().next().expect(\"empty string\")\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n}",
+"solution": "pub fn first_char(s: &str) -> char {\n    s.chars().next().expect(\"empty string\")\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    #[should_panic]\n    fn empty_panics() {\n        first_char(\"\");\n    }\n}",
+"hints": [
+"Two attributes in a row: `#[test]` and `#[should_panic]`.",
+"Inside the test just call `first_char(\"\");`"
+]
+},
+{
+"t": "quiz",
+"md": "A test failed with the message `left: 4, right: 5`. What does it mean?",
+"options": [
+"The function returned 4, and the test expected 5",
+"The test has 4 errors out of 5",
+"The test ran 4 times"
+],
+"answer": 0,
+"why": [
+"Correct. `left` is the first value in `assert_eq!`, `right` is the second.",
+"It is not a number of errors, but the two compared values.",
+"The numbers are the values that did not match."
 ]
 },
 {
 "t": "recap",
 "items": [
-"`#[should_panic]` — тест ждёт панику.",
-"Тест может вернуть `Result` и использовать `?`.",
-"Пиши тесты на обычные случаи и на граничные: 0, пусто, очень много."
+"Tests are written next to the code, in `#[cfg(test)] mod tests`.",
+"The failure message shows `left` and `right` — this makes the bug easier to find.",
+"`#[should_panic]` checks that a panic happened."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Проверить, что функция паникует",
-"Проверять `Result` в тестах"
+"Write tests for your functions",
+"Find bugs with tests"
 ]
 }
 ]
 },
 {
 "id": "m16",
-"title": "Умные указатели",
-"sub": "Box, Rc и RefCell",
+"title": "Smart pointers",
+"sub": "Box, Rc and RefCell",
 "lessons": [
 {
 "id": "m16-1",
-"title": "Box — значение в куче",
+"title": "Box — a value in the heap",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Умный указатель",
-"md": "**Указатель** — это адрес значения в памяти. **Умный** указатель — адрес плюс правила: кто владеет, когда удалять.\n\nТы уже пользовался умными указателями: `String` и `Vec` — они тоже такие."
+"title": "A smart pointer",
+"md": "A **pointer** is the address of a value in memory. A **smart** pointer is an address plus rules: who owns it, when to delete it.\n\nYou have already used smart pointers: `String` and `Vec` are like that too."
 },
 {
 "t": "text",
-"title": "Box — коробка на складе",
-"md": "`Box<T>` кладёт значение в кучу, а у тебя остаётся маленький адрес.\n\n```\nlet b = Box::new(5);\nprintln!(\"{}\", b); // 5\n```\nКогда нужен Box:\n- тип ссылается сам на себя (дерево, список);\n- значение очень большое, и его не хочется копировать;\n- нужен `Box<dyn Трейт>` — разные типы в одном списке."
+"title": "Box — a box in the storage room",
+"md": "`Box<T>` puts a value into the heap, and you keep a small address.\n\n```\nlet b = Box::new(5);\nprintln!(\"{}\", b); // 5\n```\nWhen you need Box:\n- a type refers to itself (a tree, a list);\n- a value is very big and you do not want to copy it;\n- you need `Box<dyn Trait>` — different types in one list."
 },
 {
 "t": "code",
-"md": "Тип, который содержит сам себя. Без `Box` его размер был бы бесконечным.",
-"code": "#[derive(Debug)]\nenum List {\n    Node(i32, Box<List>),\n    End,\n}\n\nuse List::{End, Node};\n\nfn sum(list: &List) -> i32 {\n    match list {\n        Node(value, next) => value + sum(next),\n        End => 0,\n    }\n}\n\nfn main() {\n    let list = Node(1, Box::new(Node(2, Box::new(Node(3, Box::new(End))))));\n    println!(\"{:?}\", list);\n    println!(\"Сумма: {}\", sum(&list));\n}",
-"out": "Node(1, Node(2, Node(3, End)))\nСумма: 6",
-"after": "`sum` вызывает сама себя. Это называется **рекурсия**."
+"md": "A type that contains itself. Without `Box` its size would be infinite.",
+"code": "#[derive(Debug)]\nenum List {\n    Node(i32, Box<List>),\n    End,\n}\n\nuse List::{End, Node};\n\nfn sum(list: &List) -> i32 {\n    match list {\n        Node(value, next) => value + sum(next),\n        End => 0,\n    }\n}\n\nfn main() {\n    let list = Node(1, Box::new(Node(2, Box::new(Node(3, Box::new(End))))));\n    println!(\"{:?}\", list);\n    println!(\"Sum: {}\", sum(&list));\n}",
+"out": "Node(1, Node(2, Node(3, End)))\nSum: 6",
+"after": "`sum` calls itself. This is called **recursion**."
 },
 {
 "t": "quiz",
-"md": "Зачем `Box` в `Node(i32, Box<List>)`?",
+"md": "Why is there a `Box` in `Node(i32, Box<List>)`?",
 "options": [
-"Чтобы список работал быстрее",
-"Чтобы размер типа был известен: Box — это просто адрес",
-"Чтобы список можно было менять"
+"To make the list faster",
+"So the size of the type is known: a Box is just an address",
+"So the list can be changed"
 ],
 "answer": 1,
 "why": [
-"Скорость тут ни при чём.",
-"Верно. Без Box список вкладывался бы сам в себя бесконечно.",
-"Для изменения нужен `mut`, а не Box."
+"Speed has nothing to do with it.",
+"Correct. Without Box the list would contain itself endlessly.",
+"Changing needs `mut`, not Box."
 ]
+},
+{
+"t": "deep",
+"title": "How Box<dyn Trait> works",
+"md": "`Box<dyn Trait>` stores **two** addresses:\n1. the address of the data itself in the heap;\n2. the address of the **method table** (vtable) for this type.\n\nWhen you call a method, the program looks in the table and finds the right function. This is called **dynamic dispatch**. It is a bit slower than a normal call, but it lets you keep different types in one list.\n\nA normal `Box` is 8 bytes, `Box<dyn ...>` is 16: two addresses.",
+"code": "fn main() {\n    println!(\"{}\", std::mem::size_of::<Box<i32>>());\n    println!(\"{}\", std::mem::size_of::<Box<dyn std::fmt::Debug>>());\n}",
+"out": "8\n16"
 },
 {
 "t": "recap",
 "items": [
-"Умный указатель — адрес плюс правила владения.",
-"`Box::new(x)` кладёт `x` в кучу.",
-"Box нужен для рекурсивных типов и `dyn Трейт`."
+"A smart pointer is an address plus ownership rules.",
+"`Box::new(x)` puts `x` into the heap.",
+"Box is needed for recursive types and `dyn Trait`."
 ]
 }
 ],
 "goals": [
-"Что такое умный указатель",
-"Когда нужен `Box`"
+"What a smart pointer is",
+"When you need `Box`"
 ]
 },
 {
 "id": "m16-2",
-"title": "Rc — общий владелец",
+"title": "Rc — a shared owner",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Иногда хозяев несколько",
-"md": "Правило «один владелец» иногда мешает. Например, две комнаты в игре используют одну и ту же текстуру.\n\n`Rc<T>` (reference counting — подсчёт ссылок) разрешает **несколько владельцев**. Он считает, сколько их. Последний ушёл — значение удаляется.\n\n> Общий телевизор в общежитии. Есть счётчик зрителей. Ушёл последний — телевизор выключают."
+"title": "Sometimes there are several owners",
+"md": "The rule \"one owner\" sometimes gets in the way. For example, two rooms in a game use the same texture.\n\n`Rc<T>` (reference counting) allows **several owners**. It counts how many there are. When the last one leaves, the value is deleted.\n\n> Analogy: a shared TV in a dormitory. There is a counter of viewers. When the last one leaves, the TV is turned off."
 },
 {
 "t": "code",
-"code": "use std::rc::Rc;\n\nfn main() {\n    let song = Rc::new(String::from(\"Любимая песня\"));\n    println!(\"Владельцев: {}\", Rc::strong_count(&song));\n    let anya = Rc::clone(&song);\n    let borya = Rc::clone(&song);\n    println!(\"Владельцев: {}\", Rc::strong_count(&song));\n    drop(anya);\n    println!(\"Владельцев: {}\", Rc::strong_count(&song));\n    println!(\"{borya}\");\n}",
-"out": "Владельцев: 1\nВладельцев: 3\nВладельцев: 2\nЛюбимая песня",
-"after": "`Rc::clone` не копирует песню, а только увеличивает счётчик. Это дёшево. `drop` — удалить переменную раньше времени."
+"code": "use std::rc::Rc;\n\nfn main() {\n    let song = Rc::new(String::from(\"Favorite song\"));\n    println!(\"Owners: {}\", Rc::strong_count(&song));\n    let anna = Rc::clone(&song);\n    let bob = Rc::clone(&song);\n    println!(\"Owners: {}\", Rc::strong_count(&song));\n    drop(anna);\n    println!(\"Owners: {}\", Rc::strong_count(&song));\n    println!(\"{bob}\");\n}",
+"out": "Owners: 1\nOwners: 3\nOwners: 2\nFavorite song",
+"after": "`Rc::clone` does not copy the song; it only increases the counter. This is cheap. `drop` deletes a variable early."
 },
 {
 "t": "quiz",
-"md": "Что делает `Rc::clone(&x)`?",
+"md": "What does `Rc::clone(&x)` do?",
 "options": [
-"Копирует данные целиком",
-"Добавляет ещё одного владельца тех же данных",
-"Удаляет `x`"
+"Copies all the data",
+"Adds one more owner of the same data",
+"Deletes `x`"
 ],
 "answer": 1,
 "why": [
-"Нет, данные одни. Растёт только счётчик.",
-"Верно.",
-"Наоборот, владельцев становится больше."
+"No, the data is the same. Only the counter grows.",
+"Correct.",
+"The opposite: there are more owners."
 ]
+},
+{
+"t": "deep",
+"title": "Cycles and Weak",
+"md": "If two values hold an `Rc` to each other, their counters never reach zero. The memory is never freed — this is a **leak**.\n\nFor such links there is `Weak` — a \"weak\" reference. It does not increase the main counter. You get the value from it with `.upgrade()`: it returns `Some` if the value is still alive, and `None` if it is not.\n\nA typical example: in a tree a parent holds its children with `Rc`, and a child holds its parent with `Weak`.",
+"code": "use std::rc::{Rc, Weak};\n\nfn main() {\n    let strong = Rc::new(5);\n    let weak: Weak<i32> = Rc::downgrade(&strong);\n    println!(\"{:?}\", weak.upgrade());\n    drop(strong);\n    println!(\"{:?}\", weak.upgrade());\n}",
+"out": "Some(5)\nNone"
 },
 {
 "t": "recap",
 "items": [
-"`Rc<T>` — несколько владельцев одного значения.",
-"`Rc::clone` дёшев: только счётчик +1.",
-"`Rc` только для чтения и только в одном потоке."
+"`Rc<T>` gives one value several owners.",
+"`Rc::clone` is cheap: only counter +1.",
+"`Rc` is read-only and works in one thread only."
 ]
 }
 ],
 "goals": [
-"Как дать значению несколько владельцев",
-"Что считает `Rc`"
+"How to give a value several owners",
+"What `Rc` counts"
 ]
 },
 {
 "id": "m16-3",
-"title": "RefCell — менять через общий доступ",
+"title": "RefCell — changing through shared access",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Проверка не при компиляции, а при работе",
-"md": "`Rc` даёт только читать. А если нескольким владельцам нужно **менять** значение?\n\n`RefCell<T>` переносит проверку правил заимствования с компиляции **на время работы**. Правило то же: много читателей или один писатель. Нарушишь — паника.\n\n- `.borrow()` — взять на чтение;\n- `.borrow_mut()` — взять на запись."
+"title": "The check happens at run time, not at compile time",
+"md": "`Rc` only lets you read. What if several owners need to **change** the value?\n\n`RefCell<T>` moves the borrowing check from compile time **to run time**. The rule is the same: many readers or one writer. Break it — and you get a panic.\n\n- `.borrow()` — take for reading;\n- `.borrow_mut()` — take for writing."
 },
 {
 "t": "code",
-"md": "Общий счётчик, который меняют двое:",
-"code": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn main() {\n    let score = Rc::new(RefCell::new(0));\n    let player1 = Rc::clone(&score);\n    let player2 = Rc::clone(&score);\n\n    *player1.borrow_mut() += 10;\n    *player2.borrow_mut() += 5;\n\n    println!(\"Общий счёт: {}\", score.borrow());\n}",
-"out": "Общий счёт: 15"
+"md": "A shared counter that two players change:",
+"code": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn main() {\n    let score = Rc::new(RefCell::new(0));\n    let player1 = Rc::clone(&score);\n    let player2 = Rc::clone(&score);\n\n    *player1.borrow_mut() += 10;\n    *player2.borrow_mut() += 5;\n\n    println!(\"Shared score: {}\", score.borrow());\n}",
+"out": "Shared score: 15"
 },
 {
 "t": "code",
-"md": "А теперь нарушим правило: два писателя одновременно. Запусти.",
+"md": "Now let us break the rule: two writers at the same time. Run it.",
 "code": "use std::cell::RefCell;\n\nfn main() {\n    let data = RefCell::new(vec![1, 2, 3]);\n    let a = data.borrow_mut();\n    let b = data.borrow_mut();\n    println!(\"{:?} {:?}\", a, b);\n}",
-"after": "Компилятор пропустит, а программа запаникует: `already borrowed` — «уже занято». Это цена гибкости: ошибку ловит не компилятор, а запуск."
+"after": "The compiler allows it, but the program panics: `already borrowed`. This is the price of flexibility: the error is caught by running, not by the compiler."
 },
 {
 "t": "quiz",
-"md": "Когда `RefCell` проверяет правила заимствования?",
+"md": "When does `RefCell` check the borrowing rules?",
 "options": [
-"При компиляции",
-"Во время работы программы"
+"At compile time",
+"While the program runs"
 ],
 "answer": 1,
 "why": [
-"Это делают обычные ссылки. RefCell проверяет позже.",
-"Верно. Нарушение — паника."
+"Normal references do that. RefCell checks later.",
+"Correct. Breaking the rule is a panic."
+]
+},
+{
+"t": "text",
+"title": "Cell — for simple values",
+"md": "For `Copy` types (numbers, `bool`) there is the simpler `Cell`. It gives out no references; it just puts and takes a value:\n\n```\nuse std::cell::Cell;\nlet counter = Cell::new(0);\ncounter.set(counter.get() + 1);\n```\n`Cell` never panics: there are no references, so there is nothing to break."
+},
+{
+"t": "recap",
+"items": [
+"`RefCell<T>` allows changing through shared access, with the check at run time.",
+"`Rc<RefCell<T>>` is a shared changeable value in one thread.",
+"Try normal references first. Use RefCell when there is no other way."
+]
+}
+],
+"goals": [
+"What interior mutability is",
+"The combination `Rc<RefCell<T>>`"
+]
+},
+{
+"id": "m16-p",
+"title": "Practice: smart pointers",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "A binary tree: a node has a number and two optional children. Complete the function `sum` that adds up all numbers of the tree.",
+"code": "struct Node {\n    value: i32,\n    left: Option<Box<Node>>,\n    right: Option<Box<Node>>,\n}\n\nfn sum(node: &Option<Box<Node>>) -> i32 {\n    0\n}\n\nfn leaf(v: i32) -> Option<Box<Node>> {\n    Some(Box::new(Node { value: v, left: None, right: None }))\n}\n\nfn main() {\n    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));\n    println!(\"{}\", sum(&tree));\n}",
+"solution": "struct Node {\n    value: i32,\n    left: Option<Box<Node>>,\n    right: Option<Box<Node>>,\n}\n\nfn sum(node: &Option<Box<Node>>) -> i32 {\n    match node {\n        Some(n) => n.value + sum(&n.left) + sum(&n.right),\n        None => 0,\n    }\n}\n\nfn leaf(v: i32) -> Option<Box<Node>> {\n    Some(Box::new(Node { value: v, left: None, right: None }))\n}\n\nfn main() {\n    let tree = Some(Box::new(Node { value: 1, left: leaf(2), right: leaf(3) }));\n    println!(\"{}\", sum(&tree));\n}",
+"expect": "6",
+"hints": [
+"Check `node` with `match`: for `None` return 0.",
+"`Some(n) => n.value + sum(&n.left) + sum(&n.right),`"
+]
+},
+{
+"t": "task",
+"md": "A shared log. Two \"modules\" of a program write into one list through `Rc<RefCell<Vec<String>>>`. Complete the function `log`.",
+"code": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {\n}\n\nfn main() {\n    let journal = Rc::new(RefCell::new(Vec::new()));\n    let network = Rc::clone(&journal);\n    let disk = Rc::clone(&journal);\n    log(&network, \"network connected\");\n    log(&disk, \"disk ready\");\n    println!(\"{:?}\", journal.borrow());\n}",
+"solution": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn log(journal: &Rc<RefCell<Vec<String>>>, msg: &str) {\n    journal.borrow_mut().push(msg.to_string());\n}\n\nfn main() {\n    let journal = Rc::new(RefCell::new(Vec::new()));\n    let network = Rc::clone(&journal);\n    let disk = Rc::clone(&journal);\n    log(&network, \"network connected\");\n    log(&disk, \"disk ready\");\n    println!(\"{:?}\", journal.borrow());\n}",
+"expect": "[\"network connected\", \"disk ready\"]",
+"hints": [
+"To change what is inside a `RefCell`, you need `borrow_mut()`.",
+"`journal.borrow_mut().push(msg.to_string());`"
+]
+},
+{
+"t": "task",
+"md": "The program panics with `already borrowed`. Fix it: end the first borrow before the second one starts.",
+"code": "use std::cell::RefCell;\n\nfn main() {\n    let data = RefCell::new(vec![1, 2, 3]);\n    let mut first = data.borrow_mut();\n    first.push(4);\n    let mut second = data.borrow_mut();\n    second.push(5);\n    drop(second);\n    println!(\"{:?}\", data.borrow());\n}",
+"solution": "use std::cell::RefCell;\n\nfn main() {\n    let data = RefCell::new(vec![1, 2, 3]);\n    {\n        let mut first = data.borrow_mut();\n        first.push(4);\n    }\n    let mut second = data.borrow_mut();\n    second.push(5);\n    drop(second);\n    println!(\"{:?}\", data.borrow());\n}",
+"expect": "[1, 2, 3, 4, 5]",
+"hints": [
+"A borrow ends when the variable `first` disappears.",
+"Put the two lines with `first` into a separate block `{ ... }`, or write `drop(first);` after `push(4)`."
+]
+},
+{
+"t": "task",
+"md": "Add up the areas of shapes of different types that are stored in one vector `Vec<Box<dyn Shape>>`.",
+"code": "trait Shape {\n    fn area(&self) -> f64;\n}\n\nstruct Sq(f64);\nstruct Rect(f64, f64);\n\nimpl Shape for Sq {\n    fn area(&self) -> f64 { self.0 * self.0 }\n}\nimpl Shape for Rect {\n    fn area(&self) -> f64 { self.0 * self.1 }\n}\n\nfn main() {\n    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];\n    let total = 0.0;\n    println!(\"{total}\");\n}",
+"solution": "trait Shape {\n    fn area(&self) -> f64;\n}\n\nstruct Sq(f64);\nstruct Rect(f64, f64);\n\nimpl Shape for Sq {\n    fn area(&self) -> f64 { self.0 * self.0 }\n}\nimpl Shape for Rect {\n    fn area(&self) -> f64 { self.0 * self.1 }\n}\n\nfn main() {\n    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Rect(3.0, 5.0))];\n    let total: f64 = shapes.iter().map(|s| s.area()).sum();\n    println!(\"{total}\");\n}",
+"expect": "19",
+"hints": [
+"Go through the vector and call `area()` on each shape.",
+"`let total: f64 = shapes.iter().map(|s| s.area()).sum();`"
 ]
 },
 {
 "t": "recap",
 "items": [
-"`RefCell<T>` — менять через общий доступ, проверка при запуске.",
-"`Rc<RefCell<T>>` — общее изменяемое значение в одном потоке.",
-"Сначала пробуй обычные ссылки. RefCell — когда без него никак."
+"`Box` is for recursive types and `dyn Trait`.",
+"`Rc<RefCell<T>>` is shared changeable data in one thread.",
+"A `RefCell` borrow ends when its variable disappears."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Что такое внутренняя изменяемость",
-"Связка `Rc<RefCell<T>>`"
+"Build recursive types with `Box`",
+"Share data with `Rc` and `RefCell`",
+"Store different types with `Box<dyn Trait>`"
 ]
 }
 ]

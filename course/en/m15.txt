@@ -1,0 +1,317 @@
+# MODULE m15 | Tests | How to make sure code works
+
+## LESSON m15-1 | Your first test | 6
+:: goals
+- Write a test with `#[test]`
+- Check a result with `assert_eq!`
+
+:: text A test is an automatic check
+A **test** is a small function that checks another function. Write it once — and check a thousand times with one command.
+
+> Analogy: a pilot's checklist before takeoff. Boring, but it saves lives.
+
+:: text What a test looks like
+```rust
+#[test]
+fn two_plus_two() {
+    assert_eq!(add(2, 2), 4);
+}
+```
+- `#[test]` means "this is a test".
+- `assert_eq!(a, b)` means "a must equal b". If not — the test fails.
+- `assert!(condition)` means "the condition must be true".
+
+:: code
+There is no `main` here. The "Run" button runs the tests.
+```rust
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adds_positive() {
+        assert_eq!(add(2, 3), 5);
+    }
+
+    #[test]
+    fn adds_negative() {
+        assert_eq!(add(-2, -3), -5);
+    }
+}
+```
+tests: yes
+The output says `test result: ok. 2 passed`. Change `a + b` to `a - b` and run it again: you will see the failure and exactly what did not match.
+
+:: text What mod tests is
+- `#[cfg(test)]` means "build this module only when testing". It does not go into the finished program.
+- `use super::*;` means "take everything from the module above". Otherwise the tests do not see `add`.
+
+On your own computer, tests are run with the command `cargo test`.
+
+:: quiz
+What does `assert_eq!(x, 10)` do?
+[ ] It assigns 10 to `x` => It is a check, not an assignment.
+[x] It fails the test if `x` is not equal to 10 => Correct.
+[ ] It prints `x` => It prints only on failure, to show the difference.
+
+:: text More checks and your own messages
+- `assert_ne!(a, b)` means "a must **not** equal b".
+- You can add your own message to any check. It appears on failure:
+
+```rust
+assert!(age >= 18, "the age {age} is less than 18");
+assert_eq!(total, 100, "the total must be 100");
+```
+A good message saves time: you see right away what went wrong.
+
+:: recap
+- `#[test] fn name() { ... }` is a test.
+- `assert_eq!(a, b)`, `assert!(condition)` are checks.
+- Tests go into `#[cfg(test)] mod tests` and run with `cargo test`.
+
+## LESSON m15-2 | Tests for errors | 6
+:: goals
+- Check that a function panics
+- Check a `Result` in tests
+
+:: text should_panic
+Sometimes a panic is the correct behavior. This is checked with the attribute `#[should_panic]`:
+
+```rust
+#[test]
+#[should_panic]
+fn divide_by_zero_panics() {
+    divide(1, 0);
+}
+```
+
+:: text A test can return a Result
+Then you can use `?` inside it. An error means the test failed.
+
+```rust
+#[test]
+fn parses() -> Result<(), std::num::ParseIntError> {
+    let n: i32 = "42".parse()?;
+    assert_eq!(n, 42);
+    Ok(())
+}
+```
+
+:: task
+Write a function `is_adult(age: u32) -> bool` (adult means 18 or more) and two tests for it: for 20 and for 10.
+```rust
+pub fn is_adult(age: u32) -> bool {
+    // your code
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // your tests
+}
+```
+```solution
+pub fn is_adult(age: u32) -> bool {
+    age >= 18
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn twenty_is_adult() {
+        assert!(is_adult(20));
+    }
+
+    #[test]
+    fn ten_is_not_adult() {
+        assert!(!is_adult(10));
+    }
+}
+```
+tests: yes
+contains: #[test]
+hint: The function body is one expression: `age >= 18`.
+hint: A test: `#[test] fn twenty() { assert!(is_adult(20)); }`. For 10 — `assert!(!is_adult(10));`
+explain: The tests passed. This is how reliable programs are written: a function + checks.
+
+:: deep Tests in documentation and the tests folder
+Rust has two more kinds of tests.
+
+**Documentation tests.** A code example in a `///` comment is also run by `cargo test`. That way the documentation never goes out of date:
+
+```rust
+/// Doubles a number.
+///
+/// ```
+/// assert_eq!(my_crate::double(2), 4);
+/// ```
+pub fn double(x: i32) -> i32 { x * 2 }
+```
+
+**Integration tests.** Files in the folder `tests/` next to `src/`. They see the library the same way other programs will see it: only the public functions.
+
+In total: unit tests (`mod tests`) check the details, integration tests check the whole thing, documentation tests check that the examples are correct.
+
+:: recap
+- `#[should_panic]` — the test expects a panic.
+- A test can return a `Result` and use `?`.
+- Write tests for normal cases and for edge cases: 0, empty, very many.
+
+## LESSON m15-p | Practice: tests | 12 | practice
+:: goals
+- Write tests for your functions
+- Find bugs with tests
+
+:: task
+Write two tests for `max_of`: for `[3, 9, 2]` the answer is `9`, for `[-5, -1]` the answer is `-1`.
+```rust
+pub fn max_of(items: &[i32]) -> i32 {
+    let mut best = items[0];
+    for &x in items {
+        if x > best {
+            best = x;
+        }
+    }
+    best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}
+```
+```solution
+pub fn max_of(items: &[i32]) -> i32 {
+    let mut best = items[0];
+    for &x in items {
+        if x > best {
+            best = x;
+        }
+    }
+    best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positive() {
+        assert_eq!(max_of(&[3, 9, 2]), 9);
+    }
+
+    #[test]
+    fn negative() {
+        assert_eq!(max_of(&[-5, -1]), -1);
+    }
+}
+```
+tests: yes
+contains: #[test]
+hint: Each test is `#[test] fn name() { assert_eq!(...); }`
+hint: `assert_eq!(max_of(&[3, 9, 2]), 9);`
+
+:: task
+The tests are already written, but the function has a bug. Find the bug from the failure message and fix the function.
+```rust
+pub fn average(items: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for x in items {
+        sum += x;
+    }
+    sum / 2.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn three_items() {
+        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);
+    }
+
+    #[test]
+    fn two_items() {
+        assert_eq!(average(&[4.0, 6.0]), 5.0);
+    }
+}
+```
+```solution
+pub fn average(items: &[f64]) -> f64 {
+    let mut sum = 0.0;
+    for x in items {
+        sum += x;
+    }
+    sum / items.len() as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn three_items() {
+        assert_eq!(average(&[1.0, 2.0, 6.0]), 3.0);
+    }
+
+    #[test]
+    fn two_items() {
+        assert_eq!(average(&[4.0, 6.0]), 5.0);
+    }
+}
+```
+tests: yes
+hint: The test with two numbers passes, but the one with three does not. What in the function works only for two numbers?
+hint: Divide by the count: `sum / items.len() as f64`.
+
+:: task
+The function `first_char` panics on an empty string. Write a test with `#[should_panic]` that checks this.
+```rust
+pub fn first_char(s: &str) -> char {
+    s.chars().next().expect("empty string")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}
+```
+```solution
+pub fn first_char(s: &str) -> char {
+    s.chars().next().expect("empty string")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn empty_panics() {
+        first_char("");
+    }
+}
+```
+tests: yes
+contains: should_panic
+hint: Two attributes in a row: `#[test]` and `#[should_panic]`.
+hint: Inside the test just call `first_char("");`
+
+:: quiz
+A test failed with the message `left: 4, right: 5`. What does it mean?
+[x] The function returned 4, and the test expected 5 => Correct. `left` is the first value in `assert_eq!`, `right` is the second.
+[ ] The test has 4 errors out of 5 => It is not a number of errors, but the two compared values.
+[ ] The test ran 4 times => The numbers are the values that did not match.
+
+:: recap
+- Tests are written next to the code, in `#[cfg(test)] mod tests`.
+- The failure message shows `left` and `right` — this makes the bug easier to find.
+- `#[should_panic]` checks that a panic happened.
