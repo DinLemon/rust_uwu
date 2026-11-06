@@ -86,6 +86,21 @@ fn main() {
 [x] Ничего: создастся future, но он не запустится => Верно. Как итератор без `collect`.
 [ ] Программа запаникует => Паники не будет, просто код не выполнится. Компилятор об этом предупредит.
 
+:: text Что выбрать: потоки или async
+- **Потоки** — когда задач немного и каждая много **считает**: обработка картинок, сжатие, вычисления.
+- **Async** — когда задач очень много и каждая в основном **ждёт**: тысячи сетевых соединений, чат, веб-сервер.
+
+Если сомневаешься и задач немного — начни с потоков. Они проще.
+
+:: deep Что такое Future внутри
+Компилятор превращает `async fn` в **машину состояний**: структуру, которая помнит, на каком `.await` остановилась.
+
+У Future один главный метод — `poll` («опросить»). Исполнитель вызывает `poll`:
+- если результат готов, `poll` возвращает `Poll::Ready(значение)`;
+- если нет — `Poll::Pending`, и Future обещает «разбудить» исполнителя, когда можно пробовать снова.
+
+Пока один Future ждёт, исполнитель опрашивает другие. Так один поток обслуживает тысячи задач.
+
 :: recap
 - Async — много задач, которые в основном ждут.
 - `async fn` возвращает future, `.await` его дожидается.
@@ -146,8 +161,199 @@ fn main() {
 [ ] Макросы работают быстрее функций => Дело не в скорости.
 [ ] Так исторически сложилось, разницы нет => Разница есть: макрос раскрывается в код до компиляции.
 
+:: text Полезные макросы стандартной библиотеки
+- `vec![...]`, `format!(...)`, `println!`, `print!`, `eprintln!` (печать в поток ошибок);
+- `assert!`, `assert_eq!`, `assert_ne!`;
+- `dbg!(x)` — напечатать выражение, его значение и строку кода. Удобно при отладке;
+- `todo!()` — «ещё не написано». Компилируется, но паникует при запуске;
+- `matches!(x, образец)` — `true`, если `x` подходит под образец.
+
+```rust
+let c = 'z';
+let is_letter = matches!(c, 'a'..='z' | 'A'..='Z'); // true
+```
+
+:: deep Процедурные макросы
+`macro_rules!` подставляет код по шаблону. Есть второй, более мощный вид — **процедурные макросы**. Это отдельные маленькие программы на Rust, которые получают код как набор токенов и возвращают новый код.
+
+Три вида:
+- `#[derive(...)]` — дописать реализацию трейта;
+- атрибуты вроде `#[tokio::main]` — переделать функцию;
+- функциональные, вроде `sql!(...)` — разобрать свой мини-язык.
+
+Их пишут в отдельном крейте с пометкой `proc-macro = true`. Новичку писать их не нужно, но полезно знать, откуда берутся `#[derive]` и `#[tokio::main]`.
+
 :: recap
 - Макросы с `!` генерируют код до компиляции.
 - `macro_rules!` — свои простые макросы.
 - `#[derive]` — тоже макрос.
 - `unsafe` существует, но новичку не нужен.
+
+## LESSON m18-p | Практика: макросы и async | 12 | practice
+:: goals
+- Писать простые макросы
+- Пользоваться макросами стандартной библиотеки
+- Писать async-функции
+
+:: task
+Напиши макрос `max!(a, b)`, который возвращает большее из двух выражений.
+```rust
+// напиши macro_rules! max
+
+fn main() {
+    println!("{}", max!(3, 8));
+    println!("{}", max!(10 - 1, 2 * 2));
+}
+```
+```solution
+macro_rules! max {
+    ($a:expr, $b:expr) => {
+        if $a > $b { $a } else { $b }
+    };
+}
+
+fn main() {
+    println!("{}", max!(3, 8));
+    println!("{}", max!(10 - 1, 2 * 2));
+}
+```
+```expect
+8
+9
+```
+hint: Шаблон: `($a:expr, $b:expr) => { ... };`
+hint: Тело: `if $a > $b { $a } else { $b }`
+
+:: task
+Напиши макрос `sum!`, который складывает любое количество чисел: `sum!(1, 2, 3)`.
+```rust
+// напиши macro_rules! sum
+
+fn main() {
+    println!("{}", sum!(1, 2, 3));
+    println!("{}", sum!(10));
+}
+```
+```solution
+macro_rules! sum {
+    ($($x:expr),*) => {
+        0 $(+ $x)*
+    };
+}
+
+fn main() {
+    println!("{}", sum!(1, 2, 3));
+    println!("{}", sum!(10));
+}
+```
+```expect
+6
+10
+```
+hint: Повторение: `($($x:expr),*)` в шаблоне и `$( ... )*` в теле.
+hint: Тело: `0 $(+ $x)*` — превратится в `0 + 1 + 2 + 3`.
+
+:: task
+Посчитай гласные латинские буквы в строке с помощью `matches!`.
+```rust
+fn main() {
+    let text = "macro rules";
+    let n = text.chars().filter(|c| false).count();
+    println!("{n}");
+}
+```
+```solution
+fn main() {
+    let text = "macro rules";
+    let n = text.chars().filter(|c| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')).count();
+    println!("{n}");
+}
+```
+```expect
+4
+```
+hint: `matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')`
+hint: Поставь это условие внутрь `filter`.
+
+:: task
+Допиши async-функцию `total`, которая через `.await` получает две цены и возвращает их сумму. Маленький исполнитель `block_on` уже написан.
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake};
+
+struct Noop;
+impl Wake for Noop {
+    fn wake(self: Arc<Self>) {}
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let waker = Arc::new(Noop).into();
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn price(item: &str) -> u32 {
+    if item == "чай" { 100 } else { 250 }
+}
+
+async fn total() -> u32 {
+    0
+}
+
+fn main() {
+    println!("{}", block_on(total()));
+}
+```
+```solution
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake};
+
+struct Noop;
+impl Wake for Noop {
+    fn wake(self: Arc<Self>) {}
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let waker = Arc::new(Noop).into();
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn price(item: &str) -> u32 {
+    if item == "чай" { 100 } else { 250 }
+}
+
+async fn total() -> u32 {
+    let a = price("чай").await;
+    let b = price("торт").await;
+    a + b
+}
+
+fn main() {
+    println!("{}", block_on(total()));
+}
+```
+```expect
+350
+```
+hint: Результат async-функции получают через `.await`: `let a = price("чай").await;`
+hint: Верни `a + b`.
+
+:: recap
+- `macro_rules!` + `$x:expr` + `$(...)*` — свои простые макросы.
+- `matches!`, `dbg!`, `todo!` — удобные встроенные макросы.
+- `.await` достаёт результат из async-функции.

@@ -1,0 +1,359 @@
+# MODULE m18 | Async and macros | An overview of advanced topics
+
+## LESSON m18-1 | Async: waiting without idling | 7
+:: goals
+- How async differs from threads
+- What `async` and `.await` mean
+
+:: text A waiter instead of a cook for every table
+A program often **waits**: for an answer from a server, for a file to be read. While it waits, the processor is idle.
+
+> Analogy: threads are like hiring a cook for every table. Async is one waiter: he takes an order, brings it to the kitchen, and while the dish is cooking he serves other tables.
+
+Async pays off when there are very many tasks and each has little work: web servers, chats, network programs.
+
+:: text async and .await
+- `async fn` is a function that returns not a result, but a **promise** of a result (a future).
+- `.await` means "wait for the promise, and meanwhile let others work".
+
+```rust
+async fn load_user() -> String {
+    String::from("Anna")
+}
+
+async fn hello() {
+    let name = load_user().await;
+    println!("Hello, {name}");
+}
+```
+
+:: text An executor is needed
+A future is lazy by itself, like an iterator. Someone must "drive" it. This is done by a **runtime** — an executor.
+
+The standard library has no runtime. Real projects use the crate **tokio**:
+
+```text
+#[tokio::main]
+async fn main() {
+    hello().await;
+}
+```
+
+:: code
+For the curious: a tiny executor using only the standard library. You do not need to understand every line.
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake};
+
+struct Noop;
+impl Wake for Noop {
+    fn wake(self: Arc<Self>) {}
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let waker = Arc::new(Noop).into();
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn load_user() -> String {
+    String::from("Anna")
+}
+
+async fn hello() -> String {
+    let name = load_user().await;
+    format!("Hello, {name}")
+}
+
+fn main() {
+    println!("{}", block_on(hello()));
+}
+```
+```out
+Hello, Anna
+```
+
+:: quiz
+What happens if you call an `async fn` without `.await` and without an executor?
+[ ] The function runs immediately => A future is lazy: without an executor nothing happens.
+[x] Nothing: a future is created, but it does not run => Correct. Like an iterator without `collect`.
+[ ] The program panics => There is no panic; the code just does not run. The compiler warns about it.
+
+:: text What to choose: threads or async
+- **Threads** — when there are few tasks and each one **computes** a lot: image processing, compression, calculations.
+- **Async** — when there are very many tasks and each one mostly **waits**: thousands of network connections, a chat, a web server.
+
+If you are not sure and there are few tasks — start with threads. They are simpler.
+
+:: deep What a Future is inside
+The compiler turns an `async fn` into a **state machine**: a struct that remembers at which `.await` it stopped.
+
+A future has one main method — `poll`. The executor calls `poll`:
+- if the result is ready, `poll` returns `Poll::Ready(value)`;
+- if not — `Poll::Pending`, and the future promises to "wake up" the executor when it is worth trying again.
+
+While one future waits, the executor polls others. This is how one thread serves thousands of tasks.
+
+:: recap
+- Async is for many tasks that mostly wait.
+- `async fn` returns a future, `.await` waits for it.
+- A runtime is needed. Real projects use tokio.
+
+## LESSON m18-2 | Macros | 6
+:: goals
+- How a macro differs from a function
+- Write a simple macro with `macro_rules!`
+
+:: text A macro writes code for you
+You have used macros the whole course: `println!`, `vec!`, `format!`, `assert_eq!`. The exclamation mark is their sign.
+
+A **macro** is code that **writes code** before compilation. That is why `println!` can take any number of arguments, and a normal function cannot.
+
+:: code
+A simple macro with `macro_rules!`:
+```rust
+macro_rules! square {
+    ($x:expr) => {
+        $x * $x
+    };
+}
+
+macro_rules! hello_all {
+    ($($name:expr),*) => {
+        $( println!("Hello, {}!", $name); )*
+    };
+}
+
+fn main() {
+    println!("{}", square!(7));
+    hello_all!("Anna", "Bob", "Vic");
+}
+```
+```out
+49
+Hello, Anna!
+Hello, Bob!
+Hello, Vic!
+```
+- `$x:expr` means "put any expression here".
+- `$(...),*` means "repeat any number of times, separated by commas".
+
+:: text derive is a macro too
+`#[derive(Debug)]` is a **procedural macro**. It reads your struct and adds an implementation of the trait to it.
+
+People rarely write their own procedural macros. But it is useful to know that this is what they are.
+
+:: text unsafe — one line of truth
+Rust has the word `unsafe`. Inside such a block you can do things the compiler cannot check: work with raw pointers, call code written in C.
+
+A beginner does not need `unsafe`. Most Rust programs do not contain it at all.
+
+:: quiz
+Why is `println!` a macro and not a function?
+[x] It takes a different number of arguments and checks the format at compile time => Correct. A normal function in Rust cannot do that.
+[ ] Macros run faster than functions => It is not about speed.
+[ ] It is historical; there is no difference => There is a difference: a macro expands into code before compilation.
+
+:: text Useful macros of the standard library
+- `vec![...]`, `format!(...)`, `println!`, `print!`, `eprintln!` (print to the error stream);
+- `assert!`, `assert_eq!`, `assert_ne!`;
+- `dbg!(x)` — print the expression, its value and the line of code. Handy when debugging;
+- `todo!()` — "not written yet". It compiles, but panics when run;
+- `matches!(x, pattern)` — `true` if `x` fits the pattern.
+
+```rust
+let c = 'z';
+let is_letter = matches!(c, 'a'..='z' | 'A'..='Z'); // true
+```
+
+:: deep Procedural macros
+`macro_rules!` substitutes code by a template. There is a second, more powerful kind — **procedural macros**. They are separate small Rust programs that receive code as a set of tokens and return new code.
+
+Three kinds:
+- `#[derive(...)]` — add a trait implementation;
+- attributes like `#[tokio::main]` — rework a function;
+- function-like ones, like `sql!(...)` — parse a mini-language of your own.
+
+They are written in a separate crate marked `proc-macro = true`. A beginner does not need to write them, but it is useful to know where `#[derive]` and `#[tokio::main]` come from.
+
+:: recap
+- Macros with `!` generate code before compilation.
+- `macro_rules!` makes your own simple macros.
+- `#[derive]` is a macro too.
+- `unsafe` exists, but a beginner does not need it.
+
+## LESSON m18-p | Practice: macros and async | 12 | practice
+:: goals
+- Write simple macros
+- Use macros of the standard library
+- Write async functions
+
+:: task
+Write a macro `max!(a, b)` that returns the larger of two expressions.
+```rust
+// write macro_rules! max
+
+fn main() {
+    println!("{}", max!(3, 8));
+    println!("{}", max!(10 - 1, 2 * 2));
+}
+```
+```solution
+macro_rules! max {
+    ($a:expr, $b:expr) => {
+        if $a > $b { $a } else { $b }
+    };
+}
+
+fn main() {
+    println!("{}", max!(3, 8));
+    println!("{}", max!(10 - 1, 2 * 2));
+}
+```
+```expect
+8
+9
+```
+hint: The template: `($a:expr, $b:expr) => { ... };`
+hint: The body: `if $a > $b { $a } else { $b }`
+
+:: task
+Write a macro `sum!` that adds up any number of numbers: `sum!(1, 2, 3)`.
+```rust
+// write macro_rules! sum
+
+fn main() {
+    println!("{}", sum!(1, 2, 3));
+    println!("{}", sum!(10));
+}
+```
+```solution
+macro_rules! sum {
+    ($($x:expr),*) => {
+        0 $(+ $x)*
+    };
+}
+
+fn main() {
+    println!("{}", sum!(1, 2, 3));
+    println!("{}", sum!(10));
+}
+```
+```expect
+6
+10
+```
+hint: Repetition: `($($x:expr),*)` in the template and `$( ... )*` in the body.
+hint: The body: `0 $(+ $x)*` — it becomes `0 + 1 + 2 + 3`.
+
+:: task
+Count the vowels in a string with `matches!`.
+```rust
+fn main() {
+    let text = "macro rules";
+    let n = text.chars().filter(|c| false).count();
+    println!("{n}");
+}
+```
+```solution
+fn main() {
+    let text = "macro rules";
+    let n = text.chars().filter(|c| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')).count();
+    println!("{n}");
+}
+```
+```expect
+4
+```
+hint: `matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')`
+hint: Put this condition inside `filter`.
+
+:: task
+Complete the async function `total` that gets two prices with `.await` and returns their sum. The small executor `block_on` is already written.
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake};
+
+struct Noop;
+impl Wake for Noop {
+    fn wake(self: Arc<Self>) {}
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let waker = Arc::new(Noop).into();
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn price(item: &str) -> u32 {
+    if item == "tea" { 100 } else { 250 }
+}
+
+async fn total() -> u32 {
+    0
+}
+
+fn main() {
+    println!("{}", block_on(total()));
+}
+```
+```solution
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake};
+
+struct Noop;
+impl Wake for Noop {
+    fn wake(self: Arc<Self>) {}
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let waker = Arc::new(Noop).into();
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(fut);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn price(item: &str) -> u32 {
+    if item == "tea" { 100 } else { 250 }
+}
+
+async fn total() -> u32 {
+    let a = price("tea").await;
+    let b = price("cake").await;
+    a + b
+}
+
+fn main() {
+    println!("{}", block_on(total()));
+}
+```
+```expect
+350
+```
+hint: The result of an async function is taken with `.await`: `let a = price("tea").await;`
+hint: Return `a + b`.
+
+:: recap
+- `macro_rules!` + `$x:expr` + `$(...)*` make your own simple macros.
+- `matches!`, `dbg!`, `todo!` are handy built-in macros.
+- `.await` takes the result out of an async function.

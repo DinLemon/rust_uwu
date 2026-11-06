@@ -1,0 +1,444 @@
+# MODULE m17 | Threads | Doing several things at the same time
+
+## LESSON m17-1 | Your first thread | 6
+:: goals
+- Run code in a separate thread
+- Wait for it with `join`
+
+:: text A thread is one more worker
+A **thread** is a separate line of execution. Several threads run at the same time, on different processor cores.
+
+> Analogy: several cooks in one kitchen. The work goes faster, but they must agree on who takes which knife.
+
+Rust is famous for the phrase "fearless concurrency": it catches many thread bugs at compile time.
+
+:: code
+```rust
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| {
+        for i in 1..=3 {
+            println!("helper: step {i}");
+        }
+        42
+    });
+    println!("the main thread waits");
+    let answer = handle.join().unwrap();
+    println!("the helper returned {answer}");
+}
+```
+- `thread::spawn(closure)` starts a thread.
+- `join()` waits for it to finish and takes the result.
+
+The order of lines can change from run to run: the threads run at the same time.
+
+:: text move — give data to the thread
+A thread may live longer than the function that created it. So it cannot borrow a variable — it can only **take** it:
+
+```rust
+let name = String::from("Anna");
+let h = thread::spawn(move || {
+    println!("Hello from the thread, {name}");
+});
+h.join().unwrap();
+```
+Without `move` there is error `E0373`.
+
+:: quiz
+Why do you need `join()`?
+[ ] To start the thread => `spawn` starts it. `join` waits.
+[x] To wait until the thread finishes => Correct. Otherwise `main` may end earlier and cut the thread off.
+[ ] To merge two threads into one => The name is misleading, but no: it means "wait".
+
+:: deep Send and Sync — how the compiler watches threads
+The compiler knows which types can be given to another thread. For this there are two marker traits:
+- `Send` — a value can be **passed** to another thread;
+- `Sync` — a value can be **looked at** from several threads at once.
+
+Almost all types are like this automatically. Exceptions: `Rc` is not `Send` (its counter is not protected), `RefCell` is not `Sync`. If you try to send an `Rc` into `thread::spawn`, you get a compile error, not a random failure at run time.
+
+:: recap
+- `thread::spawn(|| ...)` starts a new thread.
+- `handle.join()` waits and returns the result.
+- `move` gives the variables to the thread.
+
+## LESSON m17-2 | Channels: threads write to each other | 6
+:: goals
+- Pass data between threads through a channel
+
+:: text A channel is a pneumatic tube
+A **channel** is a pipe between threads. Messages go in at one end and come out at the other.
+
+```rust
+let (tx, rx) = mpsc::channel();
+```
+- `tx` is the transmitter; you send with it: `tx.send(x)`.
+- `rx` is the receiver; you receive with it: `rx.recv()`.
+
+`mpsc` means "multiple producers, single consumer".
+
+:: code
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for fruit in ["apple", "pear", "plum"] {
+            tx.send(fruit).unwrap();
+        }
+    });
+    for got in rx {
+        println!("Got: {got}");
+    }
+    println!("The channel is closed");
+}
+```
+```out
+Got: apple
+Got: pear
+Got: plum
+The channel is closed
+```
+The loop `for got in rx` ends by itself when the transmitter disappears together with its thread.
+
+:: quiz
+What is passed with `send`?
+[x] Ownership of the value => Correct. Once sent, you no longer have it. This way threads do not fight over data.
+[ ] A copy of the value => Not necessarily a copy: the value moves.
+[ ] A reference to the value => A reference could dangle. Rust sends the value itself.
+
+:: text Several senders
+The transmitter `tx` can be cloned. Then several threads write into one channel:
+
+```rust
+let tx2 = tx.clone();
+thread::spawn(move || tx2.send("from the second").unwrap());
+```
+The receiver ends the `for` loop when **all** transmitters are gone.
+
+:: recap
+- `mpsc::channel()` creates a channel `(tx, rx)`.
+- `tx.send(x)` sends; `rx.recv()` or `for x in rx` receives.
+- Sending passes ownership.
+
+## LESSON m17-3 | Shared data: Arc and Mutex | 7
+:: goals
+- Change one value from many threads
+- Why `Arc` and `Mutex` are needed
+
+:: text A lock on the door
+`Mutex` (mutual exclusion) lets threads to the data **one at a time**.
+
+> Analogy: the key to the bathroom in a cafe. You take the key and go in. The others wait until you return it.
+
+`lock()` takes the key. The key is returned automatically when the variable holding it disappears.
+
+:: text Arc — Rc for threads
+`Rc` cannot be passed between threads: its counter is not protected. For threads there is `Arc` — an **atomic** Rc.
+
+The classic: `Arc<Mutex<T>>` — a shared changeable value for many threads.
+
+:: code
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let counter = Arc::new(Mutex::new(0));
+    let mut handles = vec![];
+    for _ in 0..10 {
+        let c = Arc::clone(&counter);
+        handles.push(thread::spawn(move || {
+            let mut n = c.lock().unwrap();
+            *n += 1;
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    println!("Result: {}", *counter.lock().unwrap());
+}
+```
+```out
+Result: 10
+```
+Ten threads, each one added 1. Without a Mutex the result could be smaller: threads would overwrite each other.
+
+:: text thread::scope — simpler for short tasks
+If threads are needed only inside one block, `thread::scope` lets them **borrow** data. `move` and `Arc` are not needed:
+
+```rust
+let data = vec![1, 2, 3, 4];
+let (left, right) = data.split_at(2);
+thread::scope(|s| {
+    s.spawn(|| println!("{}", left.iter().sum::<i32>()));
+    s.spawn(|| println!("{}", right.iter().sum::<i32>()));
+});
+```
+
+:: quiz
+Why do threads need `Arc` instead of `Rc`?
+[ ] `Arc` is faster => The opposite: it is a bit slower. But it is safe.
+[x] The `Arc` counter is safely changed from different threads => Correct. The compiler does not let you send an `Rc` into a thread.
+[ ] `Rc` cannot be cloned => It can, but only in one thread.
+
+:: deep Deadlock and other tools
+**Deadlock**: thread A holds lock 1 and waits for lock 2, while thread B holds lock 2 and waits for lock 1. Both wait forever. Rust does **not** protect against this. The rule: always take several locks in the same order.
+
+Other tools from `std::sync`:
+- `RwLock` — many readers **or** one writer. Useful when reading is frequent and writing is rare.
+- **Atomic numbers** (`AtomicUsize` and others) — a counter without a lock. Faster than `Mutex` for simple numbers.
+
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let handles: Vec<_> = (0..4).map(|_| {
+        let h = Arc::clone(&hits);
+        thread::spawn(move || {
+            for _ in 0..1000 {
+                h.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+    }).collect();
+    for t in handles {
+        t.join().unwrap();
+    }
+    println!("{}", hits.load(Ordering::Relaxed));
+}
+```
+```out
+4000
+```
+
+:: recap
+- `Mutex` gives access one at a time; `lock()` takes the key.
+- `Arc` is a shared owner for threads.
+- `Arc<Mutex<T>>` is shared changeable data.
+- `thread::scope` runs threads that borrow data.
+
+## LESSON m17-p | Practice: threads | 14 | practice
+:: goals
+- Start threads and collect results
+- Pass data through channels
+- Share data with `Arc<Mutex<T>>`
+
+:: task
+Fix error `E0373`: the thread cannot borrow `name`.
+```rust
+use std::thread;
+
+fn main() {
+    let name = String::from("Rust");
+    let h = thread::spawn(|| {
+        println!("Hello from the thread, {name}");
+    });
+    h.join().unwrap();
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let name = String::from("Rust");
+    let h = thread::spawn(move || {
+        println!("Hello from the thread, {name}");
+    });
+    h.join().unwrap();
+}
+```
+```expect
+Hello from the thread, Rust
+```
+hint: The compiler suggests: to force the closure to take ownership, use the `move` keyword.
+hint: `thread::spawn(move || { ... })`
+
+:: task
+Start three threads. Each one returns the square of its number (1, 2, 3). Add up the results in the main thread.
+```rust
+use std::thread;
+
+fn main() {
+    let mut handles = Vec::new();
+    for i in 1..=3 {
+        // start a thread that returns i * i
+    }
+    let mut total = 0;
+    for h in handles {
+        total += h.join().unwrap();
+    }
+    println!("{total}");
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let mut handles = Vec::new();
+    for i in 1..=3 {
+        handles.push(thread::spawn(move || i * i));
+    }
+    let mut total = 0;
+    for h in handles {
+        total += h.join().unwrap();
+    }
+    println!("{total}");
+}
+```
+```expect
+14
+```
+hint: `handles.push(thread::spawn(move || i * i));`
+hint: `move` is needed so that each thread takes its own copy of `i`.
+
+:: task
+Two threads send numbers into one channel. The main thread adds up everything that arrives.
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    let tx2 = tx.clone();
+    thread::spawn(move || {
+        for n in [1, 2, 3] {
+            tx.send(n).unwrap();
+        }
+    });
+    thread::spawn(move || {
+        for n in [10, 20] {
+            tx2.send(n).unwrap();
+        }
+    });
+    let mut sum = 0;
+    // receive all numbers
+    println!("{sum}");
+}
+```
+```solution
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    let tx2 = tx.clone();
+    thread::spawn(move || {
+        for n in [1, 2, 3] {
+            tx.send(n).unwrap();
+        }
+    });
+    thread::spawn(move || {
+        for n in [10, 20] {
+            tx2.send(n).unwrap();
+        }
+    });
+    let mut sum = 0;
+    for n in rx {
+        sum += n;
+    }
+    println!("{sum}");
+}
+```
+```expect
+36
+```
+hint: The loop `for n in rx` receives messages while the transmitters are alive.
+hint: Inside: `sum += n;`
+
+:: task
+Five threads add their number to a shared vector. At the end, sort the vector and print it.
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let list = Arc::new(Mutex::new(Vec::new()));
+    let mut handles = Vec::new();
+    for i in 0..5 {
+        let l = Arc::clone(&list);
+        handles.push(thread::spawn(move || {
+            // add i to the shared vector
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut v = list.lock().unwrap().clone();
+    v.sort();
+    println!("{:?}", v);
+}
+```
+```solution
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let list = Arc::new(Mutex::new(Vec::new()));
+    let mut handles = Vec::new();
+    for i in 0..5 {
+        let l = Arc::clone(&list);
+        handles.push(thread::spawn(move || {
+            l.lock().unwrap().push(i);
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut v = list.lock().unwrap().clone();
+    v.sort();
+    println!("{:?}", v);
+}
+```
+```expect
+[0, 1, 2, 3, 4]
+```
+hint: Take the lock and add the number: `l.lock().unwrap().push(i);`
+hint: Sorting is needed because threads finish in a random order.
+
+:: task
+With `thread::scope`, calculate the sums of the two halves of a vector in two threads, then add them up.
+```rust
+use std::thread;
+
+fn main() {
+    let data: Vec<u64> = (1..=100).collect();
+    let (left, right) = data.split_at(50);
+    let mut a = 0;
+    let mut b = 0;
+    thread::scope(|s| {
+        // two threads: one sums left, the other right
+    });
+    println!("{}", a + b);
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let data: Vec<u64> = (1..=100).collect();
+    let (left, right) = data.split_at(50);
+    let mut a = 0;
+    let mut b = 0;
+    thread::scope(|s| {
+        s.spawn(|| a = left.iter().sum());
+        s.spawn(|| b = right.iter().sum());
+    });
+    println!("{}", a + b);
+}
+```
+```expect
+5050
+```
+hint: Inside `scope`, threads are started with `s.spawn(|| ...)`.
+hint: `s.spawn(|| a = left.iter().sum());` and the same for `b`.
+
+:: recap
+- `move` gives variables to a thread; `join` returns the result.
+- A channel: `tx.clone()` for several senders.
+- `Arc<Mutex<T>>` for shared data, `thread::scope` for threads that borrow.

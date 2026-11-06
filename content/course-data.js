@@ -5328,6 +5328,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Send и Sync — как компилятор следит за потоками",
+"md": "Компилятор знает, какие типы можно отдавать в другой поток. Для этого есть два трейта-метки:\n- `Send` — значение можно **передать** в другой поток;\n- `Sync` — на значение можно **смотреть** из нескольких потоков сразу.\n\nПочти все типы такие сами по себе. Исключения: `Rc` не `Send` (его счётчик не защищён), `RefCell` не `Sync`. Если попытаться отправить `Rc` в `thread::spawn`, будет ошибка компиляции, а не случайный сбой во время работы."
+},
+{
 "t": "recap",
 "items": [
 "`thread::spawn(|| ...)` — новый поток.",
@@ -5371,6 +5376,11 @@ window.COURSES = {
 "Не обязательно копия: значение переезжает.",
 "Ссылка могла бы повиснуть. Rust отправляет само значение."
 ]
+},
+{
+"t": "text",
+"title": "Несколько отправителей",
+"md": "Передатчик `tx` можно клонировать. Тогда несколько потоков пишут в один канал:\n\n```\nlet tx2 = tx.clone();\nthread::spawn(move || tx2.send(\"из второго\").unwrap());\n```\nПриёмник закончит цикл `for`, когда исчезнут **все** передатчики."
 },
 {
 "t": "recap",
@@ -5427,6 +5437,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Взаимная блокировка и другие инструменты",
+"md": "**Взаимная блокировка** (deadlock): поток А держит замок 1 и ждёт замок 2, а поток Б держит замок 2 и ждёт замок 1. Оба ждут вечно. Rust от этого **не** защищает. Правило: всегда бери несколько замков в одном и том же порядке.\n\nДругие инструменты из `std::sync`:\n- `RwLock` — много читателей **или** один писатель. Удобно, когда читают часто, а пишут редко.\n- **Атомарные числа** (`AtomicUsize` и другие) — счётчик без замка. Быстрее `Mutex` для простых чисел.",
+"code": "use std::sync::atomic::{AtomicUsize, Ordering};\nuse std::sync::Arc;\nuse std::thread;\n\nfn main() {\n    let hits = Arc::new(AtomicUsize::new(0));\n    let handles: Vec<_> = (0..4).map(|_| {\n        let h = Arc::clone(&hits);\n        thread::spawn(move || {\n            for _ in 0..1000 {\n                h.fetch_add(1, Ordering::Relaxed);\n            }\n        })\n    }).collect();\n    for t in handles {\n        t.join().unwrap();\n    }\n    println!(\"{}\", hits.load(Ordering::Relaxed));\n}",
+"out": "4000"
+},
+{
 "t": "recap",
 "items": [
 "`Mutex` — доступ по одному, `lock()` — взять ключ.",
@@ -5439,6 +5456,82 @@ window.COURSES = {
 "goals": [
 "Менять одно значение из многих потоков",
 "Зачем нужны `Arc` и `Mutex`"
+]
+},
+{
+"id": "m17-p",
+"title": "Практика: потоки",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Почини ошибку `E0373`: поток не может одолжить `name`.",
+"code": "use std::thread;\n\nfn main() {\n    let name = String::from(\"Rust\");\n    let h = thread::spawn(|| {\n        println!(\"Привет из потока, {name}\");\n    });\n    h.join().unwrap();\n}",
+"solution": "use std::thread;\n\nfn main() {\n    let name = String::from(\"Rust\");\n    let h = thread::spawn(move || {\n        println!(\"Привет из потока, {name}\");\n    });\n    h.join().unwrap();\n}",
+"expect": "Привет из потока, Rust",
+"hints": [
+"Компилятор подсказывает: to force the closure to take ownership, use the `move` keyword.",
+"`thread::spawn(move || { ... })`"
+]
+},
+{
+"t": "task",
+"md": "Запусти три потока. Каждый возвращает квадрат своего номера (1, 2, 3). Сложи результаты в главном потоке.",
+"code": "use std::thread;\n\nfn main() {\n    let mut handles = Vec::new();\n    for i in 1..=3 {\n        // запусти поток, который вернёт i * i\n    }\n    let mut total = 0;\n    for h in handles {\n        total += h.join().unwrap();\n    }\n    println!(\"{total}\");\n}",
+"solution": "use std::thread;\n\nfn main() {\n    let mut handles = Vec::new();\n    for i in 1..=3 {\n        handles.push(thread::spawn(move || i * i));\n    }\n    let mut total = 0;\n    for h in handles {\n        total += h.join().unwrap();\n    }\n    println!(\"{total}\");\n}",
+"expect": "14",
+"hints": [
+"`handles.push(thread::spawn(move || i * i));`",
+"`move` нужен, чтобы каждый поток забрал свою копию `i`."
+]
+},
+{
+"t": "task",
+"md": "Два потока отправляют числа в один канал. Главный поток складывает всё, что пришло.",
+"code": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    let tx2 = tx.clone();\n    thread::spawn(move || {\n        for n in [1, 2, 3] {\n            tx.send(n).unwrap();\n        }\n    });\n    thread::spawn(move || {\n        for n in [10, 20] {\n            tx2.send(n).unwrap();\n        }\n    });\n    let mut sum = 0;\n    // получи все числа\n    println!(\"{sum}\");\n}",
+"solution": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    let tx2 = tx.clone();\n    thread::spawn(move || {\n        for n in [1, 2, 3] {\n            tx.send(n).unwrap();\n        }\n    });\n    thread::spawn(move || {\n        for n in [10, 20] {\n            tx2.send(n).unwrap();\n        }\n    });\n    let mut sum = 0;\n    for n in rx {\n        sum += n;\n    }\n    println!(\"{sum}\");\n}",
+"expect": "36",
+"hints": [
+"Цикл `for n in rx` получает сообщения, пока живы передатчики.",
+"Внутри: `sum += n;`"
+]
+},
+{
+"t": "task",
+"md": "Пять потоков добавляют свой номер в общий вектор. В конце отсортируй вектор и напечатай.",
+"code": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let list = Arc::new(Mutex::new(Vec::new()));\n    let mut handles = Vec::new();\n    for i in 0..5 {\n        let l = Arc::clone(&list);\n        handles.push(thread::spawn(move || {\n            // добавь i в общий вектор\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    let mut v = list.lock().unwrap().clone();\n    v.sort();\n    println!(\"{:?}\", v);\n}",
+"solution": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let list = Arc::new(Mutex::new(Vec::new()));\n    let mut handles = Vec::new();\n    for i in 0..5 {\n        let l = Arc::clone(&list);\n        handles.push(thread::spawn(move || {\n            l.lock().unwrap().push(i);\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    let mut v = list.lock().unwrap().clone();\n    v.sort();\n    println!(\"{:?}\", v);\n}",
+"expect": "[0, 1, 2, 3, 4]",
+"hints": [
+"Возьми замок и добавь число: `l.lock().unwrap().push(i);`",
+"Сортировка нужна, потому что потоки заканчивают работу в случайном порядке."
+]
+},
+{
+"t": "task",
+"md": "С помощью `thread::scope` посчитай суммы двух половин вектора в двух потоках, а потом сложи их.",
+"code": "use std::thread;\n\nfn main() {\n    let data: Vec<u64> = (1..=100).collect();\n    let (left, right) = data.split_at(50);\n    let mut a = 0;\n    let mut b = 0;\n    thread::scope(|s| {\n        // два потока: один считает left, другой right\n    });\n    println!(\"{}\", a + b);\n}",
+"solution": "use std::thread;\n\nfn main() {\n    let data: Vec<u64> = (1..=100).collect();\n    let (left, right) = data.split_at(50);\n    let mut a = 0;\n    let mut b = 0;\n    thread::scope(|s| {\n        s.spawn(|| a = left.iter().sum());\n        s.spawn(|| b = right.iter().sum());\n    });\n    println!(\"{}\", a + b);\n}",
+"expect": "5050",
+"hints": [
+"Внутри `scope` потоки запускают через `s.spawn(|| ...)`.",
+"`s.spawn(|| a = left.iter().sum());` и так же для `b`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`move` отдаёт потоку переменные, `join` возвращает результат.",
+"Канал: `tx.clone()` для нескольких отправителей.",
+"`Arc<Mutex<T>>` — общие данные, `thread::scope` — потоки с заимствованием."
+]
+}
+],
+"practice": true,
+"goals": [
+"Запускать потоки и собирать результаты",
+"Передавать данные через каналы",
+"Делить данные через `Arc<Mutex<T>>`"
 ]
 }
 ]
@@ -5488,6 +5581,16 @@ window.COURSES = {
 "Верно. Как итератор без `collect`.",
 "Паники не будет, просто код не выполнится. Компилятор об этом предупредит."
 ]
+},
+{
+"t": "text",
+"title": "Что выбрать: потоки или async",
+"md": "- **Потоки** — когда задач немного и каждая много **считает**: обработка картинок, сжатие, вычисления.\n- **Async** — когда задач очень много и каждая в основном **ждёт**: тысячи сетевых соединений, чат, веб-сервер.\n\nЕсли сомневаешься и задач немного — начни с потоков. Они проще."
+},
+{
+"t": "deep",
+"title": "Что такое Future внутри",
+"md": "Компилятор превращает `async fn` в **машину состояний**: структуру, которая помнит, на каком `.await` остановилась.\n\nУ Future один главный метод — `poll` («опросить»). Исполнитель вызывает `poll`:\n- если результат готов, `poll` возвращает `Poll::Ready(значение)`;\n- если нет — `Poll::Pending`, и Future обещает «разбудить» исполнителя, когда можно пробовать снова.\n\nПока один Future ждёт, исполнитель опрашивает другие. Так один поток обслуживает тысячи задач."
 },
 {
 "t": "recap",
@@ -5546,6 +5649,16 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Полезные макросы стандартной библиотеки",
+"md": "- `vec![...]`, `format!(...)`, `println!`, `print!`, `eprintln!` (печать в поток ошибок);\n- `assert!`, `assert_eq!`, `assert_ne!`;\n- `dbg!(x)` — напечатать выражение, его значение и строку кода. Удобно при отладке;\n- `todo!()` — «ещё не написано». Компилируется, но паникует при запуске;\n- `matches!(x, образец)` — `true`, если `x` подходит под образец.\n\n```\nlet c = 'z';\nlet is_letter = matches!(c, 'a'..='z' | 'A'..='Z'); // true\n```"
+},
+{
+"t": "deep",
+"title": "Процедурные макросы",
+"md": "`macro_rules!` подставляет код по шаблону. Есть второй, более мощный вид — **процедурные макросы**. Это отдельные маленькие программы на Rust, которые получают код как набор токенов и возвращают новый код.\n\nТри вида:\n- `#[derive(...)]` — дописать реализацию трейта;\n- атрибуты вроде `#[tokio::main]` — переделать функцию;\n- функциональные, вроде `sql!(...)` — разобрать свой мини-язык.\n\nИх пишут в отдельном крейте с пометкой `proc-macro = true`. Новичку писать их не нужно, но полезно знать, откуда берутся `#[derive]` и `#[tokio::main]`."
+},
+{
 "t": "recap",
 "items": [
 "Макросы с `!` генерируют код до компиляции.",
@@ -5558,6 +5671,71 @@ window.COURSES = {
 "goals": [
 "Чем макрос отличается от функции",
 "Написать простой макрос `macro_rules!`"
+]
+},
+{
+"id": "m18-p",
+"title": "Практика: макросы и async",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Напиши макрос `max!(a, b)`, который возвращает большее из двух выражений.",
+"code": "// напиши macro_rules! max\n\nfn main() {\n    println!(\"{}\", max!(3, 8));\n    println!(\"{}\", max!(10 - 1, 2 * 2));\n}",
+"solution": "macro_rules! max {\n    ($a:expr, $b:expr) => {\n        if $a > $b { $a } else { $b }\n    };\n}\n\nfn main() {\n    println!(\"{}\", max!(3, 8));\n    println!(\"{}\", max!(10 - 1, 2 * 2));\n}",
+"expect": "8\n9",
+"hints": [
+"Шаблон: `($a:expr, $b:expr) => { ... };`",
+"Тело: `if $a > $b { $a } else { $b }`"
+]
+},
+{
+"t": "task",
+"md": "Напиши макрос `sum!`, который складывает любое количество чисел: `sum!(1, 2, 3)`.",
+"code": "// напиши macro_rules! sum\n\nfn main() {\n    println!(\"{}\", sum!(1, 2, 3));\n    println!(\"{}\", sum!(10));\n}",
+"solution": "macro_rules! sum {\n    ($($x:expr),*) => {\n        0 $(+ $x)*\n    };\n}\n\nfn main() {\n    println!(\"{}\", sum!(1, 2, 3));\n    println!(\"{}\", sum!(10));\n}",
+"expect": "6\n10",
+"hints": [
+"Повторение: `($($x:expr),*)` в шаблоне и `$( ... )*` в теле.",
+"Тело: `0 $(+ $x)*` — превратится в `0 + 1 + 2 + 3`."
+]
+},
+{
+"t": "task",
+"md": "Посчитай гласные латинские буквы в строке с помощью `matches!`.",
+"code": "fn main() {\n    let text = \"macro rules\";\n    let n = text.chars().filter(|c| false).count();\n    println!(\"{n}\");\n}",
+"solution": "fn main() {\n    let text = \"macro rules\";\n    let n = text.chars().filter(|c| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')).count();\n    println!(\"{n}\");\n}",
+"expect": "4",
+"hints": [
+"`matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')`",
+"Поставь это условие внутрь `filter`."
+]
+},
+{
+"t": "task",
+"md": "Допиши async-функцию `total`, которая через `.await` получает две цены и возвращает их сумму. Маленький исполнитель `block_on` уже написан.",
+"code": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn price(item: &str) -> u32 {\n    if item == \"чай\" { 100 } else { 250 }\n}\n\nasync fn total() -> u32 {\n    0\n}\n\nfn main() {\n    println!(\"{}\", block_on(total()));\n}",
+"solution": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn price(item: &str) -> u32 {\n    if item == \"чай\" { 100 } else { 250 }\n}\n\nasync fn total() -> u32 {\n    let a = price(\"чай\").await;\n    let b = price(\"торт\").await;\n    a + b\n}\n\nfn main() {\n    println!(\"{}\", block_on(total()));\n}",
+"expect": "350",
+"hints": [
+"Результат async-функции получают через `.await`: `let a = price(\"чай\").await;`",
+"Верни `a + b`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`macro_rules!` + `$x:expr` + `$(...)*` — свои простые макросы.",
+"`matches!`, `dbg!`, `todo!` — удобные встроенные макросы.",
+"`.await` достаёт результат из async-функции."
+]
+}
+],
+"practice": true,
+"goals": [
+"Писать простые макросы",
+"Пользоваться макросами стандартной библиотеки",
+"Писать async-функции"
 ]
 }
 ]
@@ -11018,275 +11196,453 @@ window.COURSES = {
 },
 {
 "id": "m17",
-"title": "Потоки",
-"sub": "Делать несколько дел одновременно",
+"title": "Threads",
+"sub": "Doing several things at the same time",
 "lessons": [
 {
 "id": "m17-1",
-"title": "Первый поток",
+"title": "Your first thread",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Поток — ещё один исполнитель",
-"md": "**Поток** (thread) — отдельная линия выполнения. Несколько потоков работают одновременно, на разных ядрах процессора.\n\n> Как несколько поваров на одной кухне. Работа идёт быстрее, но надо договариваться, кто берёт какой нож.\n\nRust знаменит фразой «бесстрашная многопоточность»: многие ошибки потоков он ловит на компиляции."
+"title": "A thread is one more worker",
+"md": "A **thread** is a separate line of execution. Several threads run at the same time, on different processor cores.\n\n> Analogy: several cooks in one kitchen. The work goes faster, but they must agree on who takes which knife.\n\nRust is famous for the phrase \"fearless concurrency\": it catches many thread bugs at compile time."
 },
 {
 "t": "code",
-"code": "use std::thread;\n\nfn main() {\n    let handle = thread::spawn(|| {\n        for i in 1..=3 {\n            println!(\"помощник: шаг {i}\");\n        }\n        42\n    });\n    println!(\"главный поток ждёт\");\n    let answer = handle.join().unwrap();\n    println!(\"помощник вернул {answer}\");\n}",
-"after": "- `thread::spawn(замыкание)` — запустить поток.\n- `join()` — дождаться его конца и забрать результат.\n\nПорядок строк может меняться от запуска к запуску: потоки идут одновременно."
+"code": "use std::thread;\n\nfn main() {\n    let handle = thread::spawn(|| {\n        for i in 1..=3 {\n            println!(\"helper: step {i}\");\n        }\n        42\n    });\n    println!(\"the main thread waits\");\n    let answer = handle.join().unwrap();\n    println!(\"the helper returned {answer}\");\n}",
+"after": "- `thread::spawn(closure)` starts a thread.\n- `join()` waits for it to finish and takes the result.\n\nThe order of lines can change from run to run: the threads run at the same time."
 },
 {
 "t": "text",
-"title": "move — отдать данные потоку",
-"md": "Поток может жить дольше функции, которая его создала. Поэтому одолжить ему переменную нельзя — только **отдать**:\n\n```\nlet name = String::from(\"Аня\");\nlet h = thread::spawn(move || {\n    println!(\"Привет из потока, {name}\");\n});\nh.join().unwrap();\n```\nБез `move` будет ошибка `E0373`."
+"title": "move — give data to the thread",
+"md": "A thread may live longer than the function that created it. So it cannot borrow a variable — it can only **take** it:\n\n```\nlet name = String::from(\"Anna\");\nlet h = thread::spawn(move || {\n    println!(\"Hello from the thread, {name}\");\n});\nh.join().unwrap();\n```\nWithout `move` there is error `E0373`."
 },
 {
 "t": "quiz",
-"md": "Зачем нужен `join()`?",
+"md": "Why do you need `join()`?",
 "options": [
-"Чтобы запустить поток",
-"Чтобы дождаться окончания потока",
-"Чтобы соединить два потока в один"
+"To start the thread",
+"To wait until the thread finishes",
+"To merge two threads into one"
 ],
 "answer": 1,
 "why": [
-"Запускает `spawn`. `join` — ждёт.",
-"Верно. Иначе `main` может закончиться раньше и прервать поток.",
-"Название сбивает, но нет: это «дождаться»."
+"`spawn` starts it. `join` waits.",
+"Correct. Otherwise `main` may end earlier and cut the thread off.",
+"The name is misleading, but no: it means \"wait\"."
 ]
+},
+{
+"t": "deep",
+"title": "Send and Sync — how the compiler watches threads",
+"md": "The compiler knows which types can be given to another thread. For this there are two marker traits:\n- `Send` — a value can be **passed** to another thread;\n- `Sync` — a value can be **looked at** from several threads at once.\n\nAlmost all types are like this automatically. Exceptions: `Rc` is not `Send` (its counter is not protected), `RefCell` is not `Sync`. If you try to send an `Rc` into `thread::spawn`, you get a compile error, not a random failure at run time."
 },
 {
 "t": "recap",
 "items": [
-"`thread::spawn(|| ...)` — новый поток.",
-"`handle.join()` — дождаться и получить результат.",
-"`move` — отдать потоку переменные."
+"`thread::spawn(|| ...)` starts a new thread.",
+"`handle.join()` waits and returns the result.",
+"`move` gives the variables to the thread."
 ]
 }
 ],
 "goals": [
-"Запустить код в отдельном потоке",
-"Дождаться его через `join`"
+"Run code in a separate thread",
+"Wait for it with `join`"
 ]
 },
 {
 "id": "m17-2",
-"title": "Каналы: потоки пишут друг другу",
+"title": "Channels: threads write to each other",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Канал — пневмопочта",
-"md": "**Канал** — труба между потоками. В один конец кладут сообщения, из другого достают.\n\n```\nlet (tx, rx) = mpsc::channel();\n```\n- `tx` — передатчик (transmitter), им отправляют: `tx.send(x)`.\n- `rx` — приёмник (receiver), им получают: `rx.recv()`.\n\n`mpsc` значит «много отправителей, один получатель»."
+"title": "A channel is a pneumatic tube",
+"md": "A **channel** is a pipe between threads. Messages go in at one end and come out at the other.\n\n```\nlet (tx, rx) = mpsc::channel();\n```\n- `tx` is the transmitter; you send with it: `tx.send(x)`.\n- `rx` is the receiver; you receive with it: `rx.recv()`.\n\n`mpsc` means \"multiple producers, single consumer\"."
 },
 {
 "t": "code",
-"code": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    thread::spawn(move || {\n        for fruit in [\"яблоко\", \"груша\", \"слива\"] {\n            tx.send(fruit).unwrap();\n        }\n    });\n    for got in rx {\n        println!(\"Получил: {got}\");\n    }\n    println!(\"Канал закрыт\");\n}",
-"out": "Получил: яблоко\nПолучил: груша\nПолучил: слива\nКанал закрыт",
-"after": "Цикл `for got in rx` заканчивается сам, когда передатчик исчезает вместе со своим потоком."
+"code": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    thread::spawn(move || {\n        for fruit in [\"apple\", \"pear\", \"plum\"] {\n            tx.send(fruit).unwrap();\n        }\n    });\n    for got in rx {\n        println!(\"Got: {got}\");\n    }\n    println!(\"The channel is closed\");\n}",
+"out": "Got: apple\nGot: pear\nGot: plum\nThe channel is closed",
+"after": "The loop `for got in rx` ends by itself when the transmitter disappears together with its thread."
 },
 {
 "t": "quiz",
-"md": "Что передаётся через `send`?",
+"md": "What is passed with `send`?",
 "options": [
-"Владение значением",
-"Копия значения",
-"Ссылка на значение"
+"Ownership of the value",
+"A copy of the value",
+"A reference to the value"
 ],
 "answer": 0,
 "why": [
-"Верно. Отправил — у тебя его больше нет. Так потоки не дерутся за данные.",
-"Не обязательно копия: значение переезжает.",
-"Ссылка могла бы повиснуть. Rust отправляет само значение."
+"Correct. Once sent, you no longer have it. This way threads do not fight over data.",
+"Not necessarily a copy: the value moves.",
+"A reference could dangle. Rust sends the value itself."
 ]
+},
+{
+"t": "text",
+"title": "Several senders",
+"md": "The transmitter `tx` can be cloned. Then several threads write into one channel:\n\n```\nlet tx2 = tx.clone();\nthread::spawn(move || tx2.send(\"from the second\").unwrap());\n```\nThe receiver ends the `for` loop when **all** transmitters are gone."
 },
 {
 "t": "recap",
 "items": [
-"`mpsc::channel()` — канал `(tx, rx)`.",
-"`tx.send(x)` — отправить, `rx.recv()` или `for x in rx` — получить.",
-"Отправка передаёт владение."
+"`mpsc::channel()` creates a channel `(tx, rx)`.",
+"`tx.send(x)` sends; `rx.recv()` or `for x in rx` receives.",
+"Sending passes ownership."
 ]
 }
 ],
 "goals": [
-"Передавать данные между потоками через канал"
+"Pass data between threads through a channel"
 ]
 },
 {
 "id": "m17-3",
-"title": "Общие данные: Arc и Mutex",
+"title": "Shared data: Arc and Mutex",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Замок на двери",
-"md": "`Mutex` (mutual exclusion — взаимное исключение) пускает к данным **по одному**.\n\n> Ключ от туалета в кафе. Взял ключ — зашёл. Остальные ждут, пока вернёшь.\n\n`lock()` берёт ключ. Ключ возвращается сам, когда переменная с ним исчезает."
+"title": "A lock on the door",
+"md": "`Mutex` (mutual exclusion) lets threads to the data **one at a time**.\n\n> Analogy: the key to the bathroom in a cafe. You take the key and go in. The others wait until you return it.\n\n`lock()` takes the key. The key is returned automatically when the variable holding it disappears."
 },
 {
 "t": "text",
-"title": "Arc — Rc для потоков",
-"md": "`Rc` нельзя передавать между потоками: его счётчик не защищён. Для потоков есть `Arc` — **атомарный** Rc.\n\nКлассика: `Arc<Mutex<T>>` — общее изменяемое значение для многих потоков."
+"title": "Arc — Rc for threads",
+"md": "`Rc` cannot be passed between threads: its counter is not protected. For threads there is `Arc` — an **atomic** Rc.\n\nThe classic: `Arc<Mutex<T>>` — a shared changeable value for many threads."
 },
 {
 "t": "code",
-"code": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let counter = Arc::new(Mutex::new(0));\n    let mut handles = vec![];\n    for _ in 0..10 {\n        let c = Arc::clone(&counter);\n        handles.push(thread::spawn(move || {\n            let mut n = c.lock().unwrap();\n            *n += 1;\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    println!(\"Итог: {}\", *counter.lock().unwrap());\n}",
-"out": "Итог: 10",
-"after": "Десять потоков, каждый прибавил 1. Без Mutex результат мог бы быть меньше: потоки затирали бы друг друга."
+"code": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let counter = Arc::new(Mutex::new(0));\n    let mut handles = vec![];\n    for _ in 0..10 {\n        let c = Arc::clone(&counter);\n        handles.push(thread::spawn(move || {\n            let mut n = c.lock().unwrap();\n            *n += 1;\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    println!(\"Result: {}\", *counter.lock().unwrap());\n}",
+"out": "Result: 10",
+"after": "Ten threads, each one added 1. Without a Mutex the result could be smaller: threads would overwrite each other."
 },
 {
 "t": "text",
-"title": "thread::scope — проще для коротких задач",
-"md": "Если потоки нужны только внутри одного блока, `thread::scope` разрешает им **одалживать** данные. `move` и `Arc` не нужны:\n\n```\nlet data = vec![1, 2, 3, 4];\nlet (left, right) = data.split_at(2);\nthread::scope(|s| {\n    s.spawn(|| println!(\"{}\", left.iter().sum::<i32>()));\n    s.spawn(|| println!(\"{}\", right.iter().sum::<i32>()));\n});\n```"
+"title": "thread::scope — simpler for short tasks",
+"md": "If threads are needed only inside one block, `thread::scope` lets them **borrow** data. `move` and `Arc` are not needed:\n\n```\nlet data = vec![1, 2, 3, 4];\nlet (left, right) = data.split_at(2);\nthread::scope(|s| {\n    s.spawn(|| println!(\"{}\", left.iter().sum::<i32>()));\n    s.spawn(|| println!(\"{}\", right.iter().sum::<i32>()));\n});\n```"
 },
 {
 "t": "quiz",
-"md": "Почему для потоков нужен `Arc`, а не `Rc`?",
+"md": "Why do threads need `Arc` instead of `Rc`?",
 "options": [
-"`Arc` быстрее",
-"Счётчик `Arc` безопасно меняется из разных потоков",
-"`Rc` нельзя клонировать"
+"`Arc` is faster",
+"The `Arc` counter is safely changed from different threads",
+"`Rc` cannot be cloned"
 ],
 "answer": 1,
 "why": [
-"Наоборот, чуть медленнее. Зато безопасен.",
-"Верно. Компилятор не даст отправить `Rc` в поток.",
-"Можно, но только в одном потоке."
+"The opposite: it is a bit slower. But it is safe.",
+"Correct. The compiler does not let you send an `Rc` into a thread.",
+"It can, but only in one thread."
+]
+},
+{
+"t": "deep",
+"title": "Deadlock and other tools",
+"md": "**Deadlock**: thread A holds lock 1 and waits for lock 2, while thread B holds lock 2 and waits for lock 1. Both wait forever. Rust does **not** protect against this. The rule: always take several locks in the same order.\n\nOther tools from `std::sync`:\n- `RwLock` — many readers **or** one writer. Useful when reading is frequent and writing is rare.\n- **Atomic numbers** (`AtomicUsize` and others) — a counter without a lock. Faster than `Mutex` for simple numbers.",
+"code": "use std::sync::atomic::{AtomicUsize, Ordering};\nuse std::sync::Arc;\nuse std::thread;\n\nfn main() {\n    let hits = Arc::new(AtomicUsize::new(0));\n    let handles: Vec<_> = (0..4).map(|_| {\n        let h = Arc::clone(&hits);\n        thread::spawn(move || {\n            for _ in 0..1000 {\n                h.fetch_add(1, Ordering::Relaxed);\n            }\n        })\n    }).collect();\n    for t in handles {\n        t.join().unwrap();\n    }\n    println!(\"{}\", hits.load(Ordering::Relaxed));\n}",
+"out": "4000"
+},
+{
+"t": "recap",
+"items": [
+"`Mutex` gives access one at a time; `lock()` takes the key.",
+"`Arc` is a shared owner for threads.",
+"`Arc<Mutex<T>>` is shared changeable data.",
+"`thread::scope` runs threads that borrow data."
+]
+}
+],
+"goals": [
+"Change one value from many threads",
+"Why `Arc` and `Mutex` are needed"
+]
+},
+{
+"id": "m17-p",
+"title": "Practice: threads",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Fix error `E0373`: the thread cannot borrow `name`.",
+"code": "use std::thread;\n\nfn main() {\n    let name = String::from(\"Rust\");\n    let h = thread::spawn(|| {\n        println!(\"Hello from the thread, {name}\");\n    });\n    h.join().unwrap();\n}",
+"solution": "use std::thread;\n\nfn main() {\n    let name = String::from(\"Rust\");\n    let h = thread::spawn(move || {\n        println!(\"Hello from the thread, {name}\");\n    });\n    h.join().unwrap();\n}",
+"expect": "Hello from the thread, Rust",
+"hints": [
+"The compiler suggests: to force the closure to take ownership, use the `move` keyword.",
+"`thread::spawn(move || { ... })`"
+]
+},
+{
+"t": "task",
+"md": "Start three threads. Each one returns the square of its number (1, 2, 3). Add up the results in the main thread.",
+"code": "use std::thread;\n\nfn main() {\n    let mut handles = Vec::new();\n    for i in 1..=3 {\n        // start a thread that returns i * i\n    }\n    let mut total = 0;\n    for h in handles {\n        total += h.join().unwrap();\n    }\n    println!(\"{total}\");\n}",
+"solution": "use std::thread;\n\nfn main() {\n    let mut handles = Vec::new();\n    for i in 1..=3 {\n        handles.push(thread::spawn(move || i * i));\n    }\n    let mut total = 0;\n    for h in handles {\n        total += h.join().unwrap();\n    }\n    println!(\"{total}\");\n}",
+"expect": "14",
+"hints": [
+"`handles.push(thread::spawn(move || i * i));`",
+"`move` is needed so that each thread takes its own copy of `i`."
+]
+},
+{
+"t": "task",
+"md": "Two threads send numbers into one channel. The main thread adds up everything that arrives.",
+"code": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    let tx2 = tx.clone();\n    thread::spawn(move || {\n        for n in [1, 2, 3] {\n            tx.send(n).unwrap();\n        }\n    });\n    thread::spawn(move || {\n        for n in [10, 20] {\n            tx2.send(n).unwrap();\n        }\n    });\n    let mut sum = 0;\n    // receive all numbers\n    println!(\"{sum}\");\n}",
+"solution": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    let tx2 = tx.clone();\n    thread::spawn(move || {\n        for n in [1, 2, 3] {\n            tx.send(n).unwrap();\n        }\n    });\n    thread::spawn(move || {\n        for n in [10, 20] {\n            tx2.send(n).unwrap();\n        }\n    });\n    let mut sum = 0;\n    for n in rx {\n        sum += n;\n    }\n    println!(\"{sum}\");\n}",
+"expect": "36",
+"hints": [
+"The loop `for n in rx` receives messages while the transmitters are alive.",
+"Inside: `sum += n;`"
+]
+},
+{
+"t": "task",
+"md": "Five threads add their number to a shared vector. At the end, sort the vector and print it.",
+"code": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let list = Arc::new(Mutex::new(Vec::new()));\n    let mut handles = Vec::new();\n    for i in 0..5 {\n        let l = Arc::clone(&list);\n        handles.push(thread::spawn(move || {\n            // add i to the shared vector\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    let mut v = list.lock().unwrap().clone();\n    v.sort();\n    println!(\"{:?}\", v);\n}",
+"solution": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let list = Arc::new(Mutex::new(Vec::new()));\n    let mut handles = Vec::new();\n    for i in 0..5 {\n        let l = Arc::clone(&list);\n        handles.push(thread::spawn(move || {\n            l.lock().unwrap().push(i);\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    let mut v = list.lock().unwrap().clone();\n    v.sort();\n    println!(\"{:?}\", v);\n}",
+"expect": "[0, 1, 2, 3, 4]",
+"hints": [
+"Take the lock and add the number: `l.lock().unwrap().push(i);`",
+"Sorting is needed because threads finish in a random order."
+]
+},
+{
+"t": "task",
+"md": "With `thread::scope`, calculate the sums of the two halves of a vector in two threads, then add them up.",
+"code": "use std::thread;\n\nfn main() {\n    let data: Vec<u64> = (1..=100).collect();\n    let (left, right) = data.split_at(50);\n    let mut a = 0;\n    let mut b = 0;\n    thread::scope(|s| {\n        // two threads: one sums left, the other right\n    });\n    println!(\"{}\", a + b);\n}",
+"solution": "use std::thread;\n\nfn main() {\n    let data: Vec<u64> = (1..=100).collect();\n    let (left, right) = data.split_at(50);\n    let mut a = 0;\n    let mut b = 0;\n    thread::scope(|s| {\n        s.spawn(|| a = left.iter().sum());\n        s.spawn(|| b = right.iter().sum());\n    });\n    println!(\"{}\", a + b);\n}",
+"expect": "5050",
+"hints": [
+"Inside `scope`, threads are started with `s.spawn(|| ...)`.",
+"`s.spawn(|| a = left.iter().sum());` and the same for `b`."
 ]
 },
 {
 "t": "recap",
 "items": [
-"`Mutex` — доступ по одному, `lock()` — взять ключ.",
-"`Arc` — общий владелец для потоков.",
-"`Arc<Mutex<T>>` — общие изменяемые данные.",
-"`thread::scope` — потоки, которые одалживают данные."
+"`move` gives variables to a thread; `join` returns the result.",
+"A channel: `tx.clone()` for several senders.",
+"`Arc<Mutex<T>>` for shared data, `thread::scope` for threads that borrow."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Менять одно значение из многих потоков",
-"Зачем нужны `Arc` и `Mutex`"
+"Start threads and collect results",
+"Pass data through channels",
+"Share data with `Arc<Mutex<T>>`"
 ]
 }
 ]
 },
 {
 "id": "m18",
-"title": "Async и макросы",
-"sub": "Обзор продвинутых тем",
+"title": "Async and macros",
+"sub": "An overview of advanced topics",
 "lessons": [
 {
 "id": "m18-1",
-"title": "Async: ждать, не простаивая",
+"title": "Async: waiting without idling",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Официант, а не повар на каждый стол",
-"md": "Программа часто **ждёт**: ответа от сервера, чтения файла. Пока ждёт — процессор простаивает.\n\n> Потоки — нанять по повару на каждый стол. Async — один официант: принял заказ, отнёс на кухню и, пока блюдо готовится, обслуживает другие столы.\n\nAsync выгоден, когда задач очень много, а работы у каждой мало: веб-серверы, чаты, сетевые программы."
+"title": "A waiter instead of a cook for every table",
+"md": "A program often **waits**: for an answer from a server, for a file to be read. While it waits, the processor is idle.\n\n> Analogy: threads are like hiring a cook for every table. Async is one waiter: he takes an order, brings it to the kitchen, and while the dish is cooking he serves other tables.\n\nAsync pays off when there are very many tasks and each has little work: web servers, chats, network programs."
 },
 {
 "t": "text",
-"title": "async и .await",
-"md": "- `async fn` — функция, которая возвращает не результат, а **обещание** результата (future).\n- `.await` — «дождись обещания, а пока дай поработать другим».\n\n```\nasync fn load_user() -> String {\n    String::from(\"Аня\")\n}\n\nasync fn hello() {\n    let name = load_user().await;\n    println!(\"Привет, {name}\");\n}\n```"
+"title": "async and .await",
+"md": "- `async fn` is a function that returns not a result, but a **promise** of a result (a future).\n- `.await` means \"wait for the promise, and meanwhile let others work\".\n\n```\nasync fn load_user() -> String {\n    String::from(\"Anna\")\n}\n\nasync fn hello() {\n    let name = load_user().await;\n    println!(\"Hello, {name}\");\n}\n```"
 },
 {
 "t": "text",
-"title": "Нужен исполнитель",
-"md": "Future сам по себе ленивый, как итератор. Его кто-то должен «крутить». Это делает **рантайм** — исполнитель.\n\nВ стандартной библиотеке рантайма нет. В реальных проектах берут крейт **tokio**:\n\n```text\n#[tokio::main]\nasync fn main() {\n    hello().await;\n}\n```"
+"title": "An executor is needed",
+"md": "A future is lazy by itself, like an iterator. Someone must \"drive\" it. This is done by a **runtime** — an executor.\n\nThe standard library has no runtime. Real projects use the crate **tokio**:\n\n```text\n#[tokio::main]\nasync fn main() {\n    hello().await;\n}\n```"
 },
 {
 "t": "code",
-"md": "Для любопытных: крошечный исполнитель на одной стандартной библиотеке. Понимать каждую строку не нужно.",
-"code": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn load_user() -> String {\n    String::from(\"Аня\")\n}\n\nasync fn hello() -> String {\n    let name = load_user().await;\n    format!(\"Привет, {name}\")\n}\n\nfn main() {\n    println!(\"{}\", block_on(hello()));\n}",
-"out": "Привет, Аня"
+"md": "For the curious: a tiny executor using only the standard library. You do not need to understand every line.",
+"code": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn load_user() -> String {\n    String::from(\"Anna\")\n}\n\nasync fn hello() -> String {\n    let name = load_user().await;\n    format!(\"Hello, {name}\")\n}\n\nfn main() {\n    println!(\"{}\", block_on(hello()));\n}",
+"out": "Hello, Anna"
 },
 {
 "t": "quiz",
-"md": "Что произойдёт, если вызвать `async fn` без `.await` и без исполнителя?",
+"md": "What happens if you call an `async fn` without `.await` and without an executor?",
 "options": [
-"Функция выполнится сразу",
-"Ничего: создастся future, но он не запустится",
-"Программа запаникует"
+"The function runs immediately",
+"Nothing: a future is created, but it does not run",
+"The program panics"
 ],
 "answer": 1,
 "why": [
-"Future ленивый: без исполнителя ничего не происходит.",
-"Верно. Как итератор без `collect`.",
-"Паники не будет, просто код не выполнится. Компилятор об этом предупредит."
+"A future is lazy: without an executor nothing happens.",
+"Correct. Like an iterator without `collect`.",
+"There is no panic; the code just does not run. The compiler warns about it."
 ]
+},
+{
+"t": "text",
+"title": "What to choose: threads or async",
+"md": "- **Threads** — when there are few tasks and each one **computes** a lot: image processing, compression, calculations.\n- **Async** — when there are very many tasks and each one mostly **waits**: thousands of network connections, a chat, a web server.\n\nIf you are not sure and there are few tasks — start with threads. They are simpler."
+},
+{
+"t": "deep",
+"title": "What a Future is inside",
+"md": "The compiler turns an `async fn` into a **state machine**: a struct that remembers at which `.await` it stopped.\n\nA future has one main method — `poll`. The executor calls `poll`:\n- if the result is ready, `poll` returns `Poll::Ready(value)`;\n- if not — `Poll::Pending`, and the future promises to \"wake up\" the executor when it is worth trying again.\n\nWhile one future waits, the executor polls others. This is how one thread serves thousands of tasks."
 },
 {
 "t": "recap",
 "items": [
-"Async — много задач, которые в основном ждут.",
-"`async fn` возвращает future, `.await` его дожидается.",
-"Нужен рантайм. В реальных проектах — tokio."
+"Async is for many tasks that mostly wait.",
+"`async fn` returns a future, `.await` waits for it.",
+"A runtime is needed. Real projects use tokio."
 ]
 }
 ],
 "goals": [
-"Чем async отличается от потоков",
-"Что значат `async` и `.await`"
+"How async differs from threads",
+"What `async` and `.await` mean"
 ]
 },
 {
 "id": "m18-2",
-"title": "Макросы",
+"title": "Macros",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Макрос пишет код за тебя",
-"md": "Ты весь курс пользуешься макросами: `println!`, `vec!`, `format!`, `assert_eq!`. Восклицательный знак — их метка.\n\n**Макрос** — это код, который **пишет код** ещё до компиляции. Поэтому `println!` может принять любое количество аргументов, а обычная функция — нет."
+"title": "A macro writes code for you",
+"md": "You have used macros the whole course: `println!`, `vec!`, `format!`, `assert_eq!`. The exclamation mark is their sign.\n\nA **macro** is code that **writes code** before compilation. That is why `println!` can take any number of arguments, and a normal function cannot."
 },
 {
 "t": "code",
-"md": "Простой макрос через `macro_rules!`:",
-"code": "macro_rules! square {\n    ($x:expr) => {\n        $x * $x\n    };\n}\n\nmacro_rules! hello_all {\n    ($($name:expr),*) => {\n        $( println!(\"Привет, {}!\", $name); )*\n    };\n}\n\nfn main() {\n    println!(\"{}\", square!(7));\n    hello_all!(\"Аня\", \"Боря\", \"Вика\");\n}",
-"out": "49\nПривет, Аня!\nПривет, Боря!\nПривет, Вика!",
-"after": "- `$x:expr` — «сюда подставь любое выражение».\n- `$(...),*` — «повтори сколько угодно раз через запятую»."
+"md": "A simple macro with `macro_rules!`:",
+"code": "macro_rules! square {\n    ($x:expr) => {\n        $x * $x\n    };\n}\n\nmacro_rules! hello_all {\n    ($($name:expr),*) => {\n        $( println!(\"Hello, {}!\", $name); )*\n    };\n}\n\nfn main() {\n    println!(\"{}\", square!(7));\n    hello_all!(\"Anna\", \"Bob\", \"Vic\");\n}",
+"out": "49\nHello, Anna!\nHello, Bob!\nHello, Vic!",
+"after": "- `$x:expr` means \"put any expression here\".\n- `$(...),*` means \"repeat any number of times, separated by commas\"."
 },
 {
 "t": "text",
-"title": "derive — тоже макрос",
-"md": "`#[derive(Debug)]` — это **процедурный макрос**. Он читает твою структуру и дописывает к ней реализацию трейта.\n\nСвои процедурные макросы пишут редко. Но знать, что это они, полезно."
+"title": "derive is a macro too",
+"md": "`#[derive(Debug)]` is a **procedural macro**. It reads your struct and adds an implementation of the trait to it.\n\nPeople rarely write their own procedural macros. But it is useful to know that this is what they are."
 },
 {
 "t": "text",
-"title": "unsafe — одна строчка правды",
-"md": "В Rust есть слово `unsafe`. Внутри такого блока можно делать то, что компилятор не может проверить: работать с сырыми указателями, вызывать код на C.\n\nНовичку `unsafe` не нужен. Большинство программ на Rust его вообще не содержат."
+"title": "unsafe — one line of truth",
+"md": "Rust has the word `unsafe`. Inside such a block you can do things the compiler cannot check: work with raw pointers, call code written in C.\n\nA beginner does not need `unsafe`. Most Rust programs do not contain it at all."
 },
 {
 "t": "quiz",
-"md": "Почему `println!` — макрос, а не функция?",
+"md": "Why is `println!` a macro and not a function?",
 "options": [
-"Он принимает разное число аргументов и проверяет формат при компиляции",
-"Макросы работают быстрее функций",
-"Так исторически сложилось, разницы нет"
+"It takes a different number of arguments and checks the format at compile time",
+"Macros run faster than functions",
+"It is historical; there is no difference"
 ],
 "answer": 0,
 "why": [
-"Верно. Обычная функция в Rust так не умеет.",
-"Дело не в скорости.",
-"Разница есть: макрос раскрывается в код до компиляции."
+"Correct. A normal function in Rust cannot do that.",
+"It is not about speed.",
+"There is a difference: a macro expands into code before compilation."
+]
+},
+{
+"t": "text",
+"title": "Useful macros of the standard library",
+"md": "- `vec![...]`, `format!(...)`, `println!`, `print!`, `eprintln!` (print to the error stream);\n- `assert!`, `assert_eq!`, `assert_ne!`;\n- `dbg!(x)` — print the expression, its value and the line of code. Handy when debugging;\n- `todo!()` — \"not written yet\". It compiles, but panics when run;\n- `matches!(x, pattern)` — `true` if `x` fits the pattern.\n\n```\nlet c = 'z';\nlet is_letter = matches!(c, 'a'..='z' | 'A'..='Z'); // true\n```"
+},
+{
+"t": "deep",
+"title": "Procedural macros",
+"md": "`macro_rules!` substitutes code by a template. There is a second, more powerful kind — **procedural macros**. They are separate small Rust programs that receive code as a set of tokens and return new code.\n\nThree kinds:\n- `#[derive(...)]` — add a trait implementation;\n- attributes like `#[tokio::main]` — rework a function;\n- function-like ones, like `sql!(...)` — parse a mini-language of your own.\n\nThey are written in a separate crate marked `proc-macro = true`. A beginner does not need to write them, but it is useful to know where `#[derive]` and `#[tokio::main]` come from."
+},
+{
+"t": "recap",
+"items": [
+"Macros with `!` generate code before compilation.",
+"`macro_rules!` makes your own simple macros.",
+"`#[derive]` is a macro too.",
+"`unsafe` exists, but a beginner does not need it."
+]
+}
+],
+"goals": [
+"How a macro differs from a function",
+"Write a simple macro with `macro_rules!`"
+]
+},
+{
+"id": "m18-p",
+"title": "Practice: macros and async",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Write a macro `max!(a, b)` that returns the larger of two expressions.",
+"code": "// write macro_rules! max\n\nfn main() {\n    println!(\"{}\", max!(3, 8));\n    println!(\"{}\", max!(10 - 1, 2 * 2));\n}",
+"solution": "macro_rules! max {\n    ($a:expr, $b:expr) => {\n        if $a > $b { $a } else { $b }\n    };\n}\n\nfn main() {\n    println!(\"{}\", max!(3, 8));\n    println!(\"{}\", max!(10 - 1, 2 * 2));\n}",
+"expect": "8\n9",
+"hints": [
+"The template: `($a:expr, $b:expr) => { ... };`",
+"The body: `if $a > $b { $a } else { $b }`"
+]
+},
+{
+"t": "task",
+"md": "Write a macro `sum!` that adds up any number of numbers: `sum!(1, 2, 3)`.",
+"code": "// write macro_rules! sum\n\nfn main() {\n    println!(\"{}\", sum!(1, 2, 3));\n    println!(\"{}\", sum!(10));\n}",
+"solution": "macro_rules! sum {\n    ($($x:expr),*) => {\n        0 $(+ $x)*\n    };\n}\n\nfn main() {\n    println!(\"{}\", sum!(1, 2, 3));\n    println!(\"{}\", sum!(10));\n}",
+"expect": "6\n10",
+"hints": [
+"Repetition: `($($x:expr),*)` in the template and `$( ... )*` in the body.",
+"The body: `0 $(+ $x)*` — it becomes `0 + 1 + 2 + 3`."
+]
+},
+{
+"t": "task",
+"md": "Count the vowels in a string with `matches!`.",
+"code": "fn main() {\n    let text = \"macro rules\";\n    let n = text.chars().filter(|c| false).count();\n    println!(\"{n}\");\n}",
+"solution": "fn main() {\n    let text = \"macro rules\";\n    let n = text.chars().filter(|c| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')).count();\n    println!(\"{n}\");\n}",
+"expect": "4",
+"hints": [
+"`matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')`",
+"Put this condition inside `filter`."
+]
+},
+{
+"t": "task",
+"md": "Complete the async function `total` that gets two prices with `.await` and returns their sum. The small executor `block_on` is already written.",
+"code": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn price(item: &str) -> u32 {\n    if item == \"tea\" { 100 } else { 250 }\n}\n\nasync fn total() -> u32 {\n    0\n}\n\nfn main() {\n    println!(\"{}\", block_on(total()));\n}",
+"solution": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn price(item: &str) -> u32 {\n    if item == \"tea\" { 100 } else { 250 }\n}\n\nasync fn total() -> u32 {\n    let a = price(\"tea\").await;\n    let b = price(\"cake\").await;\n    a + b\n}\n\nfn main() {\n    println!(\"{}\", block_on(total()));\n}",
+"expect": "350",
+"hints": [
+"The result of an async function is taken with `.await`: `let a = price(\"tea\").await;`",
+"Return `a + b`."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Макросы с `!` генерируют код до компиляции.",
-"`macro_rules!` — свои простые макросы.",
-"`#[derive]` — тоже макрос.",
-"`unsafe` существует, но новичку не нужен."
+"`macro_rules!` + `$x:expr` + `$(...)*` make your own simple macros.",
+"`matches!`, `dbg!`, `todo!` are handy built-in macros.",
+"`.await` takes the result out of an async function."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Чем макрос отличается от функции",
-"Написать простой макрос `macro_rules!`"
+"Write simple macros",
+"Use macros of the standard library",
+"Write async functions"
 ]
 }
 ]

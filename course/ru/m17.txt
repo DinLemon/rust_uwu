@@ -51,6 +51,13 @@ h.join().unwrap();
 [x] Чтобы дождаться окончания потока => Верно. Иначе `main` может закончиться раньше и прервать поток.
 [ ] Чтобы соединить два потока в один => Название сбивает, но нет: это «дождаться».
 
+:: deep Send и Sync — как компилятор следит за потоками
+Компилятор знает, какие типы можно отдавать в другой поток. Для этого есть два трейта-метки:
+- `Send` — значение можно **передать** в другой поток;
+- `Sync` — на значение можно **смотреть** из нескольких потоков сразу.
+
+Почти все типы такие сами по себе. Исключения: `Rc` не `Send` (его счётчик не защищён), `RefCell` не `Sync`. Если попытаться отправить `Rc` в `thread::spawn`, будет ошибка компиляции, а не случайный сбой во время работы.
+
 :: recap
 - `thread::spawn(|| ...)` — новый поток.
 - `handle.join()` — дождаться и получить результат.
@@ -102,6 +109,15 @@ fn main() {
 [x] Владение значением => Верно. Отправил — у тебя его больше нет. Так потоки не дерутся за данные.
 [ ] Копия значения => Не обязательно копия: значение переезжает.
 [ ] Ссылка на значение => Ссылка могла бы повиснуть. Rust отправляет само значение.
+
+:: text Несколько отправителей
+Передатчик `tx` можно клонировать. Тогда несколько потоков пишут в один канал:
+
+```rust
+let tx2 = tx.clone();
+thread::spawn(move || tx2.send("из второго").unwrap());
+```
+Приёмник закончит цикл `for`, когда исчезнут **все** передатчики.
 
 :: recap
 - `mpsc::channel()` — канал `(tx, rx)`.
@@ -169,8 +185,260 @@ thread::scope(|s| {
 [x] Счётчик `Arc` безопасно меняется из разных потоков => Верно. Компилятор не даст отправить `Rc` в поток.
 [ ] `Rc` нельзя клонировать => Можно, но только в одном потоке.
 
+:: deep Взаимная блокировка и другие инструменты
+**Взаимная блокировка** (deadlock): поток А держит замок 1 и ждёт замок 2, а поток Б держит замок 2 и ждёт замок 1. Оба ждут вечно. Rust от этого **не** защищает. Правило: всегда бери несколько замков в одном и том же порядке.
+
+Другие инструменты из `std::sync`:
+- `RwLock` — много читателей **или** один писатель. Удобно, когда читают часто, а пишут редко.
+- **Атомарные числа** (`AtomicUsize` и другие) — счётчик без замка. Быстрее `Mutex` для простых чисел.
+
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let handles: Vec<_> = (0..4).map(|_| {
+        let h = Arc::clone(&hits);
+        thread::spawn(move || {
+            for _ in 0..1000 {
+                h.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+    }).collect();
+    for t in handles {
+        t.join().unwrap();
+    }
+    println!("{}", hits.load(Ordering::Relaxed));
+}
+```
+```out
+4000
+```
+
 :: recap
 - `Mutex` — доступ по одному, `lock()` — взять ключ.
 - `Arc` — общий владелец для потоков.
 - `Arc<Mutex<T>>` — общие изменяемые данные.
 - `thread::scope` — потоки, которые одалживают данные.
+
+## LESSON m17-p | Практика: потоки | 14 | practice
+:: goals
+- Запускать потоки и собирать результаты
+- Передавать данные через каналы
+- Делить данные через `Arc<Mutex<T>>`
+
+:: task
+Почини ошибку `E0373`: поток не может одолжить `name`.
+```rust
+use std::thread;
+
+fn main() {
+    let name = String::from("Rust");
+    let h = thread::spawn(|| {
+        println!("Привет из потока, {name}");
+    });
+    h.join().unwrap();
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let name = String::from("Rust");
+    let h = thread::spawn(move || {
+        println!("Привет из потока, {name}");
+    });
+    h.join().unwrap();
+}
+```
+```expect
+Привет из потока, Rust
+```
+hint: Компилятор подсказывает: to force the closure to take ownership, use the `move` keyword.
+hint: `thread::spawn(move || { ... })`
+
+:: task
+Запусти три потока. Каждый возвращает квадрат своего номера (1, 2, 3). Сложи результаты в главном потоке.
+```rust
+use std::thread;
+
+fn main() {
+    let mut handles = Vec::new();
+    for i in 1..=3 {
+        // запусти поток, который вернёт i * i
+    }
+    let mut total = 0;
+    for h in handles {
+        total += h.join().unwrap();
+    }
+    println!("{total}");
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let mut handles = Vec::new();
+    for i in 1..=3 {
+        handles.push(thread::spawn(move || i * i));
+    }
+    let mut total = 0;
+    for h in handles {
+        total += h.join().unwrap();
+    }
+    println!("{total}");
+}
+```
+```expect
+14
+```
+hint: `handles.push(thread::spawn(move || i * i));`
+hint: `move` нужен, чтобы каждый поток забрал свою копию `i`.
+
+:: task
+Два потока отправляют числа в один канал. Главный поток складывает всё, что пришло.
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    let tx2 = tx.clone();
+    thread::spawn(move || {
+        for n in [1, 2, 3] {
+            tx.send(n).unwrap();
+        }
+    });
+    thread::spawn(move || {
+        for n in [10, 20] {
+            tx2.send(n).unwrap();
+        }
+    });
+    let mut sum = 0;
+    // получи все числа
+    println!("{sum}");
+}
+```
+```solution
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    let tx2 = tx.clone();
+    thread::spawn(move || {
+        for n in [1, 2, 3] {
+            tx.send(n).unwrap();
+        }
+    });
+    thread::spawn(move || {
+        for n in [10, 20] {
+            tx2.send(n).unwrap();
+        }
+    });
+    let mut sum = 0;
+    for n in rx {
+        sum += n;
+    }
+    println!("{sum}");
+}
+```
+```expect
+36
+```
+hint: Цикл `for n in rx` получает сообщения, пока живы передатчики.
+hint: Внутри: `sum += n;`
+
+:: task
+Пять потоков добавляют свой номер в общий вектор. В конце отсортируй вектор и напечатай.
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let list = Arc::new(Mutex::new(Vec::new()));
+    let mut handles = Vec::new();
+    for i in 0..5 {
+        let l = Arc::clone(&list);
+        handles.push(thread::spawn(move || {
+            // добавь i в общий вектор
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut v = list.lock().unwrap().clone();
+    v.sort();
+    println!("{:?}", v);
+}
+```
+```solution
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let list = Arc::new(Mutex::new(Vec::new()));
+    let mut handles = Vec::new();
+    for i in 0..5 {
+        let l = Arc::clone(&list);
+        handles.push(thread::spawn(move || {
+            l.lock().unwrap().push(i);
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut v = list.lock().unwrap().clone();
+    v.sort();
+    println!("{:?}", v);
+}
+```
+```expect
+[0, 1, 2, 3, 4]
+```
+hint: Возьми замок и добавь число: `l.lock().unwrap().push(i);`
+hint: Сортировка нужна, потому что потоки заканчивают работу в случайном порядке.
+
+:: task
+С помощью `thread::scope` посчитай суммы двух половин вектора в двух потоках, а потом сложи их.
+```rust
+use std::thread;
+
+fn main() {
+    let data: Vec<u64> = (1..=100).collect();
+    let (left, right) = data.split_at(50);
+    let mut a = 0;
+    let mut b = 0;
+    thread::scope(|s| {
+        // два потока: один считает left, другой right
+    });
+    println!("{}", a + b);
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let data: Vec<u64> = (1..=100).collect();
+    let (left, right) = data.split_at(50);
+    let mut a = 0;
+    let mut b = 0;
+    thread::scope(|s| {
+        s.spawn(|| a = left.iter().sum());
+        s.spawn(|| b = right.iter().sum());
+    });
+    println!("{}", a + b);
+}
+```
+```expect
+5050
+```
+hint: Внутри `scope` потоки запускают через `s.spawn(|| ...)`.
+hint: `s.spawn(|| a = left.iter().sum());` и так же для `b`.
+
+:: recap
+- `move` отдаёт потоку переменные, `join` возвращает результат.
+- Канал: `tx.clone()` для нескольких отправителей.
+- `Arc<Mutex<T>>` — общие данные, `thread::scope` — потоки с заимствованием.
