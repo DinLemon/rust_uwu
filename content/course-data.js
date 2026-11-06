@@ -166,7 +166,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Кто такой компилятор",
-"md": "**Компилятор** — программа, которая переводит твой код в нули и единицы.\n\nУ Rust компилятор называется `rustc`. Перед переводом он внимательно проверяет код. Нашёл проблему — не переводит, а пишет сообщение.\n\n> Представь учителя, который проверяет сочинение до того, как его отправят в печать. Строгий, но всегда объясняет, что не так."
+"md": "**Компилятор** — программа, которая переводит твой код в нули и единицы.\n\nУ Rust компилятор называется `rustc`. Перед переводом он внимательно проверяет код. Нашёл проблему — не переводит, а пишет сообщение.\n\n> **Аналогия:** представь учителя, который проверяет сочинение до того, как его отправят в печать. Строгий, но всегда объясняет, что не так."
 },
 {
 "t": "text",
@@ -692,7 +692,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Затенение",
-"md": "Можно снова написать `let` с тем же именем. Получится **новая** переменная, а старая спрячется. Это называется **затенение** (shadowing).\n\n```\nlet x = 5;\nlet x = x * 2; // новая x = 10\n```\n> Похоже на наклейку поверх старой наклейки. Старая коробка есть, но мы её больше не видим."
+"md": "Можно снова написать `let` с тем же именем. Получится **новая** переменная, а старая спрячется. Это называется **затенение** (shadowing).\n\n```\nlet x = 5;\nlet x = x * 2; // новая x = 10\n```\n> **Аналогия:** это похоже на наклейку поверх старой наклейки. Старая коробка есть, но мы её больше не видим."
 },
 {
 "t": "code",
@@ -865,7 +865,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Функция — это маленькая программа",
-"md": "**Функция** — кусок кода с именем. Написал один раз — вызываешь сколько угодно.\n\n> Как кнопка на пульте: нажал «громче» — и не думаешь, что внутри происходит.\n\n`main` — тоже функция. Просто особенная: с неё всё начинается."
+"md": "**Функция** — кусок кода с именем. Написал один раз — вызываешь сколько угодно.\n\n> **Аналогия:** это как кнопка на пульте: нажал «громче» — и не думаешь, что внутри происходит.\n\n`main` — тоже функция. Просто особенная: с неё всё начинается."
 },
 {
 "t": "code",
@@ -1072,7 +1072,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Переменная живёт внутри своего блока",
-"md": "**Область видимости** — участок кода, где переменную видно. Обычно это блок, где её создали.\n\n```\nfn main() {\n    {\n        let secret = 42;\n        println!(\"{secret}\"); // тут видно\n    }\n    // println!(\"{secret}\"); // тут уже нет — ошибка\n}\n```\n> Как комната: вещь, оставленная внутри, не видна из коридора."
+"md": "**Область видимости** — участок кода, где переменную видно. Обычно это блок, где её создали.\n\n```\nfn main() {\n    {\n        let secret = 42;\n        println!(\"{secret}\"); // тут видно\n    }\n    // println!(\"{secret}\"); // тут уже нет — ошибка\n}\n```\n> **Аналогия:** это как комната: вещь, оставленная внутри, не видна из коридора."
 },
 {
 "t": "quiz",
@@ -1273,7 +1273,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "continue — пропустить шаг",
-"md": "`continue` сразу переходит к следующему повтору, пропуская остаток блока.\n\n> `break` — выйти из комнаты. `continue` — выйти и сразу зайти заново."
+"md": "`continue` сразу переходит к следующему повтору, пропуская остаток блока.\n\n> **Аналогия:** `break` — выйти из комнаты. `continue` — выйти и сразу зайти заново."
 },
 {
 "t": "quiz",
@@ -1520,7 +1520,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Кортеж — набор разных вещей",
-"md": "**Кортеж** (tuple) — несколько значений в одних скобках. Типы могут быть разными.\n\n```\nlet person = (\"Аня\", 25, true);\n```\n> Как рюкзак: в нём лежат книга, бутылка и ключи. Разные вещи, но вместе."
+"md": "**Кортеж** (tuple) — несколько значений в одних скобках. Типы могут быть разными.\n\n```\nlet person = (\"Аня\", 25, true);\n```\n> **Аналогия:** это как рюкзак: в нём лежат книга, бутылка и ключи. Разные вещи, но вместе."
 },
 {
 "t": "code",
@@ -1576,7 +1576,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Массив — ряд одинаковых ячеек",
-"md": "**Массив** — ряд значений **одного** типа. Длина фиксирована: её нельзя поменять.\n\n```\nlet days = [\"пн\", \"вт\", \"ср\", \"чт\", \"пт\"];\nlet zeros = [0; 10]; // десять нулей\n```\n> Как коробка для яиц: десять одинаковых ячеек, не больше и не меньше."
+"md": "**Массив** — ряд значений **одного** типа. Длина фиксирована: её нельзя поменять.\n\n```\nlet days = [\"пн\", \"вт\", \"ср\", \"чт\", \"пт\"];\nlet zeros = [0; 10]; // десять нулей\n```\n> **Аналогия:** это как коробка для яиц: десять одинаковых ячеек, не больше и не меньше."
 },
 {
 "t": "code",
@@ -1791,12 +1791,12 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Стек — стопка тарелок",
-"md": "Числа, `bool`, `char` всегда одного размера. Они лежат на **стеке**.\n\n> Стек — как стопка тарелок. Кладут сверху, берут сверху. Очень быстро и просто.\n\nКогда функция заканчивается, её тарелки снимаются со стопки сами."
+"md": "Числа, `bool`, `char` всегда одного размера. Они лежат на **стеке**.\n\n> **Аналогия:** стек — как стопка тарелок. Кладут сверху, берут сверху. Очень быстро и просто.\n\nКогда функция заканчивается, её тарелки снимаются со стопки сами."
 },
 {
 "t": "text",
 "title": "Куча — склад",
-"md": "Текст, который может расти, хранится в **куче**. Например, тип `String`.\n\n> Куча — как склад. Кладовщик находит свободное место, кладёт вещь и выдаёт тебе **номерок**. Номерок лежит на стеке, а сама вещь — на складе.\n\nГлавный вопрос: **кто и когда освободит место на складе?** Вот на него и отвечает владение."
+"md": "Текст, который может расти, хранится в **куче**. Например, тип `String`.\n\n> **Аналогия:** куча — как склад. Кладовщик находит свободное место, кладёт вещь и выдаёт тебе **номерок**. Номерок лежит на стеке, а сама вещь — на складе.\n\nГлавный вопрос: **кто и когда освободит место на складе?** Вот на него и отвечает владение."
 },
 {
 "t": "quiz",
@@ -1847,7 +1847,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Три правила",
-"md": "Вся система владения — это всего три правила:\n\n1. У каждого значения есть **владелец** — переменная.\n2. Владелец в каждый момент **только один**.\n3. Когда владелец выходит из области видимости, значение **удаляется**.\n\n> Как с книгой. У книги один хозяин. Хозяин уехал навсегда — книгу сдали в макулатуру."
+"md": "Вся система владения — это всего три правила:\n\n1. У каждого значения есть **владелец** — переменная.\n2. Владелец в каждый момент **только один**.\n3. Когда владелец выходит из области видимости, значение **удаляется**.\n\n> **Аналогия:** это как с книгой. У книги один хозяин. Хозяин уехал навсегда — книгу сдали в макулатуру."
 },
 {
 "t": "code",
@@ -1995,7 +1995,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "clone — ксерокопия",
-"md": "Нужно, чтобы данные были и у `a`, и у `b`? Сделай **копию**: `.clone()`.\n\n```\nlet a = String::from(\"текст\");\nlet b = a.clone();\nprintln!(\"{a} и {b}\"); // работает\n```\n> Это ксерокопия книги. Теперь у каждого своя. Но копировать большую книгу — долго, поэтому делай это осознанно."
+"md": "Нужно, чтобы данные были и у `a`, и у `b`? Сделай **копию**: `.clone()`.\n\n```\nlet a = String::from(\"текст\");\nlet b = a.clone();\nprintln!(\"{a} и {b}\"); // работает\n```\n> **Аналогия:** это ксерокопия книги. Теперь у каждого своя. Но копировать большую книгу — долго, поэтому делай это осознанно."
 },
 {
 "t": "code",
@@ -2006,7 +2006,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Тип Copy",
-"md": "Маленькие простые значения лежат на стеке. Копировать их дёшево. Поэтому Rust копирует их **сам**.\n\nТакие типы называются **Copy**: все числа, `bool`, `char` и кортежи из них.\n\n> Число — как записка с цифрой. Её легко переписать на другую бумажку. А `String` — целая книга."
+"md": "Маленькие простые значения лежат на стеке. Копировать их дёшево. Поэтому Rust копирует их **сам**.\n\nТакие типы называются **Copy**: все числа, `bool`, `char` и кортежи из них.\n\n> **Аналогия:** число — как записка с цифрой. Её легко переписать на другую бумажку. А `String` — целая книга."
 },
 {
 "t": "quiz",
@@ -2197,7 +2197,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Ссылка — это «посмотри, но не забирай»",
-"md": "**Ссылка** — это доступ к значению без владения. Пишется через `&`.\n\n```\nlet book = String::from(\"Война и мир\");\nlet r = &book; // r смотрит на book\n```\nСоздание ссылки называется **заимствованием** (borrowing).\n\n> Ты даёшь другу книгу почитать. Книга по-прежнему твоя. Друг вернёт её, когда дочитает."
+"md": "**Ссылка** — это доступ к значению без владения. Пишется через `&`.\n\n```\nlet book = String::from(\"Война и мир\");\nlet r = &book; // r смотрит на book\n```\nСоздание ссылки называется **заимствованием** (borrowing).\n\n> **Аналогия:** ты даёшь другу книгу почитать. Книга по-прежнему твоя. Друг вернёт её, когда дочитает."
 },
 {
 "t": "code",
@@ -2269,7 +2269,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Главное правило",
-"md": "В каждый момент можно **одно** из двух:\n\n- сколько угодно **читателей** `&`;\n- или ровно **один писатель** `&mut`.\n\n> Как документ в общей папке. Читать могут все сразу. Но если кто-то правит — остальные ждут, чтобы не увидеть кашу.\n\nЭто правило спасает от целого класса ошибок, когда данные меняются под ногами."
+"md": "В каждый момент можно **одно** из двух:\n\n- сколько угодно **читателей** `&`;\n- или ровно **один писатель** `&mut`.\n\n> **Аналогия:** это как документ в общей папке. Читать могут все сразу. Но если кто-то правит — остальные ждут, чтобы не увидеть кашу.\n\nЭто правило спасает от целого класса ошибок, когда данные меняются под ногами."
 },
 {
 "t": "code",
@@ -2375,7 +2375,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Срез — окошко в часть данных",
-"md": "**Срез** — ссылка на кусок последовательности. Не копия, а окошко.\n\n```\nlet nums = [10, 20, 30, 40, 50];\nlet middle = &nums[1..4]; // [20, 30, 40]\n```\n> Как рамка, которую положили на фото: видно только часть, но фото то же самое."
+"md": "**Срез** — ссылка на кусок последовательности. Не копия, а окошко.\n\n```\nlet nums = [10, 20, 30, 40, 50];\nlet middle = &nums[1..4]; // [20, 30, 40]\n```\n> **Аналогия:** это как рамка, которую положили на фото: видно только часть, но фото то же самое."
 },
 {
 "t": "text",
@@ -2539,7 +2539,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Анкета с полями",
-"md": "**Структура** (struct) — свой тип из нескольких именованных полей.\n\n```\nstruct User {\n    name: String,\n    age: u32,\n    active: bool,\n}\n```\n> Как бланк анкеты: графы «имя», «возраст», «активен». Сам бланк — это тип. Заполненная анкета — значение.\n\nИмена структур пишут с большой буквы: `User`, `GameCharacter`."
+"md": "**Структура** (struct) — свой тип из нескольких именованных полей.\n\n```\nstruct User {\n    name: String,\n    age: u32,\n    active: bool,\n}\n```\n> **Аналогия:** это как бланк анкеты: графы «имя», «возраст», «активен». Сам бланк — это тип. Заполненная анкета — значение.\n\nИмена структур пишут с большой буквы: `User`, `GameCharacter`."
 },
 {
 "t": "code",
@@ -2845,7 +2845,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Выбор из списка",
-"md": "**Перечисление** (enum) — тип, значение которого — **один** вариант из заранее известного списка.\n\n```\nenum Light {\n    Red,\n    Yellow,\n    Green,\n}\nlet now = Light::Red;\n```\n> Как светофор. Он горит красным, жёлтым или зелёным. Ничего другого быть не может."
+"md": "**Перечисление** (enum) — тип, значение которого — **один** вариант из заранее известного списка.\n\n```\nenum Light {\n    Red,\n    Yellow,\n    Green,\n}\nlet now = Light::Red;\n```\n> **Аналогия:** это как светофор. Он горит красным, жёлтым или зелёным. Ничего другого быть не может."
 },
 {
 "t": "text",
@@ -2894,7 +2894,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "match — сортировочная машина",
-"md": "`match` смотрит на значение и выбирает подходящую ветку. Это **сопоставление с образцом**.\n\n```\nmatch light {\n    Light::Red => println!(\"Стой\"),\n    Light::Yellow => println!(\"Жди\"),\n    Light::Green => println!(\"Иди\"),\n}\n```\n> Как сортировщик посылок: по адресу отправляет в нужное окно."
+"md": "`match` смотрит на значение и выбирает подходящую ветку. Это **сопоставление с образцом**.\n\n```\nmatch light {\n    Light::Red => println!(\"Стой\"),\n    Light::Yellow => println!(\"Жди\"),\n    Light::Green => println!(\"Иди\"),\n}\n```\n> **Аналогия:** это как сортировщик посылок: по адресу отправляет в нужное окно."
 },
 {
 "t": "code",
@@ -2978,7 +2978,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Option — коробка, которая может быть пустой",
-"md": "```\nenum Option<T> {\n    Some(T), // внутри есть значение\n    None,    // пусто\n}\n```\n> Подарочная коробка. Внутри может лежать подарок (`Some`), а может быть пусто (`None`). Пока не откроешь — не знаешь. И Rust заставит открыть.\n\n`T` — «любой тип». Об этом подробно в модуле про обобщения."
+"md": "```\nenum Option<T> {\n    Some(T), // внутри есть значение\n    None,    // пусто\n}\n```\n> **Аналогия:** подарочная коробка. Внутри может лежать подарок (`Some`), а может быть пусто (`None`). Пока не откроешь — не знаешь. И Rust заставит открыть.\n\n`T` — «любой тип». Об этом подробно в модуле про обобщения."
 },
 {
 "t": "code",
@@ -3298,7 +3298,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Словарь",
-"md": "**HashMap** хранит пары «ключ → значение». По ключу быстро находится значение.\n\n> Как телефонная книга: по имени находишь номер. Не нужно листать всё подряд.\n\nHashMap нужно подключить строчкой `use std::collections::HashMap;`."
+"md": "**HashMap** хранит пары «ключ → значение». По ключу быстро находится значение.\n\n> **Аналогия:** это как телефонная книга: по имени находишь номер. Не нужно листать всё подряд.\n\nHashMap нужно подключить строчкой `use std::collections::HashMap;`."
 },
 {
 "t": "code",
@@ -3490,7 +3490,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Result — посылка с запиской",
-"md": "```\nenum Result<T, E> {\n    Ok(T),  // всё хорошо, внутри результат\n    Err(E), // ошибка, внутри описание\n}\n```\n> Посылка. Внутри либо заказанная вещь (`Ok`), либо записка «товар закончился» (`Err`). Похоже на `Option`, только вместо пустоты — объяснение."
+"md": "```\nenum Result<T, E> {\n    Ok(T),  // всё хорошо, внутри результат\n    Err(E), // ошибка, внутри описание\n}\n```\n> **Аналогия:** посылка. Внутри либо заказанная вещь (`Ok`), либо записка «товар закончился» (`Err`). Похоже на `Option`, только вместо пустоты — объяснение."
 },
 {
 "t": "code",
@@ -4106,7 +4106,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Трейт — удостоверение навыка",
-"md": "**Трейт** (trait) описывает **умение**: какие методы должны быть у типа. Иногда по-русски говорят «типаж» — это то же самое.\n\n```\ntrait Speak {\n    fn speak(&self) -> String;\n}\n```\n> Как права на вождение. Неважно, кто ты — если есть права, ты умеешь водить. Трейт `Speak` — «умеет говорить»."
+"md": "**Трейт** (trait) описывает **умение**: какие методы должны быть у типа. Иногда по-русски говорят «типаж» — это то же самое.\n\n```\ntrait Speak {\n    fn speak(&self) -> String;\n}\n```\n> **Аналогия:** это как права на вождение. Неважно, кто ты — если есть права, ты умеешь водить. Трейт `Speak` — «умеет говорить»."
 },
 {
 "t": "code",
@@ -4612,7 +4612,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Замыкание видит переменные вокруг",
-"md": "В отличие от `fn`, замыкание **захватывает** переменные из окружения:\n\n```\nlet bonus = 10;\nlet add_bonus = |x| x + bonus;\nprintln!(\"{}\", add_bonus(5)); // 15\n```\n> Как записка, в которой уже вписан адрес. Не нужно передавать его каждый раз."
+"md": "В отличие от `fn`, замыкание **захватывает** переменные из окружения:\n\n```\nlet bonus = 10;\nlet add_bonus = |x| x + bonus;\nprintln!(\"{}\", add_bonus(5)); // 15\n```\n> **Аналогия:** это как записка, в которой уже вписан адрес. Не нужно передавать его каждый раз."
 },
 {
 "t": "code",
@@ -4669,7 +4669,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Итератор — конвейер",
-"md": "**Итератор** выдаёт элементы по одному. На него можно навесить операции.\n\n> Конвейерная лента. Элементы едут по ней, по пути их моют (`map`), отбраковывают (`filter`), а в конце складывают в коробку (`collect`).\n\n```\nlet v = vec![1, 2, 3, 4, 5];\nlet even_squares: Vec<i32> = v.iter()\n    .filter(|x| *x % 2 == 0)\n    .map(|x| x * x)\n    .collect();\n// [4, 16]\n```"
+"md": "**Итератор** выдаёт элементы по одному. На него можно навесить операции.\n\n> **Аналогия:** конвейерная лента. Элементы едут по ней, по пути их моют (`map`), отбраковывают (`filter`), а в конце складывают в коробку (`collect`).\n\n```\nlet v = vec![1, 2, 3, 4, 5];\nlet even_squares: Vec<i32> = v.iter()\n    .filter(|x| *x % 2 == 0)\n    .map(|x| x * x)\n    .collect();\n// [4, 16]\n```"
 },
 {
 "t": "text",
@@ -4873,7 +4873,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Тест — автоматическая проверка",
-"md": "**Тест** — маленькая функция, которая проверяет другую функцию. Написал один раз — проверяешь хоть тысячу раз, одной командой.\n\n> Как чек-лист пилота перед взлётом. Скучно, но спасает."
+"md": "**Тест** — маленькая функция, которая проверяет другую функцию. Написал один раз — проверяешь хоть тысячу раз, одной командой.\n\n> **Аналогия:** это как чек-лист пилота перед взлётом. Скучно, но спасает."
 },
 {
 "t": "text",
@@ -5122,7 +5122,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Иногда хозяев несколько",
-"md": "Правило «один владелец» иногда мешает. Например, две комнаты в игре используют одну и ту же текстуру.\n\n`Rc<T>` (reference counting — подсчёт ссылок) разрешает **несколько владельцев**. Он считает, сколько их. Последний ушёл — значение удаляется.\n\n> Общий телевизор в общежитии. Есть счётчик зрителей. Ушёл последний — телевизор выключают."
+"md": "Правило «один владелец» иногда мешает. Например, две комнаты в игре используют одну и ту же текстуру.\n\n`Rc<T>` (reference counting — подсчёт ссылок) разрешает **несколько владельцев**. Он считает, сколько их. Последний ушёл — значение удаляется.\n\n> **Аналогия:** общий телевизор в общежитии. Есть счётчик зрителей. Ушёл последний — телевизор выключают."
 },
 {
 "t": "code",
@@ -5300,7 +5300,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Поток — ещё один исполнитель",
-"md": "**Поток** (thread) — отдельная линия выполнения. Несколько потоков работают одновременно, на разных ядрах процессора.\n\n> Как несколько поваров на одной кухне. Работа идёт быстрее, но надо договариваться, кто берёт какой нож.\n\nRust знаменит фразой «бесстрашная многопоточность»: многие ошибки потоков он ловит на компиляции."
+"md": "**Поток** (thread) — отдельная линия выполнения. Несколько потоков работают одновременно, на разных ядрах процессора.\n\n> **Аналогия:** это как несколько поваров на одной кухне. Работа идёт быстрее, но надо договариваться, кто берёт какой нож.\n\nRust знаменит фразой «бесстрашная многопоточность»: многие ошибки потоков он ловит на компиляции."
 },
 {
 "t": "code",
@@ -5403,7 +5403,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Замок на двери",
-"md": "`Mutex` (mutual exclusion — взаимное исключение) пускает к данным **по одному**.\n\n> Ключ от туалета в кафе. Взял ключ — зашёл. Остальные ждут, пока вернёшь.\n\n`lock()` берёт ключ. Ключ возвращается сам, когда переменная с ним исчезает."
+"md": "`Mutex` (mutual exclusion — взаимное исключение) пускает к данным **по одному**.\n\n> **Аналогия:** ключ от туалета в кафе. Взял ключ — зашёл. Остальные ждут, пока вернёшь.\n\n`lock()` берёт ключ. Ключ возвращается сам, когда переменная с ним исчезает."
 },
 {
 "t": "text",
@@ -5549,7 +5549,7 @@ window.COURSES = {
 {
 "t": "text",
 "title": "Официант, а не повар на каждый стол",
-"md": "Программа часто **ждёт**: ответа от сервера, чтения файла. Пока ждёт — процессор простаивает.\n\n> Потоки — нанять по повару на каждый стол. Async — один официант: принял заказ, отнёс на кухню и, пока блюдо готовится, обслуживает другие столы.\n\nAsync выгоден, когда задач очень много, а работы у каждой мало: веб-серверы, чаты, сетевые программы."
+"md": "Программа часто **ждёт**: ответа от сервера, чтения файла. Пока ждёт — процессор простаивает.\n\n> **Аналогия:** потоки — нанять по повару на каждый стол. Async — один официант: принял заказ, отнёс на кухню и, пока блюдо готовится, обслуживает другие столы.\n\nAsync выгоден, когда задач очень много, а работы у каждой мало: веб-серверы, чаты, сетевые программы."
 },
 {
 "t": "text",
@@ -5889,6 +5889,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Как читать документацию",
+"md": "Почти всё о Rust есть в официальной документации:\n- **doc.rust-lang.org/std** — вся стандартная библиотека. Слева список модулей, в каждом типе — список методов с примерами.\n- **docs.rs** — документация любого крейта с crates.io.\n- Команда `rustup doc` открывает документацию **без интернета**.\n\nКак искать метод: открой страницу типа (например `Vec`), нажми `S` или кликни в поиск и введи слово, например `sort`. У каждого метода есть пример кода, его можно запустить кнопкой Run."
+},
+{
 "t": "recap",
 "items": [
 "Дальше: Rust Book, Rustlings, Rust by Example, Exercism.",
@@ -5900,6 +5905,75 @@ window.COURSES = {
 "goals": [
 "Куда идти после курса",
 "Как не бросить"
+]
+},
+{
+"id": "m19-p",
+"title": "Практика: ещё мини-проекты",
+"min": 20,
+"cards": [
+{
+"t": "text",
+"title": "Как проходить этот урок",
+"md": "Здесь четыре мини-проекта. Каждый использует сразу несколько тем курса.\n\nЕсли застрял — открой подсказку. Если и она не помогла — посмотри решение и потом перепиши его сам, не подглядывая. Это тоже хорошая тренировка."
+},
+{
+"t": "task",
+"md": "Статистика текста. Посчитай строки, слова и буквы (без пробелов и переводов строк). Напечатай: `строк: 2, слов: 5, букв: 25`.",
+"code": "fn main() {\n    let text = \"Rust быстрый\\nи очень надёжный\";\n}",
+"solution": "fn main() {\n    let text = \"Rust быстрый\\nи очень надёжный\";\n    let lines = text.lines().count();\n    let words = text.split_whitespace().count();\n    let letters = text.chars().filter(|c| !c.is_whitespace()).count();\n    println!(\"строк: {lines}, слов: {words}, букв: {letters}\");\n}",
+"expect": "строк: 2, слов: 5, букв: 25",
+"hints": [
+"Строки — `text.lines().count()`, слова — `split_whitespace().count()`.",
+"Буквы без пробелов: `text.chars().filter(|c| !c.is_whitespace()).count()`."
+]
+},
+{
+"t": "task",
+"md": "Конвертер температур. Разбери строки вида `\"36.6C\"` и `\"100F\"` и переведи в другую шкалу. Неверный ввод — `ошибка`.",
+"code": "fn convert(input: &str) -> String {\n    String::from(\"ошибка\")\n}\n\nfn main() {\n    for s in [\"100C\", \"212F\", \"abc\", \"20X\"] {\n        println!(\"{s} -> {}\", convert(s));\n    }\n}",
+"solution": "fn convert(input: &str) -> String {\n    let Some(unit) = input.chars().last() else {\n        return String::from(\"ошибка\");\n    };\n    let number = &input[..input.len() - unit.len_utf8()];\n    let Ok(value) = number.parse::<f64>() else {\n        return String::from(\"ошибка\");\n    };\n    match unit {\n        'C' => format!(\"{}F\", value * 1.8 + 32.0),\n        'F' => format!(\"{}C\", (value - 32.0) / 1.8),\n        _ => String::from(\"ошибка\"),\n    }\n}\n\nfn main() {\n    for s in [\"100C\", \"212F\", \"abc\", \"20X\"] {\n        println!(\"{s} -> {}\", convert(s));\n    }\n}",
+"expect": "100C -> 212F\n212F -> 100C\nabc -> ошибка\n20X -> ошибка",
+"hints": [
+"Последний символ — единица: `input.chars().last()`. Всё до него — число.",
+"Число без последнего символа: `&input[..input.len() - unit.len_utf8()]`, потом `parse::<f64>()` и `match unit { 'C' => ..., 'F' => ..., _ => ... }`."
+]
+},
+{
+"t": "task",
+"md": "Кошелёк. Есть список операций. Посчитай итоговый баланс через `fold`, начав со 100.",
+"code": "enum Op {\n    Income(i64),\n    Expense(i64),\n}\n\nfn main() {\n    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];\n    let balance = 0;\n    println!(\"{balance}\");\n}",
+"solution": "enum Op {\n    Income(i64),\n    Expense(i64),\n}\n\nfn main() {\n    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];\n    let balance = ops.iter().fold(100, |acc, op| match op {\n        Op::Income(n) => acc + n,\n        Op::Expense(n) => acc - n,\n    });\n    println!(\"{balance}\");\n}",
+"expect": "450",
+"hints": [
+"`ops.iter().fold(100, |acc, op| match op { ... })`",
+"Ветки: `Op::Income(n) => acc + n,` и `Op::Expense(n) => acc - n,`"
+]
+},
+{
+"t": "task",
+"md": "Топ-2 самых частых слов. Посчитай слова в `HashMap`, переложи пары в вектор, отсортируй по убыванию количества и выведи первые два.",
+"code": "use std::collections::HashMap;\n\nfn main() {\n    let text = \"кот пёс кот рыба пёс кот\";\n    let mut counts: HashMap<&str, u32> = HashMap::new();\n    for w in text.split_whitespace() {\n        *counts.entry(w).or_insert(0) += 1;\n    }\n    // отсортируй и напечатай топ-2\n}",
+"solution": "use std::collections::HashMap;\n\nfn main() {\n    let text = \"кот пёс кот рыба пёс кот\";\n    let mut counts: HashMap<&str, u32> = HashMap::new();\n    for w in text.split_whitespace() {\n        *counts.entry(w).or_insert(0) += 1;\n    }\n    let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();\n    pairs.sort_by(|a, b| b.1.cmp(&a.1));\n    for (word, n) in pairs.iter().take(2) {\n        println!(\"{word}: {n}\");\n    }\n}",
+"expect": "кот: 3\nпёс: 2",
+"hints": [
+"`let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();`",
+"По убыванию: `pairs.sort_by(|a, b| b.1.cmp(&a.1));`, потом `pairs.iter().take(2)`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Большая задача = несколько маленьких: разобрать ввод, посчитать, вывести.",
+"Ошибки ввода — через `let ... else` и `match`, без паники.",
+"`fold`, `sort_by`, `HashMap` — рабочие инструменты на каждый день."
+]
+}
+],
+"practice": true,
+"goals": [
+"Собрать знания курса в небольших программах",
+"Потренироваться без подсказок в теории"
 ]
 }
 ]
@@ -11649,28 +11723,28 @@ window.COURSES = {
 },
 {
 "id": "m19",
-"title": "Итоговый проект",
-"sub": "Собираем всё вместе",
+"title": "Final project",
+"sub": "Putting it all together",
 "lessons": [
 {
 "id": "m19-1",
-"title": "Проект: список дел. Шаг 1 — данные",
+"title": "Project: a to-do list. Step 1 — the data",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Что строим",
-"md": "Маленький менеджер задач. Он умеет:\n- добавлять задачи;\n- отмечать выполненные;\n- показывать список;\n- выполнять команды из текста вроде `add купить хлеб`.\n\nПойдём по шагам. Каждый шаг — отдельная маленькая победа."
+"title": "What we are building",
+"md": "A small task manager. It can:\n- add tasks;\n- mark tasks as done;\n- show the list;\n- run commands from text like `add buy bread`.\n\nWe go step by step. Each step is a separate small win."
 },
 {
 "t": "text",
-"title": "Типы данных",
-"md": "Начнём с данных. Задача — это структура. Состояние — перечисление.\n\n```\n#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n```"
+"title": "The data types",
+"md": "We start with the data. A task is a struct. Its state is an enum.\n\n```\n#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n```"
 },
 {
 "t": "task",
-"md": "Создай структуру `TodoList` с полями `tasks: Vec<Task>` и `next_id: u32`, и конструктор `new()`, где список пуст, а `next_id` равен 1. Программа должна напечатать `0 1`.",
-"code": "#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n\n// твоя структура TodoList и impl с new()\n\nfn main() {\n    let list = TodoList::new();\n    println!(\"{} {}\", list.tasks.len(), list.next_id);\n}",
+"md": "Create a struct `TodoList` with the fields `tasks: Vec<Task>` and `next_id: u32`, and a constructor `new()` where the list is empty and `next_id` is 1. The program must print `0 1`.",
+"code": "#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n\n// your struct TodoList and an impl with new()\n\nfn main() {\n    let list = TodoList::new();\n    println!(\"{} {}\", list.tasks.len(), list.next_id);\n}",
 "solution": "#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n\nstruct TodoList {\n    tasks: Vec<Task>,\n    next_id: u32,\n}\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n}\n\nfn main() {\n    let list = TodoList::new();\n    println!(\"{} {}\", list.tasks.len(), list.next_id);\n}",
 "expect": "0 1",
 "hints": [
@@ -11681,132 +11755,206 @@ window.COURSES = {
 {
 "t": "recap",
 "items": [
-"Сначала думаем о данных, потом о действиях.",
-"Структура — для «что это», enum — для «в каком состоянии»."
+"First think about the data, then about the actions.",
+"A struct describes \"what it is\", an enum describes \"which state it is in\"."
 ]
 }
 ],
 "goals": [
-"Спроектировать типы для программы",
-"Собрать структуру и перечисление вместе"
+"Design the types for a program",
+"Combine a struct and an enum"
 ]
 },
 {
 "id": "m19-2",
-"title": "Шаг 2 — действия",
+"title": "Step 2 — the actions",
 "min": 8,
 "cards": [
 {
 "t": "task",
-"md": "Допиши методы `add` (возвращает id новой задачи) и `done` (отмечает задачу; если id не найден — `Err` с текстом). Метод `show` уже готов.",
-"code": "#[derive(Debug, Clone, PartialEq)]\nenum Status { Todo, Done }\n\n#[derive(Debug, Clone)]\nstruct Task { id: u32, title: String, status: Status }\n\nstruct TodoList { tasks: Vec<Task>, next_id: u32 }\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n\n    fn add(&mut self, title: &str) -> u32 {\n        // создай Task, положи в tasks, увеличь next_id, верни id\n        0\n    }\n\n    fn done(&mut self, id: u32) -> Result<(), String> {\n        // найди задачу с таким id и поменяй статус\n        Err(format!(\"Нет задачи {id}\"))\n    }\n\n    fn show(&self) {\n        for t in &self.tasks {\n            let mark = if t.status == Status::Done { \"x\" } else { \" \" };\n            println!(\"[{mark}] {}. {}\", t.id, t.title);\n        }\n    }\n}\n\nfn main() {\n    let mut list = TodoList::new();\n    list.add(\"купить хлеб\");\n    list.add(\"учить Rust\");\n    list.done(2).unwrap();\n    list.show();\n    println!(\"{:?}\", list.done(99));\n}",
-"solution": "#[derive(Debug, Clone, PartialEq)]\nenum Status { Todo, Done }\n\n#[derive(Debug, Clone)]\nstruct Task { id: u32, title: String, status: Status }\n\nstruct TodoList { tasks: Vec<Task>, next_id: u32 }\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n\n    fn add(&mut self, title: &str) -> u32 {\n        let id = self.next_id;\n        self.tasks.push(Task { id, title: title.to_string(), status: Status::Todo });\n        self.next_id += 1;\n        id\n    }\n\n    fn done(&mut self, id: u32) -> Result<(), String> {\n        match self.tasks.iter_mut().find(|t| t.id == id) {\n            Some(task) => {\n                task.status = Status::Done;\n                Ok(())\n            }\n            None => Err(format!(\"Нет задачи {id}\")),\n        }\n    }\n\n    fn show(&self) {\n        for t in &self.tasks {\n            let mark = if t.status == Status::Done { \"x\" } else { \" \" };\n            println!(\"[{mark}] {}. {}\", t.id, t.title);\n        }\n    }\n}\n\nfn main() {\n    let mut list = TodoList::new();\n    list.add(\"купить хлеб\");\n    list.add(\"учить Rust\");\n    list.done(2).unwrap();\n    list.show();\n    println!(\"{:?}\", list.done(99));\n}",
-"expect": "[ ] 1. купить хлеб\n[x] 2. учить Rust\nErr(\"Нет задачи 99\")",
+"md": "Complete the methods `add` (returns the id of the new task) and `done` (marks a task; if the id is not found — `Err` with a text). The method `show` is ready.",
+"code": "#[derive(Debug, Clone, PartialEq)]\nenum Status { Todo, Done }\n\n#[derive(Debug, Clone)]\nstruct Task { id: u32, title: String, status: Status }\n\nstruct TodoList { tasks: Vec<Task>, next_id: u32 }\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n\n    fn add(&mut self, title: &str) -> u32 {\n        // create a Task, put it into tasks, increase next_id, return the id\n        0\n    }\n\n    fn done(&mut self, id: u32) -> Result<(), String> {\n        // find the task with this id and change its status\n        Err(format!(\"No task {id}\"))\n    }\n\n    fn show(&self) {\n        for t in &self.tasks {\n            let mark = if t.status == Status::Done { \"x\" } else { \" \" };\n            println!(\"[{mark}] {}. {}\", t.id, t.title);\n        }\n    }\n}\n\nfn main() {\n    let mut list = TodoList::new();\n    list.add(\"buy bread\");\n    list.add(\"learn Rust\");\n    list.done(2).unwrap();\n    list.show();\n    println!(\"{:?}\", list.done(99));\n}",
+"solution": "#[derive(Debug, Clone, PartialEq)]\nenum Status { Todo, Done }\n\n#[derive(Debug, Clone)]\nstruct Task { id: u32, title: String, status: Status }\n\nstruct TodoList { tasks: Vec<Task>, next_id: u32 }\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n\n    fn add(&mut self, title: &str) -> u32 {\n        let id = self.next_id;\n        self.tasks.push(Task { id, title: title.to_string(), status: Status::Todo });\n        self.next_id += 1;\n        id\n    }\n\n    fn done(&mut self, id: u32) -> Result<(), String> {\n        match self.tasks.iter_mut().find(|t| t.id == id) {\n            Some(task) => {\n                task.status = Status::Done;\n                Ok(())\n            }\n            None => Err(format!(\"No task {id}\")),\n        }\n    }\n\n    fn show(&self) {\n        for t in &self.tasks {\n            let mark = if t.status == Status::Done { \"x\" } else { \" \" };\n            println!(\"[{mark}] {}. {}\", t.id, t.title);\n        }\n    }\n}\n\nfn main() {\n    let mut list = TodoList::new();\n    list.add(\"buy bread\");\n    list.add(\"learn Rust\");\n    list.done(2).unwrap();\n    list.show();\n    println!(\"{:?}\", list.done(99));\n}",
+"expect": "[ ] 1. buy bread\n[x] 2. learn Rust\nErr(\"No task 99\")",
 "hints": [
-"В `add`: запомни `let id = self.next_id;`, потом `self.tasks.push(Task { ... })`, потом `self.next_id += 1;` и верни `id`.",
-"В `done`: `self.tasks.iter_mut().find(|t| t.id == id)` вернёт `Option<&mut Task>`. Разбери его через `match`."
+"In `add`: remember `let id = self.next_id;`, then `self.tasks.push(Task { ... })`, then `self.next_id += 1;` and return `id`.",
+"In `done`: `self.tasks.iter_mut().find(|t| t.id == id)` returns `Option<&mut Task>`. Check it with `match`."
 ]
 },
 {
 "t": "recap",
 "items": [
-"`iter_mut().find(...)` — найти элемент, чтобы изменить.",
-"Нет элемента — честный `Err`, а не паника."
+"`iter_mut().find(...)` finds an element in order to change it.",
+"No element — an honest `Err`, not a panic."
 ]
 }
 ],
 "goals": [
-"Написать методы add, done и показ списка",
-"Вернуть ошибку через `Result`, если задачи нет"
+"Write the methods add, done and showing the list",
+"Return an error with `Result` if there is no such task"
 ]
 },
 {
 "id": "m19-3",
-"title": "Шаг 3 — команды",
+"title": "Step 3 — commands",
 "min": 8,
 "cards": [
 {
 "t": "text",
-"title": "Команда как перечисление",
-"md": "Пользователь пишет текст. Превратим его в понятный тип:\n\n```\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n```\nФункция `parse` превращает строку в `Result<Command, String>`. Ошибки ввода — не паника, а `Err`."
+"title": "A command as an enum",
+"md": "The user writes text. Let us turn it into a clear type:\n\n```\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n```\nThe function `parse` turns a string into `Result<Command, String>`. Input mistakes are not a panic, but an `Err`."
 },
 {
 "t": "task",
-"md": "Допиши `parse`: `add текст` → `Add`, `done число` → `Done`, `list` → `List`, остальное — `Err`. Остальная программа уже готова.",
-"code": "#[derive(Debug)]\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n\nfn parse(line: &str) -> Result<Command, String> {\n    let (cmd, rest) = match line.trim().split_once(' ') {\n        Some((c, r)) => (c, r.trim()),\n        None => (line.trim(), \"\"),\n    };\n    match cmd {\n        // твои ветки\n        _ => Err(format!(\"Не знаю команду «{cmd}»\")),\n    }\n}\n\nfn main() {\n    for line in [\"add купить хлеб\", \"done 1\", \"list\", \"done abc\", \"jump\"] {\n        println!(\"{line} -> {:?}\", parse(line));\n    }\n}",
-"solution": "#[derive(Debug)]\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n\nfn parse(line: &str) -> Result<Command, String> {\n    let (cmd, rest) = match line.trim().split_once(' ') {\n        Some((c, r)) => (c, r.trim()),\n        None => (line.trim(), \"\"),\n    };\n    match cmd {\n        \"add\" if !rest.is_empty() => Ok(Command::Add(rest.to_string())),\n        \"done\" => rest\n            .parse::<u32>()\n            .map(Command::Done)\n            .map_err(|_| format!(\"«{rest}» — не номер задачи\")),\n        \"list\" => Ok(Command::List),\n        _ => Err(format!(\"Не знаю команду «{cmd}»\")),\n    }\n}\n\nfn main() {\n    for line in [\"add купить хлеб\", \"done 1\", \"list\", \"done abc\", \"jump\"] {\n        println!(\"{line} -> {:?}\", parse(line));\n    }\n}",
-"expect": "add купить хлеб -> Ok(Add(\"купить хлеб\"))\ndone 1 -> Ok(Done(1))\nlist -> Ok(List)\ndone abc -> Err(\"«abc» — не номер задачи\")\njump -> Err(\"Не знаю команду «jump»\")",
+"md": "Complete `parse`: `add text` → `Add`, `done number` → `Done`, `list` → `List`, everything else → `Err`. The rest of the program is ready.",
+"code": "#[derive(Debug)]\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n\nfn parse(line: &str) -> Result<Command, String> {\n    let (cmd, rest) = match line.trim().split_once(' ') {\n        Some((c, r)) => (c, r.trim()),\n        None => (line.trim(), \"\"),\n    };\n    match cmd {\n        // your branches\n        _ => Err(format!(\"Unknown command \\\"{cmd}\\\"\")),\n    }\n}\n\nfn main() {\n    for line in [\"add buy bread\", \"done 1\", \"list\", \"done abc\", \"jump\"] {\n        println!(\"{line} -> {:?}\", parse(line));\n    }\n}",
+"solution": "#[derive(Debug)]\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n\nfn parse(line: &str) -> Result<Command, String> {\n    let (cmd, rest) = match line.trim().split_once(' ') {\n        Some((c, r)) => (c, r.trim()),\n        None => (line.trim(), \"\"),\n    };\n    match cmd {\n        \"add\" if !rest.is_empty() => Ok(Command::Add(rest.to_string())),\n        \"done\" => rest\n            .parse::<u32>()\n            .map(Command::Done)\n            .map_err(|_| format!(\"\\\"{rest}\\\" is not a task number\")),\n        \"list\" => Ok(Command::List),\n        _ => Err(format!(\"Unknown command \\\"{cmd}\\\"\")),\n    }\n}\n\nfn main() {\n    for line in [\"add buy bread\", \"done 1\", \"list\", \"done abc\", \"jump\"] {\n        println!(\"{line} -> {:?}\", parse(line));\n    }\n}",
+"expect": "add buy bread -> Ok(Add(\"buy bread\"))\ndone 1 -> Ok(Done(1))\nlist -> Ok(List)\ndone abc -> Err(\"\\\"abc\\\" is not a task number\")\njump -> Err(\"Unknown command \\\"jump\\\"\")",
 "hints": [
-"Ветка для add: `\"add\" => Ok(Command::Add(rest.to_string())),`",
-"Для done разбери число: `match rest.parse::<u32>() { Ok(n) => Ok(Command::Done(n)), Err(_) => Err(format!(\"«{rest}» — не номер задачи\")) }`"
+"The branch for add: `\"add\" => Ok(Command::Add(rest.to_string())),`",
+"For done, parse the number: `match rest.parse::<u32>() { Ok(n) => Ok(Command::Done(n)), Err(_) => Err(format!(\"\\\"{rest}\\\" is not a task number\")) }`"
 ]
 },
 {
 "t": "text",
-"title": "Ты собрал настоящую программу",
-"md": "Посмотри, что в ней есть:\n- структуры и перечисления;\n- методы и конструктор;\n- `Vec`, итераторы, замыкания;\n- `Option`, `Result`, `match`, ошибки без паник.\n\nЭто и есть основа любой программы на Rust. Дальше — только больше того же."
+"title": "You built a real program",
+"md": "Look at what it contains:\n- structs and enums;\n- methods and a constructor;\n- `Vec`, iterators, closures;\n- `Option`, `Result`, `match`, errors without panics.\n\nThis is the base of any Rust program. From here on it is only more of the same."
 },
 {
 "t": "recap",
 "items": [
-"Текст от пользователя → свой `enum` через `parse`.",
-"Ошибки ввода → `Err`, не паника.",
-"Программа = данные + действия + разбор команд."
+"Text from the user → your own `enum` through `parse`.",
+"Input mistakes → `Err`, not a panic.",
+"A program = data + actions + parsing commands."
 ]
 }
 ],
 "goals": [
-"Разобрать текстовую команду в enum",
-"Связать всё через `match`"
+"Parse a text command into an enum",
+"Connect everything with `match`"
 ]
 },
 {
 "id": "m19-4",
-"title": "Что дальше",
+"title": "What next",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Ты прошёл курс",
-"md": "Это большой путь. Ты разобрался с владением — темой, на которой спотыкаются многие опытные программисты.\n\nНе страшно, если что-то забылось. Загляни в **Шпаргалку** и **Повторение** — они для этого и есть."
+"title": "You finished the course",
+"md": "This is a long road. You worked through ownership — a topic where many experienced programmers stumble.\n\nIt is fine if you forgot something. Look into the **Cheat sheet** and **Review** — that is what they are for."
 },
 {
 "t": "text",
-"title": "Что почитать и порешать",
-"md": "- [The Rust Book](https://doc.rust-lang.org/book/) — официальная книга. Теперь она будет понятной. Есть [русский перевод](https://doc.rust-lang.ru/book/), но он отстаёт от новых версий.\n- [Rustlings](https://rustlings.rust-lang.org/) — 95 маленьких упражнений на своём компьютере. Очень в духе этого курса.\n- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) — примеры кода по темам.\n- [Exercism, трек Rust](https://exercism.org/tracks/rust) — задачи с проверкой и отзывами наставников."
+"title": "What to read and practice",
+"md": "- [The Rust Book](https://doc.rust-lang.org/book/) — the official book. Now it will make sense.\n- [Rustlings](https://rustlings.rust-lang.org/) — 95 small exercises on your own computer. Very much in the spirit of this course.\n- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) — code examples by topic.\n- [Exercism, Rust track](https://exercism.org/tracks/rust) — tasks with checks and feedback from mentors."
 },
 {
 "t": "text",
-"title": "Как не бросить",
-"md": "- Пиши маленькие программы для себя: калькулятор расходов, переименователь файлов, бот.\n- 15 минут в день лучше, чем 3 часа раз в месяц.\n- Застрял на ошибке компилятора — прочитай её целиком ещё раз. Там почти всегда есть `help`.\n- Перерывы — часть обучения, а не его провал."
+"title": "How not to give up",
+"md": "- Write small programs for yourself: an expense calculator, a file renamer, a bot.\n- 15 minutes a day is better than 3 hours once a month.\n- Stuck on a compiler error? Read it fully once more. There is almost always a `help`.\n- Breaks are part of learning, not a failure."
 },
 {
 "t": "quiz",
-"md": "Какой путь лучше всего закрепит знания?",
+"md": "Which path best strengthens your knowledge?",
 "options": [
-"Перечитать весь курс ещё раз",
-"Писать маленькие свои программы и решать упражнения",
-"Сразу взяться за большой сложный проект"
+"Reread the whole course",
+"Write small programs of your own and solve exercises",
+"Start a big complex project right away"
 ],
 "answer": 1,
 "why": [
-"Перечитывание запоминается хуже, чем практика.",
-"Верно. Вспоминать и применять — лучший способ учиться.",
-"Можно увязнуть. Лучше много маленьких побед."
+"Rereading is remembered worse than practice.",
+"Correct. Recalling and applying is the best way to learn.",
+"You may get stuck. Many small wins are better."
+]
+},
+{
+"t": "deep",
+"title": "How to read the documentation",
+"md": "Almost everything about Rust is in the official documentation:\n- **doc.rust-lang.org/std** — the whole standard library. On the left is the list of modules; each type has a list of methods with examples.\n- **docs.rs** — the documentation of any crate from crates.io.\n- The command `rustup doc` opens the documentation **without internet**.\n\nHow to find a method: open the page of a type (for example `Vec`), press `S` or click the search field and type a word, for example `sort`. Every method has a code example, and you can run it with the Run button."
+},
+{
+"t": "recap",
+"items": [
+"Next: the Rust Book, Rustlings, Rust by Example, Exercism.",
+"Small projects and regularity.",
+"The Cheat sheet and Review are always at hand."
+]
+}
+],
+"goals": [
+"Where to go after the course",
+"How not to give up"
+]
+},
+{
+"id": "m19-p",
+"title": "Practice: more mini-projects",
+"min": 20,
+"cards": [
+{
+"t": "text",
+"title": "How to do this lesson",
+"md": "There are four mini-projects here. Each one uses several topics of the course at once.\n\nIf you are stuck, open a hint. If that does not help, look at the solution and then rewrite it yourself without looking. That is good practice too."
+},
+{
+"t": "task",
+"md": "Text statistics. Count the lines, words and letters (without spaces and line breaks). Print: `lines: 2, words: 6, letters: 25`.",
+"code": "fn main() {\n    let text = \"Rust is fast\\nand very reliable\";\n}",
+"solution": "fn main() {\n    let text = \"Rust is fast\\nand very reliable\";\n    let lines = text.lines().count();\n    let words = text.split_whitespace().count();\n    let letters = text.chars().filter(|c| !c.is_whitespace()).count();\n    println!(\"lines: {lines}, words: {words}, letters: {letters}\");\n}",
+"expect": "lines: 2, words: 6, letters: 25",
+"hints": [
+"Lines — `text.lines().count()`, words — `split_whitespace().count()`.",
+"Letters without spaces: `text.chars().filter(|c| !c.is_whitespace()).count()`."
+]
+},
+{
+"t": "task",
+"md": "A temperature converter. Parse strings like `\"36.6C\"` and `\"100F\"` and convert them to the other scale. Wrong input — `error`.",
+"code": "fn convert(input: &str) -> String {\n    String::from(\"error\")\n}\n\nfn main() {\n    for s in [\"100C\", \"212F\", \"abc\", \"20X\"] {\n        println!(\"{s} -> {}\", convert(s));\n    }\n}",
+"solution": "fn convert(input: &str) -> String {\n    let Some(unit) = input.chars().last() else {\n        return String::from(\"error\");\n    };\n    let number = &input[..input.len() - unit.len_utf8()];\n    let Ok(value) = number.parse::<f64>() else {\n        return String::from(\"error\");\n    };\n    match unit {\n        'C' => format!(\"{}F\", value * 1.8 + 32.0),\n        'F' => format!(\"{}C\", (value - 32.0) / 1.8),\n        _ => String::from(\"error\"),\n    }\n}\n\nfn main() {\n    for s in [\"100C\", \"212F\", \"abc\", \"20X\"] {\n        println!(\"{s} -> {}\", convert(s));\n    }\n}",
+"expect": "100C -> 212F\n212F -> 100C\nabc -> error\n20X -> error",
+"hints": [
+"The last character is the unit: `input.chars().last()`. Everything before it is the number.",
+"The number without the last character: `&input[..input.len() - unit.len_utf8()]`, then `parse::<f64>()` and `match unit { 'C' => ..., 'F' => ..., _ => ... }`."
+]
+},
+{
+"t": "task",
+"md": "A wallet. There is a list of operations. Calculate the final balance with `fold`, starting from 100.",
+"code": "enum Op {\n    Income(i64),\n    Expense(i64),\n}\n\nfn main() {\n    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];\n    let balance = 0;\n    println!(\"{balance}\");\n}",
+"solution": "enum Op {\n    Income(i64),\n    Expense(i64),\n}\n\nfn main() {\n    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];\n    let balance = ops.iter().fold(100, |acc, op| match op {\n        Op::Income(n) => acc + n,\n        Op::Expense(n) => acc - n,\n    });\n    println!(\"{balance}\");\n}",
+"expect": "450",
+"hints": [
+"`ops.iter().fold(100, |acc, op| match op { ... })`",
+"The branches: `Op::Income(n) => acc + n,` and `Op::Expense(n) => acc - n,`"
+]
+},
+{
+"t": "task",
+"md": "The top 2 most frequent words. Count the words in a `HashMap`, move the pairs into a vector, sort by count in descending order and print the first two.",
+"code": "use std::collections::HashMap;\n\nfn main() {\n    let text = \"cat dog cat fish dog cat\";\n    let mut counts: HashMap<&str, u32> = HashMap::new();\n    for w in text.split_whitespace() {\n        *counts.entry(w).or_insert(0) += 1;\n    }\n    // sort and print the top 2\n}",
+"solution": "use std::collections::HashMap;\n\nfn main() {\n    let text = \"cat dog cat fish dog cat\";\n    let mut counts: HashMap<&str, u32> = HashMap::new();\n    for w in text.split_whitespace() {\n        *counts.entry(w).or_insert(0) += 1;\n    }\n    let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();\n    pairs.sort_by(|a, b| b.1.cmp(&a.1));\n    for (word, n) in pairs.iter().take(2) {\n        println!(\"{word}: {n}\");\n    }\n}",
+"expect": "cat: 3\ndog: 2",
+"hints": [
+"`let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();`",
+"Descending: `pairs.sort_by(|a, b| b.1.cmp(&a.1));`, then `pairs.iter().take(2)`."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Дальше: Rust Book, Rustlings, Rust by Example, Exercism.",
-"Маленькие проекты и регулярность.",
-"Шпаргалка и Повторение всегда под рукой."
+"A big task = several small ones: parse the input, calculate, print.",
+"Input mistakes are handled with `let ... else` and `match`, without panics.",
+"`fold`, `sort_by`, `HashMap` are everyday working tools."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Куда идти после курса",
-"Как не бросить"
+"Combine the knowledge of the course in small programs",
+"Practice without theory hints"
 ]
 }
 ]
@@ -12185,7 +12333,573 @@ window.GLOSSARIES = {
 "term": "Рекурсия",
 "en": "recursion",
 "def": "Функция вызывает сама себя."
+},
+{
+"term": "Экранирование",
+"en": "escaping",
+"def": "Запись особых символов внутри текста через `\\`: `\\\"`, `\\n`."
+},
+{
+"term": "Документирующий комментарий",
+"en": "doc comment",
+"def": "Комментарий `///` перед функцией. Редактор показывает его как подсказку."
+},
+{
+"term": "Стек вызовов",
+"en": "call stack",
+"def": "Цепочка вызванных функций: кто кого вызвал. При панике её показывает backtrace."
+},
+{
+"term": "unit",
+"en": "()",
+"def": "Пустое значение `()`. Его возвращают функции без результата."
+},
+{
+"term": "Кортежная структура",
+"en": "tuple struct",
+"def": "Структура без имён полей: `struct Meters(f64);`."
+},
+{
+"term": "Охранник",
+"en": "match guard",
+"def": "Условие в ветке `match`: `n if n < 0 => ...`."
+},
+{
+"term": "Мономорфизация",
+"en": "monomorphization",
+"def": "Компилятор делает отдельную копию обобщённой функции для каждого типа. Поэтому обобщения быстрые."
+},
+{
+"term": "Типаж",
+"en": "trait",
+"def": "Другое русское название трейта."
+},
+{
+"term": "Динамическая диспетчеризация",
+"en": "dynamic dispatch",
+"def": "Вызов метода через таблицу методов, как у `Box<dyn Трейт>`."
+},
+{
+"term": "Weak",
+"en": "Weak",
+"def": "«Слабая» ссылка из `Rc`. Не держит значение живым, помогает избежать утечек в циклах."
+},
+{
+"term": "Cell",
+"en": "Cell",
+"def": "Простая внутренняя изменяемость для типов `Copy`: `get` и `set`."
+},
+{
+"term": "Send и Sync",
+"en": "Send, Sync",
+"def": "Метки типов: можно ли передать значение в другой поток и можно ли смотреть на него из нескольких потоков."
+},
+{
+"term": "Взаимная блокировка",
+"en": "deadlock",
+"def": "Два потока ждут замки друг друга и стоят вечно."
+},
+{
+"term": "Атомарное число",
+"en": "atomic",
+"def": "Число, которое безопасно меняется из нескольких потоков без замка."
+},
+{
+"term": "SemVer",
+"en": "SemVer",
+"def": "Правило версий `МАЖОР.МИНОР.ПАТЧ`. Мажорная версия может ломать совместимость."
+},
+{
+"term": "Cargo.lock",
+"en": "Cargo.lock",
+"def": "Файл с точными версиями библиотек, с которыми собрался проект."
+},
+{
+"term": "Release",
+"en": "release",
+"def": "Режим сборки с оптимизацией: `cargo build --release`. Программа работает быстрее."
+},
+{
+"term": "Машина состояний",
+"en": "state machine",
+"def": "Во что компилятор превращает `async fn`: структура, которая помнит, где остановилась."
+},
+{
+"term": "Процедурный макрос",
+"en": "procedural macro",
+"def": "Макрос-программа, которая получает код и возвращает новый код. Например `#[derive]`."
+},
+{
+"term": "Интеграционный тест",
+"en": "integration test",
+"def": "Тест в папке `tests/`, который проверяет библиотеку снаружи."
 }
 ],
-"en": []
+"en": [
+{
+"term": "Program",
+"en": "",
+"def": "A list of commands for a computer. They run in order, from top to bottom."
+},
+{
+"term": "Compiler",
+"en": "rustc",
+"def": "A program that checks code and translates it into machine commands."
+},
+{
+"term": "Function",
+"en": "fn",
+"def": "A piece of code with a name. Declared with `fn`, called as `name()`."
+},
+{
+"term": "Macro",
+"en": "name!",
+"def": "Code that writes code before compilation. Recognized by `!`: `println!`, `vec!`."
+},
+{
+"term": "Variable",
+"en": "let",
+"def": "A box with a name and a value. Created with `let`."
+},
+{
+"term": "Mutable variable",
+"en": "let mut",
+"def": "A variable that can be changed."
+},
+{
+"term": "Constant",
+"en": "const",
+"def": "A value that never changes: `const MAX: u32 = 10;`."
+},
+{
+"term": "Shadowing",
+"en": "",
+"def": "A new `let` with the same name creates a new variable; the old one is hidden."
+},
+{
+"term": "Type",
+"en": "",
+"def": "What is stored in a variable: a number, text, a `bool` and so on."
+},
+{
+"term": "Expression",
+"en": "",
+"def": "Code that has a value: `2 + 2`, a function call, a block `{}`."
+},
+{
+"term": "Statement",
+"en": "",
+"def": "Code that does something but gives no value. Usually ends with `;`."
+},
+{
+"term": "Scope",
+"en": "",
+"def": "The part of the code where a variable is visible. Usually its block `{}`."
+},
+{
+"term": "Comment",
+"en": "//",
+"def": "A note for people after `//`. The computer skips it."
+},
+{
+"term": "Loop",
+"en": "loop, while, for",
+"def": "Repeating code."
+},
+{
+"term": "Range",
+"en": "1..5, 1..=5",
+"def": "A sequence of numbers: `1..5` (without 5) or `1..=5` (with 5)."
+},
+{
+"term": "Tuple",
+"en": "(a, b)",
+"def": "Several values of different types in parentheses: `(\"Anna\", 25)`."
+},
+{
+"term": "Array",
+"en": "[T; N]",
+"def": "A row of values of one type with a fixed length: `[1, 2, 3]`."
+},
+{
+"term": "Vector",
+"en": "Vec",
+"def": "A list of one type that can grow: `vec![1, 2, 3]`."
+},
+{
+"term": "Index",
+"en": "",
+"def": "The number of an element. Counting starts from zero."
+},
+{
+"term": "Panic",
+"en": "panic!",
+"def": "An emergency stop of the program. For example, when an index is out of bounds."
+},
+{
+"term": "Stack",
+"en": "",
+"def": "Fast memory for data of known size. Like a pile of plates."
+},
+{
+"term": "Heap",
+"en": "",
+"def": "Memory for data that can grow. Like a storage room with tickets."
+},
+{
+"term": "Ownership",
+"en": "",
+"def": "The rules: a value has one owner; when the owner is gone, the value is deleted."
+},
+{
+"term": "Owner",
+"en": "",
+"def": "The variable that is responsible for a value and its deletion."
+},
+{
+"term": "Move",
+"en": "",
+"def": "Passing ownership: `let b = a;` for a `String`. After this `a` cannot be used."
+},
+{
+"term": "Clone",
+"en": ".clone()",
+"def": "A full copy of a value."
+},
+{
+"term": "Copy",
+"en": "Copy",
+"def": "The trait of simple types (numbers, `bool`, `char`) that are copied automatically."
+},
+{
+"term": "Reference",
+"en": "&x",
+"def": "Access to a value without ownership."
+},
+{
+"term": "Borrowing",
+"en": "",
+"def": "Creating a reference. Like lending a book."
+},
+{
+"term": "Mutable reference",
+"en": "&mut x",
+"def": "A reference through which you can change the value. Only one can exist at a time."
+},
+{
+"term": "Dangling reference",
+"en": "",
+"def": "A reference to a value that no longer exists. Rust does not allow them."
+},
+{
+"term": "Slice",
+"en": "&v[1..3]",
+"def": "A reference to a part of a sequence."
+},
+{
+"term": "String slice",
+"en": "&str",
+"def": "A reference to text. Text in quotes is also a `&str`."
+},
+{
+"term": "String",
+"en": "String",
+"def": "An owning string in the heap. It can grow."
+},
+{
+"term": "UTF-8",
+"en": "",
+"def": "A way to store text. An English letter takes 1 byte, a Russian letter 2, an emoji 4."
+},
+{
+"term": "Struct",
+"en": "struct",
+"def": "Your own type made of named fields."
+},
+{
+"term": "Method",
+"en": "impl",
+"def": "A function of a type, written in `impl` and called with a dot."
+},
+{
+"term": "Constructor",
+"en": "new()",
+"def": "A function that creates a value. Usually `new()`."
+},
+{
+"term": "Enum",
+"en": "enum",
+"def": "A type whose value is one variant from a list."
+},
+{
+"term": "Pattern matching",
+"en": "match",
+"def": "Choosing a branch by the shape of a value: `match`, `if let`."
+},
+{
+"term": "Option",
+"en": "Some / None",
+"def": "`Some(value)` or `None`. Rust's replacement for `null`."
+},
+{
+"term": "Result",
+"en": "Ok / Err",
+"def": "`Ok(value)` or `Err(error)`. For operations that can fail."
+},
+{
+"term": "Question mark operator",
+"en": "?",
+"def": "Take the `Ok` value, and on an error return it from the function right away."
+},
+{
+"term": "HashMap",
+"en": "HashMap",
+"def": "A dictionary: key → value."
+},
+{
+"term": "Module",
+"en": "mod",
+"def": "A named part of code: `mod name { }`."
+},
+{
+"term": "Crate",
+"en": "",
+"def": "A program or library that is built as a whole."
+},
+{
+"term": "Cargo",
+"en": "cargo",
+"def": "The tool for creating, building, running and testing projects."
+},
+{
+"term": "rustup",
+"en": "rustup",
+"def": "The installer and updater of Rust."
+},
+{
+"term": "Generics",
+"en": "<T>",
+"def": "Code for any type: `fn f<T>(x: T)`."
+},
+{
+"term": "Trait",
+"en": "trait",
+"def": "A description of a skill of a type: a set of methods."
+},
+{
+"term": "Trait bound",
+"en": "T: Trait",
+"def": "A requirement on a type: `T: Display`."
+},
+{
+"term": "derive",
+"en": "#[derive]",
+"def": "Automatic implementation of traits: `#[derive(Debug)]`."
+},
+{
+"term": "Lifetime",
+"en": "'a",
+"def": "How long a reference lives. A label like `'a`."
+},
+{
+"term": "'static",
+"en": "'static",
+"def": "The lifetime \"the whole program\". Text in quotes has it."
+},
+{
+"term": "Closure",
+"en": "closure",
+"def": "A function without a name, made on the spot: `|x| x + 1`. It sees the variables around it."
+},
+{
+"term": "Iterator",
+"en": "Iterator",
+"def": "Gives out elements one by one. Works with `map`, `filter`, `collect`."
+},
+{
+"term": "Laziness",
+"en": "",
+"def": "An iterator does nothing until the result is requested."
+},
+{
+"term": "Test",
+"en": "#[test]",
+"def": "A function with `#[test]` that checks code."
+},
+{
+"term": "Smart pointer",
+"en": "",
+"def": "The address of a value plus ownership rules: `Box`, `Rc`, `Arc`."
+},
+{
+"term": "Box",
+"en": "Box",
+"def": "Puts a value into the heap."
+},
+{
+"term": "Rc",
+"en": "Rc",
+"def": "Several owners of one value in one thread."
+},
+{
+"term": "RefCell",
+"en": "RefCell",
+"def": "Lets you change a value through shared access. The check happens at run time."
+},
+{
+"term": "Thread",
+"en": "thread::spawn",
+"def": "A separate line of execution of a program."
+},
+{
+"term": "Channel",
+"en": "mpsc::channel",
+"def": "A pipe for messages between threads."
+},
+{
+"term": "Mutex",
+"en": "Mutex",
+"def": "A lock: lets threads to the data one at a time."
+},
+{
+"term": "Arc",
+"en": "Arc",
+"def": "Like `Rc`, but safe for threads."
+},
+{
+"term": "async",
+"en": "async / .await",
+"def": "A way to write code that waits a lot without taking up threads."
+},
+{
+"term": "Future",
+"en": "Future",
+"def": "A promise of a result. It is run by an executor after `.await`."
+},
+{
+"term": "Runtime",
+"en": "",
+"def": "An executor of async code. Real projects use tokio."
+},
+{
+"term": "unsafe",
+"en": "unsafe",
+"def": "A block where the compiler does not check some rules. A beginner does not need it."
+},
+{
+"term": "Edition",
+"en": "edition",
+"def": "A version of the language rules. The current one is 2024."
+},
+{
+"term": "Rust Playground",
+"en": "",
+"def": "A website that runs Rust code. This course uses it."
+},
+{
+"term": "Dereference",
+"en": "*r",
+"def": "Getting the value behind a reference: `*r`."
+},
+{
+"term": "Recursion",
+"en": "",
+"def": "A function calls itself."
+},
+{
+"term": "Escaping",
+"en": "\\",
+"def": "Writing special characters inside text with `\\`: `\\\"`, `\\n`."
+},
+{
+"term": "Doc comment",
+"en": "///",
+"def": "A `///` comment before a function. The editor shows it as a hint."
+},
+{
+"term": "Call stack",
+"en": "",
+"def": "The chain of called functions: who called whom. On a panic, a backtrace shows it."
+},
+{
+"term": "Unit",
+"en": "()",
+"def": "The empty value `()`. Functions without a result return it."
+},
+{
+"term": "Tuple struct",
+"en": "",
+"def": "A struct without field names: `struct Meters(f64);`."
+},
+{
+"term": "Match guard",
+"en": "if",
+"def": "A condition in a `match` branch: `n if n < 0 => ...`."
+},
+{
+"term": "Monomorphization",
+"en": "",
+"def": "The compiler makes a separate copy of a generic function for each type. That is why generics are fast."
+},
+{
+"term": "Dynamic dispatch",
+"en": "dyn",
+"def": "Calling a method through a method table, like with `Box<dyn Trait>`."
+},
+{
+"term": "Weak",
+"en": "Weak",
+"def": "A \"weak\" reference from `Rc`. It does not keep the value alive and helps avoid leaks in cycles."
+},
+{
+"term": "Cell",
+"en": "Cell",
+"def": "Simple interior mutability for `Copy` types: `get` and `set`."
+},
+{
+"term": "Send and Sync",
+"en": "Send, Sync",
+"def": "Markers of types: can a value be passed to another thread, can it be looked at from several threads."
+},
+{
+"term": "Deadlock",
+"en": "",
+"def": "Two threads wait for each other's locks and stand still forever."
+},
+{
+"term": "Atomic number",
+"en": "AtomicUsize",
+"def": "A number that can be safely changed from several threads without a lock."
+},
+{
+"term": "SemVer",
+"en": "",
+"def": "The version rule `MAJOR.MINOR.PATCH`. A major version may break compatibility."
+},
+{
+"term": "Cargo.lock",
+"en": "Cargo.lock",
+"def": "A file with the exact versions of the libraries the project was built with."
+},
+{
+"term": "Release",
+"en": "--release",
+"def": "The build mode with optimization: `cargo build --release`. The program runs faster."
+},
+{
+"term": "State machine",
+"en": "",
+"def": "What the compiler turns an `async fn` into: a struct that remembers where it stopped."
+},
+{
+"term": "Procedural macro",
+"en": "",
+"def": "A macro that is a program: it receives code and returns new code. For example `#[derive]`."
+},
+{
+"term": "Integration test",
+"en": "tests/",
+"def": "A test in the folder `tests/` that checks a library from the outside."
+}
+]
 };

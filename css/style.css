@@ -316,7 +316,7 @@ body.focus .topbar nav { display: none; }
 .langbtn:hover { border-color: var(--accent); }
 .tag { display: inline-block; font-size: .7rem; padding: 0 .45rem; border-radius: 99px; background: var(--info-soft); color: var(--info); vertical-align: middle; font-weight: 600; }
 .plan { background: var(--surface-2); border-radius: 8px; padding: .5rem .8rem; font-size: .92rem; }
-.progress span.opt { background-image: repeating-linear-gradient(90deg, transparent 0 4px, rgba(0,0,0,.12) 4px 6px); }
+.progress span.optional { background-image: repeating-linear-gradient(90deg, transparent 0 4px, rgba(0,0,0,.12) 4px 6px); }
 .card.deep { border-style: dashed; }
 .deep-body { border: 1px solid var(--line); border-radius: 10px; padding: .2rem .9rem; margin-top: .4rem; background: var(--surface); }
 .deep-body > summary { cursor: pointer; padding: .55rem 0; list-style: none; display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }

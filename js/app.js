@@ -162,7 +162,7 @@
 
     const card = L.cards[step];
     const segs = L.cards.map((c, i) =>
-      `<span class="${i < step ? "on" : i === step ? "cur" : ""}${c.t === "deep" ? " opt" : ""}" title="${i + 1}: ${esc(kindName(c))}"></span>`).join("");
+      `<span class="${i < step ? "on" : i === step ? "cur" : ""}${c.t === "deep" ? " optional" : ""}" title="${i + 1}: ${esc(kindName(c))}"></span>`).join("");
     const nextCard = L.cards[step + 1];
     app.innerHTML = `<div class="wrap">
       <div class="lesson-head">

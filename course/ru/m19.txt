@@ -329,7 +329,168 @@ hint: Для done разбери число: `match rest.parse::<u32>() { Ok(n) 
 [x] Писать маленькие свои программы и решать упражнения => Верно. Вспоминать и применять — лучший способ учиться.
 [ ] Сразу взяться за большой сложный проект => Можно увязнуть. Лучше много маленьких побед.
 
+:: deep Как читать документацию
+Почти всё о Rust есть в официальной документации:
+- **doc.rust-lang.org/std** — вся стандартная библиотека. Слева список модулей, в каждом типе — список методов с примерами.
+- **docs.rs** — документация любого крейта с crates.io.
+- Команда `rustup doc` открывает документацию **без интернета**.
+
+Как искать метод: открой страницу типа (например `Vec`), нажми `S` или кликни в поиск и введи слово, например `sort`. У каждого метода есть пример кода, его можно запустить кнопкой Run.
+
 :: recap
 - Дальше: Rust Book, Rustlings, Rust by Example, Exercism.
 - Маленькие проекты и регулярность.
 - Шпаргалка и Повторение всегда под рукой.
+
+## LESSON m19-p | Практика: ещё мини-проекты | 20 | practice
+:: goals
+- Собрать знания курса в небольших программах
+- Потренироваться без подсказок в теории
+
+:: text Как проходить этот урок
+Здесь четыре мини-проекта. Каждый использует сразу несколько тем курса.
+
+Если застрял — открой подсказку. Если и она не помогла — посмотри решение и потом перепиши его сам, не подглядывая. Это тоже хорошая тренировка.
+
+:: task
+Статистика текста. Посчитай строки, слова и буквы (без пробелов и переводов строк). Напечатай: `строк: 2, слов: 5, букв: 25`.
+```rust
+fn main() {
+    let text = "Rust быстрый\nи очень надёжный";
+}
+```
+```solution
+fn main() {
+    let text = "Rust быстрый\nи очень надёжный";
+    let lines = text.lines().count();
+    let words = text.split_whitespace().count();
+    let letters = text.chars().filter(|c| !c.is_whitespace()).count();
+    println!("строк: {lines}, слов: {words}, букв: {letters}");
+}
+```
+```expect
+строк: 2, слов: 5, букв: 25
+```
+hint: Строки — `text.lines().count()`, слова — `split_whitespace().count()`.
+hint: Буквы без пробелов: `text.chars().filter(|c| !c.is_whitespace()).count()`.
+
+:: task
+Конвертер температур. Разбери строки вида `"36.6C"` и `"100F"` и переведи в другую шкалу. Неверный ввод — `ошибка`.
+```rust
+fn convert(input: &str) -> String {
+    String::from("ошибка")
+}
+
+fn main() {
+    for s in ["100C", "212F", "abc", "20X"] {
+        println!("{s} -> {}", convert(s));
+    }
+}
+```
+```solution
+fn convert(input: &str) -> String {
+    let Some(unit) = input.chars().last() else {
+        return String::from("ошибка");
+    };
+    let number = &input[..input.len() - unit.len_utf8()];
+    let Ok(value) = number.parse::<f64>() else {
+        return String::from("ошибка");
+    };
+    match unit {
+        'C' => format!("{}F", value * 1.8 + 32.0),
+        'F' => format!("{}C", (value - 32.0) / 1.8),
+        _ => String::from("ошибка"),
+    }
+}
+
+fn main() {
+    for s in ["100C", "212F", "abc", "20X"] {
+        println!("{s} -> {}", convert(s));
+    }
+}
+```
+```expect
+100C -> 212F
+212F -> 100C
+abc -> ошибка
+20X -> ошибка
+```
+hint: Последний символ — единица: `input.chars().last()`. Всё до него — число.
+hint: Число без последнего символа: `&input[..input.len() - unit.len_utf8()]`, потом `parse::<f64>()` и `match unit { 'C' => ..., 'F' => ..., _ => ... }`.
+
+:: task
+Кошелёк. Есть список операций. Посчитай итоговый баланс через `fold`, начав со 100.
+```rust
+enum Op {
+    Income(i64),
+    Expense(i64),
+}
+
+fn main() {
+    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];
+    let balance = 0;
+    println!("{balance}");
+}
+```
+```solution
+enum Op {
+    Income(i64),
+    Expense(i64),
+}
+
+fn main() {
+    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];
+    let balance = ops.iter().fold(100, |acc, op| match op {
+        Op::Income(n) => acc + n,
+        Op::Expense(n) => acc - n,
+    });
+    println!("{balance}");
+}
+```
+```expect
+450
+```
+hint: `ops.iter().fold(100, |acc, op| match op { ... })`
+hint: Ветки: `Op::Income(n) => acc + n,` и `Op::Expense(n) => acc - n,`
+
+:: task
+Топ-2 самых частых слов. Посчитай слова в `HashMap`, переложи пары в вектор, отсортируй по убыванию количества и выведи первые два.
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let text = "кот пёс кот рыба пёс кот";
+    let mut counts: HashMap<&str, u32> = HashMap::new();
+    for w in text.split_whitespace() {
+        *counts.entry(w).or_insert(0) += 1;
+    }
+    // отсортируй и напечатай топ-2
+}
+```
+```solution
+use std::collections::HashMap;
+
+fn main() {
+    let text = "кот пёс кот рыба пёс кот";
+    let mut counts: HashMap<&str, u32> = HashMap::new();
+    for w in text.split_whitespace() {
+        *counts.entry(w).or_insert(0) += 1;
+    }
+    let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();
+    pairs.sort_by(|a, b| b.1.cmp(&a.1));
+    for (word, n) in pairs.iter().take(2) {
+        println!("{word}: {n}");
+    }
+}
+```
+```expect
+кот: 3
+пёс: 2
+```
+hint: `let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();`
+hint: По убыванию: `pairs.sort_by(|a, b| b.1.cmp(&a.1));`, потом `pairs.iter().take(2)`.
+
+:: recap
+- Большая задача = несколько маленьких: разобрать ввод, посчитать, вывести.
+- Ошибки ввода — через `let ... else` и `match`, без паники.
+- `fold`, `sort_by`, `HashMap` — рабочие инструменты на каждый день.

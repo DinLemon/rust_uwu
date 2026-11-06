@@ -1,0 +1,94 @@
+// term | short form or syntax | explanation
+Program |  | A list of commands for a computer. They run in order, from top to bottom.
+Compiler | rustc | A program that checks code and translates it into machine commands.
+Function | fn | A piece of code with a name. Declared with `fn`, called as `name()`.
+Macro | name! | Code that writes code before compilation. Recognized by `!`: `println!`, `vec!`.
+Variable | let | A box with a name and a value. Created with `let`.
+Mutable variable | let mut | A variable that can be changed.
+Constant | const | A value that never changes: `const MAX: u32 = 10;`.
+Shadowing |  | A new `let` with the same name creates a new variable; the old one is hidden.
+Type |  | What is stored in a variable: a number, text, a `bool` and so on.
+Expression |  | Code that has a value: `2 + 2`, a function call, a block `{}`.
+Statement |  | Code that does something but gives no value. Usually ends with `;`.
+Scope |  | The part of the code where a variable is visible. Usually its block `{}`.
+Comment | // | A note for people after `//`. The computer skips it.
+Loop | loop, while, for | Repeating code.
+Range | 1..5, 1..=5 | A sequence of numbers: `1..5` (without 5) or `1..=5` (with 5).
+Tuple | (a, b) | Several values of different types in parentheses: `("Anna", 25)`.
+Array | [T; N] | A row of values of one type with a fixed length: `[1, 2, 3]`.
+Vector | Vec | A list of one type that can grow: `vec![1, 2, 3]`.
+Index |  | The number of an element. Counting starts from zero.
+Panic | panic! | An emergency stop of the program. For example, when an index is out of bounds.
+Stack |  | Fast memory for data of known size. Like a pile of plates.
+Heap |  | Memory for data that can grow. Like a storage room with tickets.
+Ownership |  | The rules: a value has one owner; when the owner is gone, the value is deleted.
+Owner |  | The variable that is responsible for a value and its deletion.
+Move |  | Passing ownership: `let b = a;` for a `String`. After this `a` cannot be used.
+Clone | .clone() | A full copy of a value.
+Copy | Copy | The trait of simple types (numbers, `bool`, `char`) that are copied automatically.
+Reference | &x | Access to a value without ownership.
+Borrowing |  | Creating a reference. Like lending a book.
+Mutable reference | &mut x | A reference through which you can change the value. Only one can exist at a time.
+Dangling reference |  | A reference to a value that no longer exists. Rust does not allow them.
+Slice | &v[1..3] | A reference to a part of a sequence.
+String slice | &str | A reference to text. Text in quotes is also a `&str`.
+String | String | An owning string in the heap. It can grow.
+UTF-8 |  | A way to store text. An English letter takes 1 byte, a Russian letter 2, an emoji 4.
+Struct | struct | Your own type made of named fields.
+Method | impl | A function of a type, written in `impl` and called with a dot.
+Constructor | new() | A function that creates a value. Usually `new()`.
+Enum | enum | A type whose value is one variant from a list.
+Pattern matching | match | Choosing a branch by the shape of a value: `match`, `if let`.
+Option | Some / None | `Some(value)` or `None`. Rust's replacement for `null`.
+Result | Ok / Err | `Ok(value)` or `Err(error)`. For operations that can fail.
+Question mark operator | ? | Take the `Ok` value, and on an error return it from the function right away.
+HashMap | HashMap | A dictionary: key → value.
+Module | mod | A named part of code: `mod name { }`.
+Crate |  | A program or library that is built as a whole.
+Cargo | cargo | The tool for creating, building, running and testing projects.
+rustup | rustup | The installer and updater of Rust.
+Generics | <T> | Code for any type: `fn f<T>(x: T)`.
+Trait | trait | A description of a skill of a type: a set of methods.
+Trait bound | T: Trait | A requirement on a type: `T: Display`.
+derive | #[derive] | Automatic implementation of traits: `#[derive(Debug)]`.
+Lifetime | 'a | How long a reference lives. A label like `'a`.
+'static | 'static | The lifetime "the whole program". Text in quotes has it.
+Closure | closure | A function without a name, made on the spot: `|x| x + 1`. It sees the variables around it.
+Iterator | Iterator | Gives out elements one by one. Works with `map`, `filter`, `collect`.
+Laziness |  | An iterator does nothing until the result is requested.
+Test | #[test] | A function with `#[test]` that checks code.
+Smart pointer |  | The address of a value plus ownership rules: `Box`, `Rc`, `Arc`.
+Box | Box | Puts a value into the heap.
+Rc | Rc | Several owners of one value in one thread.
+RefCell | RefCell | Lets you change a value through shared access. The check happens at run time.
+Thread | thread::spawn | A separate line of execution of a program.
+Channel | mpsc::channel | A pipe for messages between threads.
+Mutex | Mutex | A lock: lets threads to the data one at a time.
+Arc | Arc | Like `Rc`, but safe for threads.
+async | async / .await | A way to write code that waits a lot without taking up threads.
+Future | Future | A promise of a result. It is run by an executor after `.await`.
+Runtime |  | An executor of async code. Real projects use tokio.
+unsafe | unsafe | A block where the compiler does not check some rules. A beginner does not need it.
+Edition | edition | A version of the language rules. The current one is 2024.
+Rust Playground |  | A website that runs Rust code. This course uses it.
+Dereference | *r | Getting the value behind a reference: `*r`.
+Recursion |  | A function calls itself.
+Escaping | \ | Writing special characters inside text with `\`: `\"`, `\n`.
+Doc comment | /// | A `///` comment before a function. The editor shows it as a hint.
+Call stack |  | The chain of called functions: who called whom. On a panic, a backtrace shows it.
+Unit | () | The empty value `()`. Functions without a result return it.
+Tuple struct |  | A struct without field names: `struct Meters(f64);`.
+Match guard | if | A condition in a `match` branch: `n if n < 0 => ...`.
+Monomorphization |  | The compiler makes a separate copy of a generic function for each type. That is why generics are fast.
+Dynamic dispatch | dyn | Calling a method through a method table, like with `Box<dyn Trait>`.
+Weak | Weak | A "weak" reference from `Rc`. It does not keep the value alive and helps avoid leaks in cycles.
+Cell | Cell | Simple interior mutability for `Copy` types: `get` and `set`.
+Send and Sync | Send, Sync | Markers of types: can a value be passed to another thread, can it be looked at from several threads.
+Deadlock |  | Two threads wait for each other's locks and stand still forever.
+Atomic number | AtomicUsize | A number that can be safely changed from several threads without a lock.
+SemVer |  | The version rule `MAJOR.MINOR.PATCH`. A major version may break compatibility.
+Cargo.lock | Cargo.lock | A file with the exact versions of the libraries the project was built with.
+Release | --release | The build mode with optimization: `cargo build --release`. The program runs faster.
+State machine |  | What the compiler turns an `async fn` into: a struct that remembers where it stopped.
+Procedural macro |  | A macro that is a program: it receives code and returns new code. For example `#[derive]`.
+Integration test | tests/ | A test in the folder `tests/` that checks a library from the outside.

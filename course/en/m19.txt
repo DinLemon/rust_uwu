@@ -1,0 +1,496 @@
+# MODULE m19 | Final project | Putting it all together
+
+## LESSON m19-1 | Project: a to-do list. Step 1 — the data | 7
+:: goals
+- Design the types for a program
+- Combine a struct and an enum
+
+:: text What we are building
+A small task manager. It can:
+- add tasks;
+- mark tasks as done;
+- show the list;
+- run commands from text like `add buy bread`.
+
+We go step by step. Each step is a separate small win.
+
+:: text The data types
+We start with the data. A task is a struct. Its state is an enum.
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+enum Status {
+    Todo,
+    Done,
+}
+
+#[derive(Debug, Clone)]
+struct Task {
+    id: u32,
+    title: String,
+    status: Status,
+}
+```
+
+:: task
+Create a struct `TodoList` with the fields `tasks: Vec<Task>` and `next_id: u32`, and a constructor `new()` where the list is empty and `next_id` is 1. The program must print `0 1`.
+```rust
+#[derive(Debug, Clone, PartialEq)]
+enum Status {
+    Todo,
+    Done,
+}
+
+#[derive(Debug, Clone)]
+struct Task {
+    id: u32,
+    title: String,
+    status: Status,
+}
+
+// your struct TodoList and an impl with new()
+
+fn main() {
+    let list = TodoList::new();
+    println!("{} {}", list.tasks.len(), list.next_id);
+}
+```
+```solution
+#[derive(Debug, Clone, PartialEq)]
+enum Status {
+    Todo,
+    Done,
+}
+
+#[derive(Debug, Clone)]
+struct Task {
+    id: u32,
+    title: String,
+    status: Status,
+}
+
+struct TodoList {
+    tasks: Vec<Task>,
+    next_id: u32,
+}
+
+impl TodoList {
+    fn new() -> Self {
+        TodoList { tasks: Vec::new(), next_id: 1 }
+    }
+}
+
+fn main() {
+    let list = TodoList::new();
+    println!("{} {}", list.tasks.len(), list.next_id);
+}
+```
+```expect
+0 1
+```
+hint: `struct TodoList { tasks: Vec<Task>, next_id: u32 }`
+hint: `impl TodoList { fn new() -> Self { TodoList { tasks: Vec::new(), next_id: 1 } } }`
+
+:: recap
+- First think about the data, then about the actions.
+- A struct describes "what it is", an enum describes "which state it is in".
+
+## LESSON m19-2 | Step 2 — the actions | 8
+:: goals
+- Write the methods add, done and showing the list
+- Return an error with `Result` if there is no such task
+
+:: task
+Complete the methods `add` (returns the id of the new task) and `done` (marks a task; if the id is not found — `Err` with a text). The method `show` is ready.
+```rust
+#[derive(Debug, Clone, PartialEq)]
+enum Status { Todo, Done }
+
+#[derive(Debug, Clone)]
+struct Task { id: u32, title: String, status: Status }
+
+struct TodoList { tasks: Vec<Task>, next_id: u32 }
+
+impl TodoList {
+    fn new() -> Self {
+        TodoList { tasks: Vec::new(), next_id: 1 }
+    }
+
+    fn add(&mut self, title: &str) -> u32 {
+        // create a Task, put it into tasks, increase next_id, return the id
+        0
+    }
+
+    fn done(&mut self, id: u32) -> Result<(), String> {
+        // find the task with this id and change its status
+        Err(format!("No task {id}"))
+    }
+
+    fn show(&self) {
+        for t in &self.tasks {
+            let mark = if t.status == Status::Done { "x" } else { " " };
+            println!("[{mark}] {}. {}", t.id, t.title);
+        }
+    }
+}
+
+fn main() {
+    let mut list = TodoList::new();
+    list.add("buy bread");
+    list.add("learn Rust");
+    list.done(2).unwrap();
+    list.show();
+    println!("{:?}", list.done(99));
+}
+```
+```solution
+#[derive(Debug, Clone, PartialEq)]
+enum Status { Todo, Done }
+
+#[derive(Debug, Clone)]
+struct Task { id: u32, title: String, status: Status }
+
+struct TodoList { tasks: Vec<Task>, next_id: u32 }
+
+impl TodoList {
+    fn new() -> Self {
+        TodoList { tasks: Vec::new(), next_id: 1 }
+    }
+
+    fn add(&mut self, title: &str) -> u32 {
+        let id = self.next_id;
+        self.tasks.push(Task { id, title: title.to_string(), status: Status::Todo });
+        self.next_id += 1;
+        id
+    }
+
+    fn done(&mut self, id: u32) -> Result<(), String> {
+        match self.tasks.iter_mut().find(|t| t.id == id) {
+            Some(task) => {
+                task.status = Status::Done;
+                Ok(())
+            }
+            None => Err(format!("No task {id}")),
+        }
+    }
+
+    fn show(&self) {
+        for t in &self.tasks {
+            let mark = if t.status == Status::Done { "x" } else { " " };
+            println!("[{mark}] {}. {}", t.id, t.title);
+        }
+    }
+}
+
+fn main() {
+    let mut list = TodoList::new();
+    list.add("buy bread");
+    list.add("learn Rust");
+    list.done(2).unwrap();
+    list.show();
+    println!("{:?}", list.done(99));
+}
+```
+```expect
+[ ] 1. buy bread
+[x] 2. learn Rust
+Err("No task 99")
+```
+hint: In `add`: remember `let id = self.next_id;`, then `self.tasks.push(Task { ... })`, then `self.next_id += 1;` and return `id`.
+hint: In `done`: `self.tasks.iter_mut().find(|t| t.id == id)` returns `Option<&mut Task>`. Check it with `match`.
+
+:: recap
+- `iter_mut().find(...)` finds an element in order to change it.
+- No element — an honest `Err`, not a panic.
+
+## LESSON m19-3 | Step 3 — commands | 8
+:: goals
+- Parse a text command into an enum
+- Connect everything with `match`
+
+:: text A command as an enum
+The user writes text. Let us turn it into a clear type:
+
+```rust
+enum Command {
+    Add(String),
+    Done(u32),
+    List,
+}
+```
+The function `parse` turns a string into `Result<Command, String>`. Input mistakes are not a panic, but an `Err`.
+
+:: task
+Complete `parse`: `add text` → `Add`, `done number` → `Done`, `list` → `List`, everything else → `Err`. The rest of the program is ready.
+```rust
+#[derive(Debug)]
+enum Command {
+    Add(String),
+    Done(u32),
+    List,
+}
+
+fn parse(line: &str) -> Result<Command, String> {
+    let (cmd, rest) = match line.trim().split_once(' ') {
+        Some((c, r)) => (c, r.trim()),
+        None => (line.trim(), ""),
+    };
+    match cmd {
+        // your branches
+        _ => Err(format!("Unknown command \"{cmd}\"")),
+    }
+}
+
+fn main() {
+    for line in ["add buy bread", "done 1", "list", "done abc", "jump"] {
+        println!("{line} -> {:?}", parse(line));
+    }
+}
+```
+```solution
+#[derive(Debug)]
+enum Command {
+    Add(String),
+    Done(u32),
+    List,
+}
+
+fn parse(line: &str) -> Result<Command, String> {
+    let (cmd, rest) = match line.trim().split_once(' ') {
+        Some((c, r)) => (c, r.trim()),
+        None => (line.trim(), ""),
+    };
+    match cmd {
+        "add" if !rest.is_empty() => Ok(Command::Add(rest.to_string())),
+        "done" => rest
+            .parse::<u32>()
+            .map(Command::Done)
+            .map_err(|_| format!("\"{rest}\" is not a task number")),
+        "list" => Ok(Command::List),
+        _ => Err(format!("Unknown command \"{cmd}\"")),
+    }
+}
+
+fn main() {
+    for line in ["add buy bread", "done 1", "list", "done abc", "jump"] {
+        println!("{line} -> {:?}", parse(line));
+    }
+}
+```
+```expect
+add buy bread -> Ok(Add("buy bread"))
+done 1 -> Ok(Done(1))
+list -> Ok(List)
+done abc -> Err("\"abc\" is not a task number")
+jump -> Err("Unknown command \"jump\"")
+```
+hint: The branch for add: `"add" => Ok(Command::Add(rest.to_string())),`
+hint: For done, parse the number: `match rest.parse::<u32>() { Ok(n) => Ok(Command::Done(n)), Err(_) => Err(format!("\"{rest}\" is not a task number")) }`
+
+:: text You built a real program
+Look at what it contains:
+- structs and enums;
+- methods and a constructor;
+- `Vec`, iterators, closures;
+- `Option`, `Result`, `match`, errors without panics.
+
+This is the base of any Rust program. From here on it is only more of the same.
+
+:: recap
+- Text from the user → your own `enum` through `parse`.
+- Input mistakes → `Err`, not a panic.
+- A program = data + actions + parsing commands.
+
+## LESSON m19-4 | What next | 5
+:: goals
+- Where to go after the course
+- How not to give up
+
+:: text You finished the course
+This is a long road. You worked through ownership — a topic where many experienced programmers stumble.
+
+It is fine if you forgot something. Look into the **Cheat sheet** and **Review** — that is what they are for.
+
+:: text What to read and practice
+- [The Rust Book](https://doc.rust-lang.org/book/) — the official book. Now it will make sense.
+- [Rustlings](https://rustlings.rust-lang.org/) — 95 small exercises on your own computer. Very much in the spirit of this course.
+- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) — code examples by topic.
+- [Exercism, Rust track](https://exercism.org/tracks/rust) — tasks with checks and feedback from mentors.
+
+:: text How not to give up
+- Write small programs for yourself: an expense calculator, a file renamer, a bot.
+- 15 minutes a day is better than 3 hours once a month.
+- Stuck on a compiler error? Read it fully once more. There is almost always a `help`.
+- Breaks are part of learning, not a failure.
+
+:: quiz
+Which path best strengthens your knowledge?
+[ ] Reread the whole course => Rereading is remembered worse than practice.
+[x] Write small programs of your own and solve exercises => Correct. Recalling and applying is the best way to learn.
+[ ] Start a big complex project right away => You may get stuck. Many small wins are better.
+
+:: deep How to read the documentation
+Almost everything about Rust is in the official documentation:
+- **doc.rust-lang.org/std** — the whole standard library. On the left is the list of modules; each type has a list of methods with examples.
+- **docs.rs** — the documentation of any crate from crates.io.
+- The command `rustup doc` opens the documentation **without internet**.
+
+How to find a method: open the page of a type (for example `Vec`), press `S` or click the search field and type a word, for example `sort`. Every method has a code example, and you can run it with the Run button.
+
+:: recap
+- Next: the Rust Book, Rustlings, Rust by Example, Exercism.
+- Small projects and regularity.
+- The Cheat sheet and Review are always at hand.
+
+## LESSON m19-p | Practice: more mini-projects | 20 | practice
+:: goals
+- Combine the knowledge of the course in small programs
+- Practice without theory hints
+
+:: text How to do this lesson
+There are four mini-projects here. Each one uses several topics of the course at once.
+
+If you are stuck, open a hint. If that does not help, look at the solution and then rewrite it yourself without looking. That is good practice too.
+
+:: task
+Text statistics. Count the lines, words and letters (without spaces and line breaks). Print: `lines: 2, words: 6, letters: 25`.
+```rust
+fn main() {
+    let text = "Rust is fast\nand very reliable";
+}
+```
+```solution
+fn main() {
+    let text = "Rust is fast\nand very reliable";
+    let lines = text.lines().count();
+    let words = text.split_whitespace().count();
+    let letters = text.chars().filter(|c| !c.is_whitespace()).count();
+    println!("lines: {lines}, words: {words}, letters: {letters}");
+}
+```
+```expect
+lines: 2, words: 6, letters: 25
+```
+hint: Lines — `text.lines().count()`, words — `split_whitespace().count()`.
+hint: Letters without spaces: `text.chars().filter(|c| !c.is_whitespace()).count()`.
+
+:: task
+A temperature converter. Parse strings like `"36.6C"` and `"100F"` and convert them to the other scale. Wrong input — `error`.
+```rust
+fn convert(input: &str) -> String {
+    String::from("error")
+}
+
+fn main() {
+    for s in ["100C", "212F", "abc", "20X"] {
+        println!("{s} -> {}", convert(s));
+    }
+}
+```
+```solution
+fn convert(input: &str) -> String {
+    let Some(unit) = input.chars().last() else {
+        return String::from("error");
+    };
+    let number = &input[..input.len() - unit.len_utf8()];
+    let Ok(value) = number.parse::<f64>() else {
+        return String::from("error");
+    };
+    match unit {
+        'C' => format!("{}F", value * 1.8 + 32.0),
+        'F' => format!("{}C", (value - 32.0) / 1.8),
+        _ => String::from("error"),
+    }
+}
+
+fn main() {
+    for s in ["100C", "212F", "abc", "20X"] {
+        println!("{s} -> {}", convert(s));
+    }
+}
+```
+```expect
+100C -> 212F
+212F -> 100C
+abc -> error
+20X -> error
+```
+hint: The last character is the unit: `input.chars().last()`. Everything before it is the number.
+hint: The number without the last character: `&input[..input.len() - unit.len_utf8()]`, then `parse::<f64>()` and `match unit { 'C' => ..., 'F' => ..., _ => ... }`.
+
+:: task
+A wallet. There is a list of operations. Calculate the final balance with `fold`, starting from 100.
+```rust
+enum Op {
+    Income(i64),
+    Expense(i64),
+}
+
+fn main() {
+    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];
+    let balance = 0;
+    println!("{balance}");
+}
+```
+```solution
+enum Op {
+    Income(i64),
+    Expense(i64),
+}
+
+fn main() {
+    let ops = [Op::Income(500), Op::Expense(120), Op::Expense(80), Op::Income(50)];
+    let balance = ops.iter().fold(100, |acc, op| match op {
+        Op::Income(n) => acc + n,
+        Op::Expense(n) => acc - n,
+    });
+    println!("{balance}");
+}
+```
+```expect
+450
+```
+hint: `ops.iter().fold(100, |acc, op| match op { ... })`
+hint: The branches: `Op::Income(n) => acc + n,` and `Op::Expense(n) => acc - n,`
+
+:: task
+The top 2 most frequent words. Count the words in a `HashMap`, move the pairs into a vector, sort by count in descending order and print the first two.
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let text = "cat dog cat fish dog cat";
+    let mut counts: HashMap<&str, u32> = HashMap::new();
+    for w in text.split_whitespace() {
+        *counts.entry(w).or_insert(0) += 1;
+    }
+    // sort and print the top 2
+}
+```
+```solution
+use std::collections::HashMap;
+
+fn main() {
+    let text = "cat dog cat fish dog cat";
+    let mut counts: HashMap<&str, u32> = HashMap::new();
+    for w in text.split_whitespace() {
+        *counts.entry(w).or_insert(0) += 1;
+    }
+    let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();
+    pairs.sort_by(|a, b| b.1.cmp(&a.1));
+    for (word, n) in pairs.iter().take(2) {
+        println!("{word}: {n}");
+    }
+}
+```
+```expect
+cat: 3
+dog: 2
+```
+hint: `let mut pairs: Vec<(&str, u32)> = counts.into_iter().collect();`
+hint: Descending: `pairs.sort_by(|a, b| b.1.cmp(&a.1));`, then `pairs.iter().take(2)`.
+
+:: recap
+- A big task = several small ones: parse the input, calculate, print.
+- Input mistakes are handled with `let ... else` and `match`, without panics.
+- `fold`, `sort_by`, `HashMap` are everyday working tools.
