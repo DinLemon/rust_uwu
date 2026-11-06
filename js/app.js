@@ -114,25 +114,66 @@
   const freshStamps = new Set();
 
   // ---------- Главная ----------
+  const foxReactions = {
+    wave: { pose: "assets/fox-wave.webp", duration: 920 },
+    pet: { duration: 920 },
+    stretch: { pose: "assets/fox-stretch.webp", duration: 1060 },
+    cookie: { pose: "assets/fox-cookie.webp", duration: 1160 },
+    nap: { pose: "assets/fox-nap.webp", duration: 1750 },
+  };
+
   function bindHeroFox(fox) {
     const art = app.querySelector(".hero-art");
-    const wave = art.querySelector(".hero-fox-wave");
+    const slot = art.querySelector(".fox-pose-slot");
     const response = app.querySelector(".fox-response");
-    if (wave.complete && wave.naturalWidth) art.classList.add("has-wave");
-    else wave.addEventListener("load", () => art.classList.add("has-wave"), { once: true });
-    let settle;
-    app.querySelector(".fox-controls").addEventListener("click", (event) => {
-      const action = event.target.closest("[data-fox-action]")?.dataset.foxAction;
-      if (action !== "wave" && action !== "pet") return;
-      clearTimeout(settle);
-      const animate = S.settings.motion && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
-      if (animate && art.dataset.foxReaction === action) {
-        delete art.dataset.foxReaction;
-        void art.offsetWidth; // повторный клик запускает короткую реакцию заново
+    const poses = new Map();
+    let settle, revision = 0;
+
+    function loadPose(src) {
+      if (!poses.has(src)) {
+        const image = new Image(1374, 1145);
+        image.className = "hero-fox-pose";
+        image.alt = "";
+        image.src = src;
+        poses.set(src, image.decode().then(() => image, () => {
+          poses.delete(src);
+          return null;
+        }));
       }
+      return poses.get(src);
+    }
+
+    loadPose(foxReactions.wave.pose);
+    app.querySelector(".fox-controls").addEventListener("click", async (event) => {
+      const action = event.target.closest("[data-fox-action]")?.dataset.foxAction;
+      const reaction = foxReactions[action];
+      if (!reaction) return;
+      const selected = ++revision;
+      const previous = art.dataset.foxReaction;
+      clearTimeout(settle);
+      delete art.dataset.foxReaction;
+      art.classList.remove("has-pose");
+      slot.replaceChildren();
+
+      const animate = S.settings.motion && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+      if (animate && previous === action) void art.offsetWidth; // повторно запускаем реакцию
+      if (reaction.pose) {
+        response.textContent = fox.loading;
+        const pose = await loadPose(reaction.pose);
+        if (selected !== revision || !art.isConnected) return;
+        if (pose) {
+          slot.replaceChildren(pose);
+          art.classList.add("has-pose");
+        }
+      }
+
       art.dataset.foxReaction = action;
-      response.textContent = action === "wave" ? fox.waved : fox.petted;
-      if (animate) settle = setTimeout(() => { delete art.dataset.foxReaction; }, 920);
+      response.textContent = fox.actions[action][1];
+      if (animate) settle = setTimeout(() => {
+        delete art.dataset.foxReaction;
+        art.classList.remove("has-pose");
+        slot.replaceChildren();
+      }, reaction.duration);
     });
   }
 
@@ -143,7 +184,7 @@
     const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
     const cont = saved || n;
     const started = doneCount() > 0 || S.last;
-    const fox = T.fox;
+    const fox = T.fox?.actions && T.fox;
     let html = `<div class="wrap-wide">
       <section class="hero">
         <div class="hero-grid">
@@ -165,7 +206,7 @@
           <div class="hero-companion">
             <div class="hero-art" aria-hidden="true">
               <img class="hero-fox-idle" src="assets/fox-mascot.webp" width="1374" height="1145" alt="">
-              <img class="hero-fox-wave" src="assets/fox-wave.webp" width="1374" height="1145" alt="">
+              <div class="fox-pose-slot"></div>
               <svg class="fox-effects" viewBox="0 0 120 100" focusable="false">
                 <g class="fox-wave-marks" fill="none" stroke="#ad70b8" stroke-width="1.8" stroke-linecap="round">
                   <path d="M30 46q-1-4-5-6m3 10q-3-3-6-3"/>
@@ -176,11 +217,20 @@
                   <path d="M92 27c-6-4-4-8-1-8q1 0 2 2 1-2 3-2c3 1 2 5-4 8Z"/>
                   <path d="M99 47c-8-4-7-10-3-10q2 0 3 2 2-3 5-2c4 2 2 6-5 10Z"/>
                 </g>
+                <g class="fox-stretch-stars" fill="#ffd578" stroke="#bc8443" stroke-width=".65">
+                  <path d="M15 25q1-5 2-7 1 5 4 7-3 1-4 5-1-4-2-5Z"/>
+                  <path d="M103 27q2-2 3-7 1 5 4 7-3 1-4 6-1-5-3-6Z"/>
+                </g>
+                <g class="fox-cookie-crumbs" fill="#f4bf72" stroke="#996035" stroke-width=".65">
+                  <circle cx="77" cy="55" r="1.7"/><circle cx="81" cy="58" r="1.2"/><circle cx="77" cy="61" r="1"/>
+                </g>
+                <g class="fox-nap-letters" fill="none" stroke="#bf9ae8" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M92 32h5l-5 5h5"/><path d="M100 20h7l-7 7h7"/><path d="M109 7h8l-8 8h8"/>
+                </g>
               </svg>
             </div>
             ${fox ? `<div class="fox-controls" role="group" aria-label="${esc(fox.label)}">
-              <button type="button" class="btn btn-quiet btn-sm" data-fox-action="wave">${esc(fox.wave)}</button>
-              <button type="button" class="btn btn-quiet btn-sm" data-fox-action="pet">${esc(fox.pet)}</button>
+              ${Object.entries(fox.actions).map(([action, [label]]) => `<button type="button" class="btn btn-quiet btn-sm" data-fox-action="${action}">${esc(label)}</button>`).join("")}
             </div><span class="fox-response" role="status"></span>` : ""}
           </div>
         </div>
