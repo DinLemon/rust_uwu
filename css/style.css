@@ -395,3 +395,46 @@ body.focus .topbar nav { display: none; }
 .deep-content { padding: .3rem 0 .6rem; }
 .lesson-nav .hint { text-align: center; }
 @media (max-width: 600px) { .lesson-nav .hint { display: none; } }
+
+/* Реакции маскотов */
+.mascot { display: block; width: 3.65rem; height: auto; overflow: visible; }
+.mascot-bubble { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem; align-items: center; }
+.mascot-bubble > div { overflow-wrap: anywhere; }
+.mascot-hint { overflow: hidden; }
+.resume-note { margin-top: .7rem; color: var(--muted); font-size: .85rem; }
+.resume-note .mascot { width: 3rem; }
+.mod-num .mascot { width: 1.9rem; }
+.compiler-tip { margin: 0; }
+.compiler-tip + .compiler-tip { margin-top: .35rem; }
+.theme-panel { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.theme-mascot .mascot { width: 4.6rem; }
+.mascot .fox-head, .mascot .fox-ear, .mascot .laptop-lid, .mascot .curtain-left, .mascot .curtain-right { transform-box: fill-box; }
+.mascot .fox-head { transform-origin: center; }
+.mascot .fox-ear, .mascot .laptop-lid { transform-origin: center bottom; }
+.mascot .laptop-lid { transform: scaleY(.16); }
+.mascot .curtain-left { transform-origin: left; transform: scaleX(.24); }
+.mascot .curtain-right { transform-origin: right; transform: scaleX(.24); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .anim:not(.focus) .mascot-hint .fox-head { animation: mascot-peek .32s ease-out; }
+  .anim:not(.focus) .mascot-success .fox-ear { animation: mascot-ear .42s ease-out; }
+  .anim:not(.focus) .mascot-success .crab-claws { animation: mascot-claws .42s ease-out; }
+  .anim:not(.focus) .mascot-error .fox-head { animation: mascot-tilt .42s ease-in-out; }
+  .anim:not(.focus) .mascot-run .key-claw { animation: mascot-press .32s ease-out; }
+  .anim:not(.focus) .mascot-run .screen-led { animation: mascot-light .35s .08s ease-out backwards; }
+  .anim:not(.focus) .finish-new .laptop-lid { animation: mascot-close .48s ease-in-out; }
+  .anim:not(.focus) .stamp-new .mascot-paw { animation: mascot-stamp .35s ease-out; }
+  .anim:not(.focus) .mascot-bookmark .ribbon { animation: mascot-bookmark .36s ease-out; }
+  .anim:not(.focus) .theme-mascot.is-new .lamp-light { animation: mascot-light .4s ease-out; }
+  .anim:not(.focus) .theme-mascot.is-new :is(.curtain-left, .curtain-right) { animation: mascot-open .4s ease-out; }
+}
+@keyframes mascot-peek { from { opacity: 0; transform: translateY(18px); } }
+@keyframes mascot-ear { 35% { transform: rotate(-12deg); } 68% { transform: rotate(8deg); } }
+@keyframes mascot-claws { 45% { transform: translateY(-5px); } }
+@keyframes mascot-tilt { 50% { transform: rotate(-11deg); } }
+@keyframes mascot-press { from { transform: translateY(-7px); } 45% { transform: translateY(2px); } }
+@keyframes mascot-light { from { opacity: 0; } }
+@keyframes mascot-close { from { transform: scaleY(1); } }
+@keyframes mascot-stamp { from { opacity: 0; transform: scale(1.5) rotate(-14deg); } }
+@keyframes mascot-bookmark { from { opacity: 0; transform: translateY(10px); } }
+@keyframes mascot-open { from { transform: scaleX(1); } }
