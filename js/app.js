@@ -82,16 +82,24 @@
     const started = doneCount() > 0 || S.last;
     let html = `<div class="wrap-wide">
       <section class="hero">
-        <h1>${T.heroTitle}</h1>
-        <p>${T.heroText}</p>
-        <div class="hero-actions">
-          ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
-          ${doneCount() > 0 ? `<a class="btn btn-ghost" href="#/review">${T.reviewBtn}</a>` : ""}
-        </div>
-        <div class="stats">
-          <span>${T.statLessons(doneCount(), lessons.length)}</span>
-          <span>${T.statModules(COURSE.modules.length)}</span>
-          <span>${T.statHours(Math.round(totalMin / 60))}</span>
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <span class="hero-kicker">Rust UwU</span>
+            <h1>${T.heroTitle}</h1>
+            <p>${T.heroText}</p>
+            <div class="hero-actions">
+              ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
+              ${doneCount() > 0 ? `<a class="btn btn-ghost" href="#/review">${T.reviewBtn}</a>` : ""}
+            </div>
+            <div class="stats">
+              <span>${T.statLessons(doneCount(), lessons.length)}</span>
+              <span>${T.statModules(COURSE.modules.length)}</span>
+              <span>${T.statHours(Math.round(totalMin / 60))}</span>
+            </div>
+          </div>
+          <div class="hero-art">
+            <img src="assets/rust-uwu.webp" width="1939" height="811" alt="">
+          </div>
         </div>
       </section>
       <div class="how">
@@ -203,9 +211,14 @@
     const nl = lessons[lesson.idx + 1];
     const modDone = lesson.module.lessons.every((l) => S.done[l.id]);
     const breakTip = (doneCount() % 3 === 0) ? `<div class="break-box">${T.breakTip}</div>` : "";
-    app.innerHTML = `<div class="wrap"><article class="card finish">
-      <div class="big">${modDone && first ? T.moduleDone : T.lessonDone}</div>
-      <p class="muted">${esc(T.finishSub(lesson.title, doneCount(), lessons.length))}</p>
+    app.innerHTML = `<div class="wrap"><article class="card finish${first ? " finish-new" : ""}">
+      <div class="finish-head">
+        <img class="finish-mark" src="assets/crab.svg" width="54" height="54" alt="">
+        <div>
+          <div class="big">${modDone && first ? T.moduleDone : T.lessonDone}</div>
+          <p class="muted">${esc(T.finishSub(lesson.title, doneCount(), lessons.length))}</p>
+        </div>
+      </div>
       ${recap.length ? `<h3>${T.remember}</h3><ul class="tldr">${recap.map((r) => `<li>${inline(r)}</li>`).join("")}</ul>` : ""}
       ${breakTip}
       <div class="row">
