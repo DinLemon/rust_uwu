@@ -272,6 +272,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Напиши программу, которая печатает три строки:",
 "code": "fn main() {\n    // напиши здесь три команды\n}",
 "solution": "fn main() {\n    println!(\"Rust\");\n    println!(\"это\");\n    println!(\"весело\");\n}",
@@ -318,17 +319,20 @@ window.COURSES = {
 },
 {
 "t": "task",
-"md": "Напечатай свою визитку из трёх строк точно в таком виде:",
+"md": "Напечатай свою визитку из трёх строк. Сохрани порядок и подписи `Имя:`, `Возраст:` и `Любимое:`. Имя и любимое занятие выбери сам, возраст укажи целым неотрицательным числом.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    println!(\"Имя: Rust\");\n    println!(\"Возраст: 11\");\n    println!(\"Любимое: скорость\");\n}",
 "expect": "Имя: Rust\nВозраст: 11\nЛюбимое: скорость",
+"expectFormat": "Имя: {{text}}\nВозраст: {{int}}\nЛюбимое: {{text}}",
+"expectPattern": "Имя[ \\t]*:[ \\t]*\\S[^\\r\\n]*\\nВозраст[ \\t]*:[ \\t]*[0-9]+\\nЛюбимое[ \\t]*:[ \\t]*\\S[^\\r\\n]*",
 "hints": [
-"Нужно три команды `println!`, по одной на строку.",
-"Первая строка: `println!(\"Имя: Rust\");`"
+"Можно использовать три команды `println!`, по одной на строку.",
+"Первая строка, например: `println!(\"Имя: Rust\");`. Имя можно заменить."
 ]
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "В программе три ошибки. Почини её. Она должна напечатать `Раз` и `Два` на отдельных строках.",
 "code": "fn main()\n    println(\"Раз\");\n    println!(\"Два\")\n}",
 "solution": "fn main() {\n    println!(\"Раз\");\n    println!(\"Два\");\n}",
@@ -340,6 +344,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "С помощью `print!` и одного `println!` напечатай `1 2 3` в одну строку.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    print!(\"1 \");\n    print!(\"2 \");\n    println!(\"3\");\n}",
@@ -351,6 +356,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Напечатай фразу с кавычками точно так: `Rust говорит: \"Без паники\"`.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    println!(\"Rust говорит: \\\"Без паники\\\"\");\n}",
@@ -778,6 +784,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Посчитай площадь и периметр прямоугольника 7 на 3. Напечатай две строки: `Площадь: 21` и `Периметр: 20`.",
 "code": "fn main() {\n    let width = 7;\n    let height = 3;\n}",
 "solution": "fn main() {\n    let width = 7;\n    let height = 3;\n    println!(\"Площадь: {}\", width * height);\n    println!(\"Периметр: {}\", 2 * (width + height));\n}",
@@ -1437,6 +1444,7 @@ window.COURSES = {
 "cards": [
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Напечатай строку таблицы умножения на 7: числа от `7 × 1 = 7` до `7 × 5 = 35`, каждое на своей строке.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    for i in 1..=5 {\n        println!(\"7 × {i} = {}\", 7 * i);\n    }\n}",
@@ -1481,6 +1489,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Напечатай треугольник из звёздочек высотой 4. Нужны два цикла: внешний — по строкам, внутренний — по звёздочкам.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    for row in 1..=4 {\n        for _ in 0..row {\n            print!(\"*\");\n        }\n        println!();\n    }\n}",
@@ -1606,6 +1615,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "number",
 "md": "Найди самую большую оценку в массиве и напечатай её.",
 "code": "fn main() {\n    let scores = [7, 9, 4, 10, 6];\n    let mut best = scores[0];\n    // пройди циклом по scores и обнови best\n    println!(\"Лучшая: {best}\");\n}",
 "solution": "fn main() {\n    let scores = [7, 9, 4, 10, 6];\n    let mut best = scores[0];\n    for s in scores {\n        if s > best {\n            best = s;\n        }\n    }\n    println!(\"Лучшая: {best}\");\n}",
@@ -6252,6 +6262,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Write a program that prints three lines:",
 "code": "fn main() {\n    // write three commands here\n}",
 "solution": "fn main() {\n    println!(\"Rust\");\n    println!(\"is\");\n    println!(\"fun\");\n}",
@@ -6298,17 +6309,20 @@ window.COURSES = {
 },
 {
 "t": "task",
-"md": "Print your business card with three lines, exactly like this:",
+"md": "Print a three-line business card. Keep the labels `Name:`, `Age:`, and `Favorite:` in that order. Use your own name and favorite activity, and write your age as a whole number zero or greater.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    println!(\"Name: Rust\");\n    println!(\"Age: 11\");\n    println!(\"Favorite: speed\");\n}",
 "expect": "Name: Rust\nAge: 11\nFavorite: speed",
+"expectFormat": "Name: {{text}}\nAge: {{int}}\nFavorite: {{text}}",
+"expectPattern": "Name[ \\t]*:[ \\t]*\\S[^\\r\\n]*\\nAge[ \\t]*:[ \\t]*[0-9]+\\nFavorite[ \\t]*:[ \\t]*\\S[^\\r\\n]*",
 "hints": [
-"You need three `println!` commands, one per line.",
-"The first line: `println!(\"Name: Rust\");`"
+"Try three `println!` commands, one per line.",
+"For the first line, try `println!(\"Name: Rust\");` with a name of your choice."
 ]
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "The program has three errors. Fix it. It must print `One` and `Two` on separate lines.",
 "code": "fn main()\n    println(\"One\");\n    println!(\"Two\")\n}",
 "solution": "fn main() {\n    println!(\"One\");\n    println!(\"Two\");\n}",
@@ -6320,6 +6334,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Using `print!` and one `println!`, print `1 2 3` on one line.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    print!(\"1 \");\n    print!(\"2 \");\n    println!(\"3\");\n}",
@@ -6331,6 +6346,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Print this sentence with quotes exactly: `Rust says: \"Don't panic\"`.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    println!(\"Rust says: \\\"Don't panic\\\"\");\n}",
@@ -6758,6 +6774,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Calculate the area and the perimeter of a 7 by 3 rectangle. Print two lines: `Area: 21` and `Perimeter: 20`.",
 "code": "fn main() {\n    let width = 7;\n    let height = 3;\n}",
 "solution": "fn main() {\n    let width = 7;\n    let height = 3;\n    println!(\"Area: {}\", width * height);\n    println!(\"Perimeter: {}\", 2 * (width + height));\n}",
@@ -7417,6 +7434,7 @@ window.COURSES = {
 "cards": [
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Print a row of the multiplication table for 7: from `7 × 1 = 7` to `7 × 5 = 35`, each on its own line.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    for i in 1..=5 {\n        println!(\"7 × {i} = {}\", 7 * i);\n    }\n}",
@@ -7461,6 +7479,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "exact",
 "md": "Print a triangle of stars with a height of 4. You need two loops: the outer one for rows, the inner one for stars.",
 "code": "fn main() {\n}",
 "solution": "fn main() {\n    for row in 1..=4 {\n        for _ in 0..row {\n            print!(\"*\");\n        }\n        println!();\n    }\n}",
@@ -7586,6 +7605,7 @@ window.COURSES = {
 },
 {
 "t": "task",
+"outputCheck": "number",
 "md": "Find the highest score in the array and print it.",
 "code": "fn main() {\n    let scores = [7, 9, 4, 10, 6];\n    let mut best = scores[0];\n    // go through scores with a loop and update best\n    println!(\"Best: {best}\");\n}",
 "solution": "fn main() {\n    let scores = [7, 9, 4, 10, 6];\n    let mut best = scores[0];\n    for s in scores {\n        if s > best {\n            best = s;\n        }\n    }\n    println!(\"Best: {best}\");\n}",
