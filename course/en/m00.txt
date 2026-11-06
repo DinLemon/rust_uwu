@@ -1,0 +1,427 @@
+# MODULE m00 | Start | What a program is and how to talk to a computer
+
+## LESSON m00-1 | What programming is | 4
+:: goals
+- What a program is
+- What Rust is and why it exists
+- How this course works
+
+:: text A program is a recipe
+A **program** is a list of commands for a computer.
+
+Analogy: a recipe says "take, mix, put in the oven". A computer also does the commands one by one, from top to bottom.
+
+A computer is very fast, but it cannot guess. It does **exactly** what is written. Nothing more.
+
+:: text A programming language
+A computer understands only zeros and ones. Writing with them is hard.
+
+So people invented **programming languages**. You write text that looks a bit like English. A special program translates it into zeros and ones.
+
+**Rust** is one of these languages.
+
+:: quiz
+What does a computer do if a program has a mistake in its logic?
+[ ] It understands what you meant and fixes it => A computer cannot guess. It does not know what you "meant".
+[x] It does exactly what is written => Yes. That is why programs are written precisely and carefully.
+[ ] It refuses to work and shuts down => Usually not. It just does what is written, even if that makes no sense.
+
+:: text Why Rust is good
+- **Fast.** Rust programs run as fast as programs in C and C++.
+- **Reliable.** It catches many mistakes **before** the program runs.
+- **Popular.** People use it for browsers, games, servers, tools, and even parts of Windows and Linux.
+
+> People say Rust is hard. That is only half true. It is strict, but it explains every complaint it makes. We will go in small steps.
+
+:: text How the course works
+- One lesson takes 5–10 minutes.
+- One screen holds one idea.
+- Press "Next" when you are ready. There are no timers.
+- You can make as many mistakes as you want. A mistake is also a step.
+- Tired? Close the tab. The course remembers where you stopped.
+
+:: quiz
+What should you do if a step becomes boring or hard?
+[ ] Force yourself to finish the whole module => Usually this only makes it worse. Short breaks help more.
+[x] Take a break: progress saves itself => Yes. When you come back, you continue from the same step.
+[ ] Start the course again => Not needed. Everything you finished is already saved.
+
+:: deep Where Rust is really used
+- **Firefox.** Its style engine, Stylo, is written in Rust.
+- **Windows and Linux.** Both kernels have parts written in Rust.
+- **Android.** Google writes more and more new system code in Rust.
+- **Discord, Dropbox, Cloudflare.** Servers that need speed.
+- **Developer tools.** For example, `ripgrep` (fast file search) and `uv` (a Python package manager).
+
+Rust started in 2010 at the company Mozilla. Version 1.0 came out in 2015. A new compiler version comes out every 6 weeks.
+
+:: recap
+- A program is a list of commands. The computer runs them in order.
+- The computer does exactly what is written.
+- Rust is a fast and strict language. It catches mistakes before the program runs.
+
+## LESSON m00-2 | Your first program | 6
+:: goals
+- Write and run your first program
+- Learn what `fn main` and `println!` are
+
+:: text Hello, world!
+Almost every programmer's first program prints "Hello, world!".
+
+Below is a real Rust program. Press **"▶ Run"**. The code goes to the Rust Playground server, gets compiled, and the result comes back.
+
+:: code
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+```out
+Hello, world!
+```
+Did it work? You just ran a Rust program.
+
+:: text Word by word
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+- `fn` is short for **function**. A function is a named piece of a program.
+- `main` is the name of the function. A program **always** starts with the function `main`.
+- `{` and `}` are curly braces. The commands of the function go inside them.
+- `println!` is the command "print a line".
+
+:: text Small details that matter
+```rust
+println!("Hello, world!");
+```
+- Text goes inside double quotes: `"..."`.
+- A command ends with a semicolon `;`.
+- `println!` has an exclamation mark. It means this is a **macro** — a special kind of command. More about this at the end of the course. For now, just remember: `println!` is written with `!`.
+
+:: quiz
+Which function does every Rust program start with?
+[ ] `start` => There is no such rule. Try again.
+[x] `main` => Correct. `main` is the main function, the entry point of the program.
+[ ] `println!` => `println!` prints text. The program does not start with it.
+
+:: order
+Build a program that prints "Hi".
+```rust
+fn main() {
+    println!("Hi");
+}
+```
+explain: First the function header, then the command inside, then the closing brace.
+
+:: task
+Change the program so that it prints **My name is Rust**.
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+```solution
+fn main() {
+    println!("My name is Rust");
+}
+```
+```expect
+My name is Rust
+```
+hint: Change only the text inside the quotes.
+hint: The line should be: `println!("My name is Rust");`
+
+:: recap
+- A program starts with `fn main() { ... }`.
+- `println!("text");` prints a line.
+- Text goes in quotes, and a command ends with `;`.
+
+## LESSON m00-3 | The compiler is your strict friend | 6
+:: goals
+- What a compiler is
+- How to read error messages
+
+:: text What a compiler is
+A **compiler** is a program that translates your code into zeros and ones.
+
+Rust's compiler is called `rustc`. Before translating, it checks the code carefully. If it finds a problem, it does not translate. It writes a message instead.
+
+> Analogy: a teacher who checks an essay before it goes to print. Strict, but always explains what is wrong.
+
+:: text Errors are normal
+**Everyone** sees compile errors: beginners and professionals with 20 years of experience.
+
+An error does not mean "I am not trying hard enough". It means "the compiler found a place that needs to be more precise". It is a hint, not a grade.
+
+:: code
+A semicolon is missing here. Run it and see what the compiler says.
+```rust
+fn main() {
+    println!("One")
+    println!("Two");
+}
+```
+fails: yes
+The compiler writes `expected ;` and shows with an arrow exactly where.
+
+:: text How to read an error
+An error message usually has three parts:
+1. `error` and a short description: what is wrong.
+2. A line number and a piece of code with an arrow `^`: where it is.
+3. Sometimes `help`: how to fix it.
+
+Read **from top to bottom** and fix the first error first. Often the others disappear when the first one is fixed.
+
+:: quiz
+A program has five errors. Which one should you start with?
+[x] The first one => Yes. One error often causes a whole chain of other errors.
+[ ] The last one => The last ones are often an echo of the first one. Start at the top.
+[ ] The shortest one => The length of the message does not matter. The order does.
+
+:: task
+Fix the program: the compiler complains. Press "Run", read the message, and fix it.
+```rust
+fn main() {
+    println("I fixed the program!");
+}
+```
+```solution
+fn main() {
+    println!("I fixed the program!");
+}
+```
+```expect
+I fixed the program!
+```
+hint: Look carefully at the name of the command. Something is missing.
+hint: `println` needs an exclamation mark: `println!`.
+
+:: deep What the compiler does, step by step
+In simple terms, compiling goes like this:
+1. **Parsing.** The compiler reads the code and builds a tree from it: where a function is, where a command is, where text is.
+2. **Name checking.** Do all variables and functions exist?
+3. **Type checking.** Are you adding a number to text?
+4. **Borrow checking.** A special Rust check about who uses data and when. Modules 5 and 6 are about it.
+5. **Optimization.** The compiler makes the program faster. A part called LLVM does this.
+6. **Machine code.** The result is a file that the processor runs directly. On Windows it is an `.exe` file.
+
+Errors appear in steps 1–4. If those pass, the program almost always works the way it is written.
+
+:: recap
+- The compiler checks the code before it runs.
+- Errors are hints, not failures.
+- Read errors from top to bottom and start with the first one.
+
+## LESSON m00-4 | Several lines and comments | 5
+:: goals
+- Print several lines
+- Write comments for people
+
+:: text Commands run in order
+You can write many commands inside `main`. They run from top to bottom, one after another.
+
+:: code
+```rust
+fn main() {
+    println!("Step 1: wake up");
+    println!("Step 2: drink water");
+    println!("Step 3: learn Rust");
+}
+```
+```out
+Step 1: wake up
+Step 2: drink water
+Step 3: learn Rust
+```
+
+:: text Comments
+A **comment** is a note for a person. The computer skips it.
+
+A comment starts with two slashes `//` and goes to the end of the line.
+
+```rust
+fn main() {
+    // This is a comment. It does nothing.
+    println!("And this is a command"); // a comment can also be at the end of a line
+}
+```
+
+:: quiz
+What will the program print?
+```rust
+fn main() {
+    println!("A");
+    // println!("B");
+    println!("C");
+}
+```
+[ ] A, B, C => The line with "B" is commented out. The computer skips it.
+[x] A, C => Correct. A commented-out line does not run.
+[ ] Only C => The first line is a normal command. It runs.
+
+:: text An empty line and `print!`
+- `println!()` with no text prints an empty line.
+- `print!` prints **without** moving to a new line.
+
+```rust
+fn main() {
+    print!("One, ");
+    print!("two, ");
+    println!("three!");
+    println!();
+    println!("The end");
+}
+```
+
+:: task
+Write a program that prints three lines:
+```text
+Rust
+is
+fun
+```
+```rust
+fn main() {
+    // write three commands here
+}
+```
+```solution
+fn main() {
+    println!("Rust");
+    println!("is");
+    println!("fun");
+}
+```
+```expect
+Rust
+is
+fun
+```
+hint: You need three `println!` commands.
+hint: The first one: `println!("Rust");`
+
+:: text Quotes and curly braces inside text
+Sometimes the text itself needs quotes or curly braces. There are special ways to write them:
+- `\"` — a quote inside text;
+- `\n` — a new line;
+- `{{` and `}}` — curly braces in `println!`.
+
+:: code
+```rust
+fn main() {
+    println!("He said: \"Hello\"");
+    println!("First line\nSecond line");
+    println!("Curly braces: {{ and }}");
+}
+```
+```out
+He said: "Hello"
+First line
+Second line
+Curly braces: { and }
+```
+The backslash `\` means "the next character is special". This is called **escaping**.
+
+:: recap
+- Commands run from top to bottom.
+- `// ...` is a comment. The computer does not read it.
+- `println!` moves to a new line, `print!` does not.
+
+## LESSON m00-p | Practice: first programs | 8 | practice
+:: goals
+- Practice `fn main`, `println!` and `print!`
+- Fix broken programs
+
+:: text How practice works
+"Practice" lessons have almost nothing new. They only have tasks about what you already learned.
+
+Every task has a "Hint" button. When the hints run out, the button shows the solution. Looking at the solution is fine.
+
+:: task
+Print your business card with three lines, exactly like this:
+```text
+Name: Rust
+Age: 11
+Favorite: speed
+```
+```rust
+fn main() {
+}
+```
+```solution
+fn main() {
+    println!("Name: Rust");
+    println!("Age: 11");
+    println!("Favorite: speed");
+}
+```
+```expect
+Name: Rust
+Age: 11
+Favorite: speed
+```
+hint: You need three `println!` commands, one per line.
+hint: The first line: `println!("Name: Rust");`
+
+:: task
+The program has three errors. Fix it. It must print `One` and `Two` on separate lines.
+```rust
+fn main()
+    println("One");
+    println!("Two")
+}
+```
+```solution
+fn main() {
+    println!("One");
+    println!("Two");
+}
+```
+```expect
+One
+Two
+```
+hint: The errors: the opening brace `{` is missing, the first command has no `!`, the second has no `;`.
+hint: The first line must be `fn main() {`
+
+:: task
+Using `print!` and one `println!`, print `1 2 3` on one line.
+```rust
+fn main() {
+}
+```
+```solution
+fn main() {
+    print!("1 ");
+    print!("2 ");
+    println!("3");
+}
+```
+```expect
+1 2 3
+```
+hint: `print!` does not move to a new line. Do not forget the spaces inside the quotes.
+hint: `print!("1 "); print!("2 "); println!("3");`
+
+:: task
+Print this sentence with quotes exactly: `Rust says: "Don't panic"`.
+```rust
+fn main() {
+}
+```
+```solution
+fn main() {
+    println!("Rust says: \"Don't panic\"");
+}
+```
+```expect
+Rust says: "Don't panic"
+```
+hint: A quote inside text is written as `\"`.
+hint: `println!("Rust says: \"Don't panic\"");`
+
+:: recap
+- If something does not work, read the compiler error first.
+- Small details matter: `!`, `;`, braces, quotes.

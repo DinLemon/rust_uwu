@@ -1,5 +1,6 @@
-// Сгенерировано tools/build.py из course/*.txt. Не редактируй вручную.
-window.COURSE = {
+// Сгенерировано tools/build.py из course/<язык>/*.txt. Не редактируй вручную.
+window.COURSES = {
+"ru": {
 "modules": [
 {
 "id": "m00",
@@ -60,6 +61,11 @@ window.COURSE = {
 "Да. Вернёшься — продолжишь с того же шага.",
 "Не нужно. Всё пройденное уже сохранено."
 ]
+},
+{
+"t": "deep",
+"title": "Где на самом деле работает Rust",
+"md": "- **Firefox.** Движок стилей Stylo написан на Rust.\n- **Windows и Linux.** В ядрах обеих систем есть части на Rust.\n- **Android.** Новый системный код Google всё чаще пишет на Rust.\n- **Discord, Dropbox, Cloudflare.** Серверы, которым нужна скорость.\n- **Инструменты разработчика.** Например, `ripgrep` (быстрый поиск по файлам) и `uv` (менеджер пакетов Python).\n\nRust появился в 2010 году в компании Mozilla. Версия 1.0 вышла в 2015 году. Новая версия компилятора выходит каждые 6 недель."
 },
 {
 "t": "recap",
@@ -206,6 +212,11 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Что компилятор делает по шагам",
+"md": "Упрощённо компиляция идёт так:\n1. **Разбор текста.** Компилятор читает код и строит из него дерево: где функция, где команда, где текст.\n2. **Проверка имён.** Все ли переменные и функции существуют.\n3. **Проверка типов.** Не складываешь ли ты число с текстом.\n4. **Проверка заимствований** (borrow checker). Особая проверка Rust о том, кто и когда пользуется данными. Ей посвящены модули 5 и 6.\n5. **Оптимизация.** Компилятор ускоряет программу. Этим занимается часть под названием LLVM.\n6. **Машинный код.** Получается файл, который процессор выполняет напрямую. На Windows это `.exe`.\n\nОшибки появляются на шагах 1–4. Если они пройдены, программа почти всегда работает так, как написано."
+},
+{
 "t": "recap",
 "items": [
 "Компилятор проверяет код до запуска.",
@@ -271,6 +282,17 @@ window.COURSE = {
 ]
 },
 {
+"t": "text",
+"title": "Кавычки и фигурные скобки внутри текста",
+"md": "Иногда в тексте нужны сами кавычки или фигурные скобки. Для них есть особые записи:\n- `\\\"` — кавычка внутри текста;\n- `\\n` — переход на новую строку;\n- `{{` и `}}` — фигурные скобки в `println!`."
+},
+{
+"t": "code",
+"code": "fn main() {\n    println!(\"Он сказал: \\\"Привет\\\"\");\n    println!(\"Первая строка\\nВторая строка\");\n    println!(\"Фигурные скобки: {{ и }}\");\n}",
+"out": "Он сказал: \"Привет\"\nПервая строка\nВторая строка\nФигурные скобки: { и }",
+"after": "Обратная косая черта `\\` значит «следующий символ особенный». Это называется **экранирование**."
+},
+{
 "t": "recap",
 "items": [
 "Команды выполняются сверху вниз.",
@@ -282,6 +304,74 @@ window.COURSE = {
 "goals": [
 "Печатать несколько строк",
 "Писать комментарии для людей"
+]
+},
+{
+"id": "m00-p",
+"title": "Практика: первые программы",
+"min": 8,
+"cards": [
+{
+"t": "text",
+"title": "Как устроена практика",
+"md": "В уроках «Практика» почти нет нового. Здесь только задания на то, что уже было.\n\nУ каждой задачи есть кнопка «Подсказка». Если подсказки закончились, кнопка покажет решение. Подсматривать в решение — нормально."
+},
+{
+"t": "task",
+"md": "Напечатай свою визитку из трёх строк точно в таком виде:",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    println!(\"Имя: Rust\");\n    println!(\"Возраст: 11\");\n    println!(\"Любимое: скорость\");\n}",
+"expect": "Имя: Rust\nВозраст: 11\nЛюбимое: скорость",
+"hints": [
+"Нужно три команды `println!`, по одной на строку.",
+"Первая строка: `println!(\"Имя: Rust\");`"
+]
+},
+{
+"t": "task",
+"md": "В программе три ошибки. Почини её. Она должна напечатать `Раз` и `Два` на отдельных строках.",
+"code": "fn main()\n    println(\"Раз\");\n    println!(\"Два\")\n}",
+"solution": "fn main() {\n    println!(\"Раз\");\n    println!(\"Два\");\n}",
+"expect": "Раз\nДва",
+"hints": [
+"Ошибки: нет открывающей скобки `{`, нет `!` у первой команды, нет `;` у второй.",
+"Первая строка должна быть `fn main() {`"
+]
+},
+{
+"t": "task",
+"md": "С помощью `print!` и одного `println!` напечатай `1 2 3` в одну строку.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    print!(\"1 \");\n    print!(\"2 \");\n    println!(\"3\");\n}",
+"expect": "1 2 3",
+"hints": [
+"`print!` не переходит на новую строку. Не забудь пробелы внутри кавычек.",
+"`print!(\"1 \"); print!(\"2 \"); println!(\"3\");`"
+]
+},
+{
+"t": "task",
+"md": "Напечатай фразу с кавычками точно так: `Rust говорит: \"Без паники\"`.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    println!(\"Rust говорит: \\\"Без паники\\\"\");\n}",
+"expect": "Rust говорит: \"Без паники\"",
+"hints": [
+"Кавычка внутри текста пишется как `\\\"`.",
+"`println!(\"Rust говорит: \\\"Без паники\\\"\");`"
+]
+},
+{
+"t": "recap",
+"items": [
+"Если не получается, сначала прочитай ошибку компилятора.",
+"Мелочи важны: `!`, `;`, скобки, кавычки."
+]
+}
+],
+"practice": true,
+"goals": [
+"Закрепить `fn main`, `println!` и `print!`",
+"Починить сломанные программы"
 ]
 }
 ]
@@ -487,6 +577,18 @@ window.COURSE = {
 ]
 },
 {
+"t": "text",
+"title": "Удобная запись больших чисел",
+"md": "В числе можно ставить подчёркивания для удобства чтения. Компьютер их не замечает:\n\n```\nlet million = 1_000_000;\n```\nТип можно указать прямо в числе, в конце: `5u8`, `10i64`, `2.5f32`."
+},
+{
+"t": "deep",
+"title": "Что будет, если число не влезает",
+"md": "У каждого целого типа есть предел. `u8` хранит максимум 255. Что будет, если прибавить 1 к 255?\n\n- При обычном запуске (режим debug) программа **запаникует**: `attempt to add with overflow` — «попытка сложения с переполнением».\n- Если нужно другое поведение, его выбирают явно специальными методами.\n\n- `checked_add` — вернуть «ничего» (`None`), если не влезло;\n- `wrapping_add` — пойти по кругу: после 255 идёт 0;\n- `saturating_add` — остановиться на пределе.",
+"code": "fn main() {\n    let x: u8 = 255;\n    println!(\"{:?}\", x.checked_add(1));\n    println!(\"{}\", x.wrapping_add(1));\n    println!(\"{}\", x.saturating_add(1));\n    println!(\"Предел u8: {}, предел i32: {}\", u8::MAX, i32::MAX);\n}",
+"out": "None\n0\n255\nПредел u8: 255, предел i32: 2147483647"
+},
+{
 "t": "recap",
 "items": [
 "`i32` — целое, `f64` — дробное. Это типы по умолчанию.",
@@ -555,6 +657,13 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Сколько места занимает char",
+"md": "`char` в Rust занимает **4 байта**. В нём помещается любой символ Юникода: буквы всех алфавитов, иероглифы, эмодзи.\n\nУ каждого символа есть номер в таблице Юникода. Его можно узнать через `as u32`:",
+"code": "fn main() {\n    println!(\"{}\", 'A' as u32);\n    println!(\"{}\", 'Я' as u32);\n    println!(\"{}\", char::from_u32(1071).unwrap());\n}",
+"out": "65\n1071\nЯ"
+},
+{
 "t": "recap",
 "items": [
 "`bool`: `true` или `false`.",
@@ -619,6 +728,11 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Почему по умолчанию нельзя менять",
+"md": "В больших программах много кода читает одни и те же данные. Если данные могут измениться в любой момент, сложно понять, откуда взялась ошибка.\n\nRust делает неизменяемость обычным случаем. Тогда `mut` работает как метка: «внимание, здесь значение меняется». Читать такой код проще.\n\nЕсть и вторая причина: неизменяемые данные безопасно отдавать сразу нескольким частям программы и даже нескольким потокам. Про потоки — в модуле 17."
+},
+{
 "t": "recap",
 "items": [
 "`const ИМЯ: тип = значение;` — константа навсегда.",
@@ -630,6 +744,110 @@ window.COURSE = {
 "goals": [
 "Константы `const`",
 "Затенение: новая переменная со старым именем"
+]
+},
+{
+"id": "m01-p",
+"title": "Практика: переменные и числа",
+"min": 10,
+"cards": [
+{
+"t": "fill",
+"md": "Заполни типы: целое со знаком, дробное, логическое, символ.",
+"code": "let a: ___ = -5;\nlet b: ___ = 2.5;\nlet c: ___ = true;\nlet d: ___ = 'z';",
+"answers": [
+[
+"i32",
+"i64",
+"i8",
+"i16",
+"i128",
+"isize"
+],
+[
+"f64",
+"f32"
+],
+[
+"bool"
+],
+[
+"char"
+]
+]
+},
+{
+"t": "task",
+"md": "Посчитай площадь и периметр прямоугольника 7 на 3. Напечатай две строки: `Площадь: 21` и `Периметр: 20`.",
+"code": "fn main() {\n    let width = 7;\n    let height = 3;\n}",
+"solution": "fn main() {\n    let width = 7;\n    let height = 3;\n    println!(\"Площадь: {}\", width * height);\n    println!(\"Периметр: {}\", 2 * (width + height));\n}",
+"expect": "Площадь: 21\nПериметр: 20",
+"hints": [
+"Площадь — `width * height`. Периметр — `2 * (width + height)`.",
+"`println!(\"Площадь: {}\", width * height);`"
+]
+},
+{
+"t": "task",
+"md": "Переведи 135 секунд в минуты и секунды. Напечатай `2 мин 15 сек`.",
+"code": "fn main() {\n    let total = 135;\n}",
+"solution": "fn main() {\n    let total = 135;\n    let minutes = total / 60;\n    let seconds = total % 60;\n    println!(\"{minutes} мин {seconds} сек\");\n}",
+"expect": "2 мин 15 сек",
+"hints": [
+"Целое деление `/` даёт минуты. Остаток `%` даёт секунды.",
+"`let minutes = total / 60; let seconds = total % 60;`"
+]
+},
+{
+"t": "task",
+"md": "Почини программу. Она должна напечатать `Средняя: 2.5`.",
+"code": "fn main() {\n    let sum = 10;\n    let count = 4;\n    let avg = sum / count;\n    println!(\"Средняя: {avg}\");\n}",
+"solution": "fn main() {\n    let sum = 10;\n    let count = 4;\n    let avg = sum as f64 / count as f64;\n    println!(\"Средняя: {avg}\");\n}",
+"expect": "Средняя: 2.5",
+"hints": [
+"Сейчас деление целое, и дробная часть теряется.",
+"Преврати оба числа в `f64`: `sum as f64 / count as f64`."
+]
+},
+{
+"t": "task",
+"md": "Есть счёт игрока: 15. Добавь 50 очков, потом отними 20, потом удвой. Напечатай `Счёт: 90`. Используй `+=`, `-=`, `*=`.",
+"code": "fn main() {\n    let score = 15;\n    println!(\"Счёт: {score}\");\n}",
+"solution": "fn main() {\n    let mut score = 15;\n    score += 50;\n    score -= 20;\n    score *= 2;\n    println!(\"Счёт: {score}\");\n}",
+"expect": "Счёт: 90",
+"hints": [
+"Переменная должна быть `mut`.",
+"15 + 50 = 65, 65 − 20 = 45, 45 × 2 = 90."
+]
+},
+{
+"t": "quiz",
+"md": "Что напечатает `println!(\"{}\", 17 / 5 * 5 + 17 % 5);`?",
+"options": [
+"17",
+"17.0",
+"3"
+],
+"answer": 0,
+"why": [
+"Верно. 17 / 5 = 3, 3 × 5 = 15, 17 % 5 = 2, 15 + 2 = 17.",
+"Все числа целые, дробной точки не будет.",
+"Это только первая часть: 17 / 5."
+]
+},
+{
+"t": "recap",
+"items": [
+"Целые числа делятся без остатка, остаток даёт `%`.",
+"Для дробного результата нужно `as f64`.",
+"Меняешь переменную — нужен `mut`."
+]
+}
+],
+"practice": true,
+"goals": [
+"Создавать переменные и менять их",
+"Считать с целыми и дробными числами"
 ]
 }
 ]
@@ -681,6 +899,11 @@ window.COURSE = {
 "    hello();",
 "}"
 ]
+},
+{
+"t": "text",
+"title": "Комментарии к функции",
+"md": "Перед функцией можно написать комментарий с **тремя** косыми чертами `///`. Это **документирующий комментарий**. Редактор показывает его, когда наводишь мышь на имя функции.\n\n```\n/// Печатает приветствие.\nfn greet() {\n    println!(\"Привет!\");\n}\n```\nИмена функций пишут так же, как имена переменных: маленькими буквами через `_`. Например `print_report`."
 },
 {
 "t": "recap",
@@ -814,6 +1037,13 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Что такое ()",
+"md": "Функция без `->` тоже кое-что возвращает: значение `()`. Его называют **unit** («единичный тип»). Это значение «ничего полезного».\n\nПоэтому ошибка с лишней `;` звучит как `expected i32, found ()`: строка с `;` даёт `()`, а не число.",
+"code": "fn nothing() {}\n\nfn main() {\n    let x = nothing();\n    println!(\"{:?}\", x);\n}",
+"out": "()"
+},
+{
 "t": "recap",
 "items": [
 "`-> тип` — что функция возвращает.",
@@ -860,6 +1090,11 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Стек вызовов",
+"md": "Когда `main` вызывает функцию `a`, а `a` вызывает `b`, компьютер помнит цепочку: `main → a → b`. Эта цепочка называется **стек вызовов**.\n\n- Каждый вызов кладёт на стек свой «кадр»: параметры и локальные переменные.\n- Когда функция заканчивается, её кадр снимается, и переменные исчезают.\n\nПоэтому переменные функции не видны снаружи: их кадр уже убран. Если программа паникует, Rust может показать этот стек — он называется **backtrace**."
+},
+{
 "t": "recap",
 "items": [
 "`{ ... }` — блок. Его значение — последнее выражение.",
@@ -870,6 +1105,81 @@ window.COURSE = {
 "goals": [
 "Что такое блок `{ }`",
 "Где «живёт» переменная"
+]
+},
+{
+"id": "m02-p",
+"title": "Практика: функции",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Напиши функцию `is_even`, которая возвращает `true` для чётного числа.",
+"code": "fn is_even(n: i32) -> bool {\n}\n\nfn main() {\n    println!(\"{} {}\", is_even(4), is_even(7));\n}",
+"solution": "fn is_even(n: i32) -> bool {\n    n % 2 == 0\n}\n\nfn main() {\n    println!(\"{} {}\", is_even(4), is_even(7));\n}",
+"expect": "true false",
+"hints": [
+"Число чётное, если остаток от деления на 2 равен 0.",
+"Тело функции — одна строка без `;`: `n % 2 == 0`"
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `average3`, которая возвращает среднее трёх дробных чисел.",
+"code": "// напиши функцию average3\n\nfn main() {\n    println!(\"{}\", average3(2.0, 4.0, 9.0));\n}",
+"solution": "fn average3(a: f64, b: f64, c: f64) -> f64 {\n    (a + b + c) / 3.0\n}\n\nfn main() {\n    println!(\"{}\", average3(2.0, 4.0, 9.0));\n}",
+"expect": "5",
+"hints": [
+"Заголовок: `fn average3(a: f64, b: f64, c: f64) -> f64`",
+"Тело: `(a + b + c) / 3.0`"
+]
+},
+{
+"t": "task",
+"md": "Почини функцию. Она должна печатать `Итого: 30`.",
+"code": "fn total(price: i32, count: i32) {\n    price * count;\n}\n\nfn main() {\n    println!(\"Итого: {}\", total(10, 3));\n}",
+"solution": "fn total(price: i32, count: i32) -> i32 {\n    price * count\n}\n\nfn main() {\n    println!(\"Итого: {}\", total(10, 3));\n}",
+"expect": "Итого: 30",
+"hints": [
+"Ошибок две: функция не обещает вернуть число, а в последней строке лишняя `;`.",
+"Нужно `-> i32` в заголовке и `price * count` без `;`."
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `greet(name: &str, times: i32)`, которая печатает `Привет, имя!` нужное число раз.",
+"code": "// напиши функцию greet\n\nfn main() {\n    greet(\"Аня\", 2);\n}",
+"solution": "fn greet(name: &str, times: i32) {\n    for _ in 0..times {\n        println!(\"Привет, {name}!\");\n    }\n}\n\nfn main() {\n    greet(\"Аня\", 2);\n}",
+"expect": "Привет, Аня!\nПривет, Аня!",
+"hints": [
+"Повторять поможет цикл `for _ in 0..times { ... }`. Циклы подробно — в следующем модуле.",
+"Внутри цикла: `println!(\"Привет, {name}!\");`"
+]
+},
+{
+"t": "task",
+"md": "Функция `clamp_score` должна возвращать число, но не меньше 0 и не больше 100. Используй `return` для раннего выхода.",
+"code": "fn clamp_score(x: i32) -> i32 {\n    x\n}\n\nfn main() {\n    println!(\"{} {} {}\", clamp_score(-5), clamp_score(50), clamp_score(140));\n}",
+"solution": "fn clamp_score(x: i32) -> i32 {\n    if x < 0 {\n        return 0;\n    }\n    if x > 100 {\n        return 100;\n    }\n    x\n}\n\nfn main() {\n    println!(\"{} {} {}\", clamp_score(-5), clamp_score(50), clamp_score(140));\n}",
+"expect": "0 50 100",
+"hints": [
+"Две проверки: `if x < 0 { return 0; }` и `if x > 100 { return 100; }`.",
+"В конце верни `x` без `;`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`-> тип` нужен, если функция возвращает значение.",
+"Последнее выражение без `;` — результат.",
+"`return` — ранний выход."
+]
+}
+],
+"practice": true,
+"goals": [
+"Писать функции с параметрами и результатом",
+"Чинить ошибки в функциях"
 ]
 }
 ]
@@ -927,6 +1237,11 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Почему в Rust нет оператора «?:»",
+"md": "Во многих языках есть короткая запись условия: `условие ? да : нет`. В Rust её нет.\n\nОна не нужна: `if` в Rust сам возвращает значение. Поэтому то же самое пишут так:\n\n```\nlet price = if is_member { 90 } else { 100 };\n```\nЭто одна из идей Rust: почти всё — **выражение** и даёт значение. Так меньше особых правил."
+},
+{
 "t": "recap",
 "items": [
 "`if условие { } else if условие { } else { }`.",
@@ -979,6 +1294,13 @@ window.COURSE = {
 "t": "text",
 "title": "break может вернуть значение",
 "md": "```\nlet mut n = 1;\nlet result = loop {\n    n *= 2;\n    if n > 100 {\n        break n;\n    }\n};\n// result = 128\n```"
+},
+{
+"t": "deep",
+"title": "Метки циклов",
+"md": "Если один цикл внутри другого, `break` выходит только из **внутреннего**. Чтобы выйти сразу из внешнего, циклу дают **метку** — имя с апострофом:\n\nТак же работает `continue 'outer`: перейти к следующему шагу внешнего цикла.",
+"code": "fn main() {\n    'outer: for a in 1..=3 {\n        for b in 1..=3 {\n            if a * b == 4 {\n                println!(\"Нашёл: {a} × {b}\");\n                break 'outer;\n            }\n        }\n    }\n}",
+"out": "Нашёл: 2 × 2"
 },
 {
 "t": "recap",
@@ -1042,6 +1364,11 @@ window.COURSE = {
 ]
 },
 {
+"t": "text",
+"title": "Шаг больше единицы",
+"md": "Метод `.step_by(n)` перебирает числа через `n`:\n\n```\nfor i in (0..=10).step_by(5) {\n    println!(\"{i}\"); // 0, 5, 10\n}\n```\n`for` умеет перебирать не только числа. Например, буквы строки или элементы списка. Это будет в следующих модулях."
+},
+{
 "t": "recap",
 "items": [
 "`while условие { }` — пока правда.",
@@ -1102,6 +1429,81 @@ window.COURSE = {
 "Собрать вместе `for`, `if` и `%`",
 "Решить классическую задачу"
 ]
+},
+{
+"id": "m03-p",
+"title": "Практика: условия и циклы",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Напечатай строку таблицы умножения на 7: числа от `7 × 1 = 7` до `7 × 5 = 35`, каждое на своей строке.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    for i in 1..=5 {\n        println!(\"7 × {i} = {}\", 7 * i);\n    }\n}",
+"expect": "7 × 1 = 7\n7 × 2 = 14\n7 × 3 = 21\n7 × 4 = 28\n7 × 5 = 35",
+"hints": [
+"Цикл `for i in 1..=5`.",
+"`println!(\"7 × {i} = {}\", 7 * i);`"
+]
+},
+{
+"t": "task",
+"md": "Посчитай сумму только чётных чисел от 1 до 20.",
+"code": "fn main() {\n    let mut sum = 0;\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let mut sum = 0;\n    for i in 1..=20 {\n        if i % 2 == 0 {\n            sum += i;\n        }\n    }\n    println!(\"{sum}\");\n}",
+"expect": "110",
+"hints": [
+"Внутри цикла добавляй `i`, только если `i % 2 == 0`.",
+"Или так: `for i in (2..=20).step_by(2) { sum += i; }`"
+]
+},
+{
+"t": "task",
+"md": "Через `while` сделай обратный отсчёт от 5 до 1, а в конце напечатай `Пуск!`.",
+"code": "fn main() {\n    let mut n = 5;\n}",
+"solution": "fn main() {\n    let mut n = 5;\n    while n > 0 {\n        println!(\"{n}\");\n        n -= 1;\n    }\n    println!(\"Пуск!\");\n}",
+"expect": "5\n4\n3\n2\n1\nПуск!",
+"hints": [
+"Условие цикла: `while n > 0`.",
+"Не забудь уменьшать `n` внутри цикла: `n -= 1;`"
+]
+},
+{
+"t": "task",
+"md": "С помощью `loop` и `break` со значением найди первое число больше 50, которое делится и на 7, и на 4. Напечатай его.",
+"code": "fn main() {\n    let mut n = 51;\n    let found = 0; // замени на loop\n    println!(\"{found}\");\n}",
+"solution": "fn main() {\n    let mut n = 51;\n    let found = loop {\n        if n % 7 == 0 && n % 4 == 0 {\n            break n;\n        }\n        n += 1;\n    };\n    println!(\"{found}\");\n}",
+"expect": "56",
+"hints": [
+"`let found = loop { ... };` — после `}` нужна `;`.",
+"Внутри: если подходит — `break n;`, иначе `n += 1;`"
+]
+},
+{
+"t": "task",
+"md": "Напечатай треугольник из звёздочек высотой 4. Нужны два цикла: внешний — по строкам, внутренний — по звёздочкам.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    for row in 1..=4 {\n        for _ in 0..row {\n            print!(\"*\");\n        }\n        println!();\n    }\n}",
+"expect": "*\n**\n***\n****",
+"hints": [
+"Внешний цикл `for row in 1..=4`. Внутри — `row` раз печатай `*` через `print!`.",
+"После внутреннего цикла — `println!();`, чтобы перейти на новую строку."
+]
+},
+{
+"t": "recap",
+"items": [
+"Цикл + `if` внутри — частый приём.",
+"`loop` с `break значение` удобен для поиска.",
+"Вложенные циклы: внешний — строки, внутренний — элементы строки."
+]
+}
+],
+"practice": true,
+"goals": [
+"Сочетать циклы и условия",
+"Писать вложенные циклы"
+]
 }
 ]
 },
@@ -1146,6 +1548,11 @@ window.COURSE = {
 "Верно. Третий элемент имеет номер 2.",
 "Квадратные скобки — для массивов. У кортежа — точка."
 ]
+},
+{
+"t": "deep",
+"title": "Пустой кортеж",
+"md": "Помнишь значение `()` из модуля про функции? Это **пустой кортеж** — кортеж, в котором ноль элементов.\n\nПоэтому функция «без результата» на самом деле возвращает пустой кортеж. Тип и значение пишутся одинаково: `()`."
 },
 {
 "t": "recap",
@@ -1209,6 +1616,18 @@ window.COURSE = {
 ]
 },
 {
+"t": "text",
+"title": "Тип массива",
+"md": "У массива тип пишут так: `[тип; длина]`.\n\n```\nlet days: [&str; 7] = [\"пн\", \"вт\", \"ср\", \"чт\", \"пт\", \"сб\", \"вс\"];\n```\nДлина — часть типа. `[i32; 3]` и `[i32; 4]` — **разные** типы."
+},
+{
+"t": "deep",
+"title": "Таблица: массив массивов",
+"md": "Массив может хранить другие массивы. Так получается таблица:\n\nТип `grid` — `[[i32; 3]; 2]`: два ряда по три числа.",
+"code": "fn main() {\n    let grid = [[1, 2, 3], [4, 5, 6]];\n    println!(\"Строка 1, столбец 2: {}\", grid[1][2]);\n    for row in grid {\n        for cell in row {\n            print!(\"{cell} \");\n        }\n        println!();\n    }\n}",
+"out": "Строка 1, столбец 2: 6\n1 2 3 \n4 5 6 "
+},
+{
 "t": "recap",
 "items": [
 "`[a, b, c]` — массив одного типа, длина постоянна.",
@@ -1254,6 +1673,11 @@ window.COURSE = {
 ]
 },
 {
+"t": "deep",
+"title": "Длина и вместимость Vec",
+"md": "У вектора есть два числа:\n- `len()` — сколько элементов лежит сейчас;\n- `capacity()` — на сколько элементов уже выделено место.\n\nКогда места не хватает, вектор выделяет новый кусок памяти, обычно вдвое больше, и переносит туда элементы. Это происходит редко, поэтому `push` в среднем быстрый.\n\nЕсли заранее известно, сколько будет элементов, можно сразу попросить место: `Vec::with_capacity(100)`."
+},
+{
 "t": "recap",
 "items": [
 "`Vec::new()` или `vec![...]` — вектор.",
@@ -1265,6 +1689,81 @@ window.COURSE = {
 "goals": [
 "Список, который может расти",
 "Добавлять элементы через `push`"
+]
+},
+{
+"id": "m04-p",
+"title": "Практика: кортежи, массивы, векторы",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Посчитай сумму всех чисел массива.",
+"code": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n    let mut sum = 0;\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n    let mut sum = 0;\n    for n in nums {\n        sum += n;\n    }\n    println!(\"{sum}\");\n}",
+"expect": "108",
+"hints": [
+"`for n in nums { ... }`",
+"Внутри: `sum += n;`"
+]
+},
+{
+"t": "task",
+"md": "Посчитай, сколько в массиве отрицательных чисел.",
+"code": "fn main() {\n    let temps = [3, -2, 0, -7, 5, -1];\n}",
+"solution": "fn main() {\n    let temps = [3, -2, 0, -7, 5, -1];\n    let mut count = 0;\n    for t in temps {\n        if t < 0 {\n            count += 1;\n        }\n    }\n    println!(\"{count}\");\n}",
+"expect": "3",
+"hints": [
+"Нужен счётчик `let mut count = 0;`.",
+"В цикле: если `t < 0`, то `count += 1;`"
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `swap`, которая принимает кортеж `(i32, i32)` и возвращает его с элементами в обратном порядке.",
+"code": "// напиши функцию swap\n\nfn main() {\n    let p = swap((1, 2));\n    println!(\"{} {}\", p.0, p.1);\n}",
+"solution": "fn swap(pair: (i32, i32)) -> (i32, i32) {\n    (pair.1, pair.0)\n}\n\nfn main() {\n    let p = swap((1, 2));\n    println!(\"{} {}\", p.0, p.1);\n}",
+"expect": "2 1",
+"hints": [
+"Заголовок: `fn swap(pair: (i32, i32)) -> (i32, i32)`",
+"Тело: `(pair.1, pair.0)`"
+]
+},
+{
+"t": "task",
+"md": "Найди номер (индекс) числа 23 в массиве. Перебери индексы от 0 до длины массива.",
+"code": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n}",
+"solution": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n    for i in 0..nums.len() {\n        if nums[i] == 23 {\n            println!(\"{i}\");\n        }\n    }\n}",
+"expect": "4",
+"hints": [
+"`for i in 0..nums.len()` перебирает индексы.",
+"Внутри: `if nums[i] == 23 { println!(\"{i}\"); }`"
+]
+},
+{
+"t": "task",
+"md": "Собери вектор квадратов чисел от 1 до 5 и напечатай его через `{:?}`.",
+"code": "fn main() {\n    let mut squares = Vec::new();\n    println!(\"{:?}\", squares);\n}",
+"solution": "fn main() {\n    let mut squares = Vec::new();\n    for i in 1..=5 {\n        squares.push(i * i);\n    }\n    println!(\"{:?}\", squares);\n}",
+"expect": "[1, 4, 9, 16, 25]",
+"hints": [
+"Цикл `for i in 1..=5`.",
+"Внутри: `squares.push(i * i);`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`for x in массив` — перебор значений, `for i in 0..a.len()` — перебор индексов.",
+"`Vec::new()` + `push` — собрать список по ходу.",
+"`{:?}` печатает массивы и векторы целиком."
+]
+}
+],
+"practice": true,
+"goals": [
+"Обходить массивы циклами",
+"Собирать данные в Vec"
 ]
 }
 ]
@@ -4085,8 +4584,4595 @@ window.COURSE = {
 ]
 }
 ]
+},
+"en": {
+"modules": [
+{
+"id": "m00",
+"title": "Start",
+"sub": "What a program is and how to talk to a computer",
+"lessons": [
+{
+"id": "m00-1",
+"title": "What programming is",
+"min": 4,
+"cards": [
+{
+"t": "text",
+"title": "A program is a recipe",
+"md": "A **program** is a list of commands for a computer.\n\nAnalogy: a recipe says \"take, mix, put in the oven\". A computer also does the commands one by one, from top to bottom.\n\nA computer is very fast, but it cannot guess. It does **exactly** what is written. Nothing more."
+},
+{
+"t": "text",
+"title": "A programming language",
+"md": "A computer understands only zeros and ones. Writing with them is hard.\n\nSo people invented **programming languages**. You write text that looks a bit like English. A special program translates it into zeros and ones.\n\n**Rust** is one of these languages."
+},
+{
+"t": "quiz",
+"md": "What does a computer do if a program has a mistake in its logic?",
+"options": [
+"It understands what you meant and fixes it",
+"It does exactly what is written",
+"It refuses to work and shuts down"
+],
+"answer": 1,
+"why": [
+"A computer cannot guess. It does not know what you \"meant\".",
+"Yes. That is why programs are written precisely and carefully.",
+"Usually not. It just does what is written, even if that makes no sense."
+]
+},
+{
+"t": "text",
+"title": "Why Rust is good",
+"md": "- **Fast.** Rust programs run as fast as programs in C and C++.\n- **Reliable.** It catches many mistakes **before** the program runs.\n- **Popular.** People use it for browsers, games, servers, tools, and even parts of Windows and Linux.\n\n> People say Rust is hard. That is only half true. It is strict, but it explains every complaint it makes. We will go in small steps."
+},
+{
+"t": "text",
+"title": "How the course works",
+"md": "- One lesson takes 5–10 minutes.\n- One screen holds one idea.\n- Press \"Next\" when you are ready. There are no timers.\n- You can make as many mistakes as you want. A mistake is also a step.\n- Tired? Close the tab. The course remembers where you stopped."
+},
+{
+"t": "quiz",
+"md": "What should you do if a step becomes boring or hard?",
+"options": [
+"Force yourself to finish the whole module",
+"Take a break: progress saves itself",
+"Start the course again"
+],
+"answer": 1,
+"why": [
+"Usually this only makes it worse. Short breaks help more.",
+"Yes. When you come back, you continue from the same step.",
+"Not needed. Everything you finished is already saved."
+]
+},
+{
+"t": "deep",
+"title": "Where Rust is really used",
+"md": "- **Firefox.** Its style engine, Stylo, is written in Rust.\n- **Windows and Linux.** Both kernels have parts written in Rust.\n- **Android.** Google writes more and more new system code in Rust.\n- **Discord, Dropbox, Cloudflare.** Servers that need speed.\n- **Developer tools.** For example, `ripgrep` (fast file search) and `uv` (a Python package manager).\n\nRust started in 2010 at the company Mozilla. Version 1.0 came out in 2015. A new compiler version comes out every 6 weeks."
+},
+{
+"t": "recap",
+"items": [
+"A program is a list of commands. The computer runs them in order.",
+"The computer does exactly what is written.",
+"Rust is a fast and strict language. It catches mistakes before the program runs."
+]
+}
+],
+"goals": [
+"What a program is",
+"What Rust is and why it exists",
+"How this course works"
+]
+},
+{
+"id": "m00-2",
+"title": "Your first program",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Hello, world!",
+"md": "Almost every programmer's first program prints \"Hello, world!\".\n\nBelow is a real Rust program. Press **\"▶ Run\"**. The code goes to the Rust Playground server, gets compiled, and the result comes back."
+},
+{
+"t": "code",
+"code": "fn main() {\n    println!(\"Hello, world!\");\n}",
+"out": "Hello, world!",
+"after": "Did it work? You just ran a Rust program."
+},
+{
+"t": "text",
+"title": "Word by word",
+"md": "```\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n- `fn` is short for **function**. A function is a named piece of a program.\n- `main` is the name of the function. A program **always** starts with the function `main`.\n- `{` and `}` are curly braces. The commands of the function go inside them.\n- `println!` is the command \"print a line\"."
+},
+{
+"t": "text",
+"title": "Small details that matter",
+"md": "```\nprintln!(\"Hello, world!\");\n```\n- Text goes inside double quotes: `\"...\"`.\n- A command ends with a semicolon `;`.\n- `println!` has an exclamation mark. It means this is a **macro** — a special kind of command. More about this at the end of the course. For now, just remember: `println!` is written with `!`."
+},
+{
+"t": "quiz",
+"md": "Which function does every Rust program start with?",
+"options": [
+"`start`",
+"`main`",
+"`println!`"
+],
+"answer": 1,
+"why": [
+"There is no such rule. Try again.",
+"Correct. `main` is the main function, the entry point of the program.",
+"`println!` prints text. The program does not start with it."
+]
+},
+{
+"t": "order",
+"explain": "First the function header, then the command inside, then the closing brace.",
+"md": "Build a program that prints \"Hi\".",
+"lines": [
+"fn main() {",
+"    println!(\"Hi\");",
+"}"
+]
+},
+{
+"t": "task",
+"md": "Change the program so that it prints **My name is Rust**.",
+"code": "fn main() {\n    println!(\"Hello, world!\");\n}",
+"solution": "fn main() {\n    println!(\"My name is Rust\");\n}",
+"expect": "My name is Rust",
+"hints": [
+"Change only the text inside the quotes.",
+"The line should be: `println!(\"My name is Rust\");`"
+]
+},
+{
+"t": "recap",
+"items": [
+"A program starts with `fn main() { ... }`.",
+"`println!(\"text\");` prints a line.",
+"Text goes in quotes, and a command ends with `;`."
+]
+}
+],
+"goals": [
+"Write and run your first program",
+"Learn what `fn main` and `println!` are"
+]
+},
+{
+"id": "m00-3",
+"title": "The compiler is your strict friend",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "What a compiler is",
+"md": "A **compiler** is a program that translates your code into zeros and ones.\n\nRust's compiler is called `rustc`. Before translating, it checks the code carefully. If it finds a problem, it does not translate. It writes a message instead.\n\n> Analogy: a teacher who checks an essay before it goes to print. Strict, but always explains what is wrong."
+},
+{
+"t": "text",
+"title": "Errors are normal",
+"md": "**Everyone** sees compile errors: beginners and professionals with 20 years of experience.\n\nAn error does not mean \"I am not trying hard enough\". It means \"the compiler found a place that needs to be more precise\". It is a hint, not a grade."
+},
+{
+"t": "code",
+"fails": true,
+"md": "A semicolon is missing here. Run it and see what the compiler says.",
+"code": "fn main() {\n    println!(\"One\")\n    println!(\"Two\");\n}",
+"after": "The compiler writes `expected ;` and shows with an arrow exactly where."
+},
+{
+"t": "text",
+"title": "How to read an error",
+"md": "An error message usually has three parts:\n1. `error` and a short description: what is wrong.\n2. A line number and a piece of code with an arrow `^`: where it is.\n3. Sometimes `help`: how to fix it.\n\nRead **from top to bottom** and fix the first error first. Often the others disappear when the first one is fixed."
+},
+{
+"t": "quiz",
+"md": "A program has five errors. Which one should you start with?",
+"options": [
+"The first one",
+"The last one",
+"The shortest one"
+],
+"answer": 0,
+"why": [
+"Yes. One error often causes a whole chain of other errors.",
+"The last ones are often an echo of the first one. Start at the top.",
+"The length of the message does not matter. The order does."
+]
+},
+{
+"t": "task",
+"md": "Fix the program: the compiler complains. Press \"Run\", read the message, and fix it.",
+"code": "fn main() {\n    println(\"I fixed the program!\");\n}",
+"solution": "fn main() {\n    println!(\"I fixed the program!\");\n}",
+"expect": "I fixed the program!",
+"hints": [
+"Look carefully at the name of the command. Something is missing.",
+"`println` needs an exclamation mark: `println!`."
+]
+},
+{
+"t": "deep",
+"title": "What the compiler does, step by step",
+"md": "In simple terms, compiling goes like this:\n1. **Parsing.** The compiler reads the code and builds a tree from it: where a function is, where a command is, where text is.\n2. **Name checking.** Do all variables and functions exist?\n3. **Type checking.** Are you adding a number to text?\n4. **Borrow checking.** A special Rust check about who uses data and when. Modules 5 and 6 are about it.\n5. **Optimization.** The compiler makes the program faster. A part called LLVM does this.\n6. **Machine code.** The result is a file that the processor runs directly. On Windows it is an `.exe` file.\n\nErrors appear in steps 1–4. If those pass, the program almost always works the way it is written."
+},
+{
+"t": "recap",
+"items": [
+"The compiler checks the code before it runs.",
+"Errors are hints, not failures.",
+"Read errors from top to bottom and start with the first one."
+]
+}
+],
+"goals": [
+"What a compiler is",
+"How to read error messages"
+]
+},
+{
+"id": "m00-4",
+"title": "Several lines and comments",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Commands run in order",
+"md": "You can write many commands inside `main`. They run from top to bottom, one after another."
+},
+{
+"t": "code",
+"code": "fn main() {\n    println!(\"Step 1: wake up\");\n    println!(\"Step 2: drink water\");\n    println!(\"Step 3: learn Rust\");\n}",
+"out": "Step 1: wake up\nStep 2: drink water\nStep 3: learn Rust"
+},
+{
+"t": "text",
+"title": "Comments",
+"md": "A **comment** is a note for a person. The computer skips it.\n\nA comment starts with two slashes `//` and goes to the end of the line.\n\n```\nfn main() {\n    // This is a comment. It does nothing.\n    println!(\"And this is a command\"); // a comment can also be at the end of a line\n}\n```"
+},
+{
+"t": "quiz",
+"md": "What will the program print?\n```\nfn main() {\n    println!(\"A\");\n    // println!(\"B\");\n    println!(\"C\");\n}\n```",
+"options": [
+"A, B, C",
+"A, C",
+"Only C"
+],
+"answer": 1,
+"why": [
+"The line with \"B\" is commented out. The computer skips it.",
+"Correct. A commented-out line does not run.",
+"The first line is a normal command. It runs."
+]
+},
+{
+"t": "text",
+"title": "An empty line and `print!`",
+"md": "- `println!()` with no text prints an empty line.\n- `print!` prints **without** moving to a new line.\n\n```\nfn main() {\n    print!(\"One, \");\n    print!(\"two, \");\n    println!(\"three!\");\n    println!();\n    println!(\"The end\");\n}\n```"
+},
+{
+"t": "task",
+"md": "Write a program that prints three lines:",
+"code": "fn main() {\n    // write three commands here\n}",
+"solution": "fn main() {\n    println!(\"Rust\");\n    println!(\"is\");\n    println!(\"fun\");\n}",
+"expect": "Rust\nis\nfun",
+"hints": [
+"You need three `println!` commands.",
+"The first one: `println!(\"Rust\");`"
+]
+},
+{
+"t": "text",
+"title": "Quotes and curly braces inside text",
+"md": "Sometimes the text itself needs quotes or curly braces. There are special ways to write them:\n- `\\\"` — a quote inside text;\n- `\\n` — a new line;\n- `{{` and `}}` — curly braces in `println!`."
+},
+{
+"t": "code",
+"code": "fn main() {\n    println!(\"He said: \\\"Hello\\\"\");\n    println!(\"First line\\nSecond line\");\n    println!(\"Curly braces: {{ and }}\");\n}",
+"out": "He said: \"Hello\"\nFirst line\nSecond line\nCurly braces: { and }",
+"after": "The backslash `\\` means \"the next character is special\". This is called **escaping**."
+},
+{
+"t": "recap",
+"items": [
+"Commands run from top to bottom.",
+"`// ...` is a comment. The computer does not read it.",
+"`println!` moves to a new line, `print!` does not."
+]
+}
+],
+"goals": [
+"Print several lines",
+"Write comments for people"
+]
+},
+{
+"id": "m00-p",
+"title": "Practice: first programs",
+"min": 8,
+"cards": [
+{
+"t": "text",
+"title": "How practice works",
+"md": "\"Practice\" lessons have almost nothing new. They only have tasks about what you already learned.\n\nEvery task has a \"Hint\" button. When the hints run out, the button shows the solution. Looking at the solution is fine."
+},
+{
+"t": "task",
+"md": "Print your business card with three lines, exactly like this:",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    println!(\"Name: Rust\");\n    println!(\"Age: 11\");\n    println!(\"Favorite: speed\");\n}",
+"expect": "Name: Rust\nAge: 11\nFavorite: speed",
+"hints": [
+"You need three `println!` commands, one per line.",
+"The first line: `println!(\"Name: Rust\");`"
+]
+},
+{
+"t": "task",
+"md": "The program has three errors. Fix it. It must print `One` and `Two` on separate lines.",
+"code": "fn main()\n    println(\"One\");\n    println!(\"Two\")\n}",
+"solution": "fn main() {\n    println!(\"One\");\n    println!(\"Two\");\n}",
+"expect": "One\nTwo",
+"hints": [
+"The errors: the opening brace `{` is missing, the first command has no `!`, the second has no `;`.",
+"The first line must be `fn main() {`"
+]
+},
+{
+"t": "task",
+"md": "Using `print!` and one `println!`, print `1 2 3` on one line.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    print!(\"1 \");\n    print!(\"2 \");\n    println!(\"3\");\n}",
+"expect": "1 2 3",
+"hints": [
+"`print!` does not move to a new line. Do not forget the spaces inside the quotes.",
+"`print!(\"1 \"); print!(\"2 \"); println!(\"3\");`"
+]
+},
+{
+"t": "task",
+"md": "Print this sentence with quotes exactly: `Rust says: \"Don't panic\"`.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    println!(\"Rust says: \\\"Don't panic\\\"\");\n}",
+"expect": "Rust says: \"Don't panic\"",
+"hints": [
+"A quote inside text is written as `\\\"`.",
+"`println!(\"Rust says: \\\"Don't panic\\\"\");`"
+]
+},
+{
+"t": "recap",
+"items": [
+"If something does not work, read the compiler error first.",
+"Small details matter: `!`, `;`, braces, quotes."
+]
+}
+],
+"practice": true,
+"goals": [
+"Practice `fn main`, `println!` and `print!`",
+"Fix broken programs"
+]
+}
+]
+},
+{
+"id": "m01",
+"title": "Variables and types",
+"sub": "How a program remembers data",
+"lessons": [
+{
+"id": "m01-1",
+"title": "A variable is a labeled box",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "A box with a label",
+"md": "Analogy: a **variable** is a box with a label. The label is the name. The value is inside.\n\nIn Rust you create the box with the word `let`:\n\n```\nlet age = 25;\n```\nRead it like this: \"let `age` be 25\"."
+},
+{
+"t": "code",
+"md": "To print a variable, put its name in curly braces inside the text.",
+"code": "fn main() {\n    let age = 25;\n    let name = \"Anna\";\n    println!(\"{name}, you are {age} years old\");\n}",
+"out": "Anna, you are 25 years old",
+"after": "Try changing the name and the age, then run it again."
+},
+{
+"t": "text",
+"title": "Another way to print",
+"md": "You can leave the braces empty `{}` and list the variables after the text, separated by commas. They are inserted in order.\n\n```\nlet a = 2;\nlet b = 3;\nprintln!(\"{} plus {} equals {}\", a, b, a + b);\n```\nIt prints: `2 plus 3 equals 5`."
+},
+{
+"t": "fill",
+"explain": "`let` creates a variable, and `{cat}` inserts its value into the text.",
+"md": "Fill in the blanks so the program prints `Cat: Tom`.",
+"code": "fn main() {\n    ___ cat = \"Tom\";\n    println!(\"Cat: {___}\");\n}",
+"answers": [
+[
+"let"
+],
+[
+"cat"
+]
+]
+},
+{
+"t": "text",
+"title": "How to name variables",
+"md": "- Only Latin letters, digits and `_`.\n- Separate words with an underscore: `user_name`, `max_speed`.\n- The name should explain what is inside. `price` is better than `p`.\n\n> This style is called snake_case. All Rust programmers write names this way."
+},
+{
+"t": "quiz",
+"md": "Which variable name follows the Rust style?",
+"options": [
+"`UserName`",
+"`user_name`",
+"`user-name`"
+],
+"answer": 1,
+"why": [
+"In Rust this style is used for types, not variables.",
+"Correct. Lowercase letters and an underscore.",
+"A dash means minus. The compiler reads this as \"user minus name\"."
+]
+},
+{
+"t": "recap",
+"items": [
+"`let name = value;` creates a variable.",
+"`{name}` inside text inserts the value.",
+"Names are written in snake_case: `my_value`."
+]
+}
+],
+"goals": [
+"What a variable is",
+"How to create one with `let`",
+"How to print its value"
+]
+},
+{
+"id": "m01-2",
+"title": "Changing variables: mut",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "The box is sealed",
+"md": "In Rust a variable is **immutable** by default. Once you put a value in, the box is sealed.\n\nWhy? So that a value does not change by accident somewhere in the middle of a big program."
+},
+{
+"t": "code",
+"fails": true,
+"md": "Run it and read the error.",
+"code": "fn main() {\n    let score = 10;\n    score = 20;\n    println!(\"{score}\");\n}",
+"after": "The compiler says `cannot assign twice to immutable variable`. It even suggests a fix in `help`."
+},
+{
+"t": "text",
+"title": "The word mut",
+"md": "To allow changes, add `mut` (short for mutable — changeable):\n\n```\nlet mut score = 10;\nscore = 20;\n```\nNow it works. `mut` is an honest label: \"this variable will change\"."
+},
+{
+"t": "task",
+"md": "Fix the program. It must print `Points: 15`.",
+"code": "fn main() {\n    let points = 10;\n    points = points + 5;\n    println!(\"Points: {points}\");\n}",
+"solution": "fn main() {\n    let mut points = 10;\n    points = points + 5;\n    println!(\"Points: {points}\");\n}",
+"expect": "Points: 15",
+"hints": [
+"The compiler complains that the variable cannot be changed.",
+"Add `mut` after `let`."
+]
+},
+{
+"t": "text",
+"title": "Short forms",
+"md": "Instead of `x = x + 5` you can write `x += 5`. The same works with `-=`, `*=`, `/=`.\n\n```\nlet mut lives = 3;\nlives -= 1; // now 2\n```"
+},
+{
+"t": "quiz",
+"md": "What will the program print?\n```\nfn main() {\n    let mut coins = 5;\n    coins += 10;\n    coins -= 3;\n    println!(\"{coins}\");\n}\n```",
+"options": [
+"5",
+"12",
+"A compile error"
+],
+"answer": 1,
+"why": [
+"The value changed twice. Count: 5 + 10 − 3.",
+"Correct: 5 + 10 − 3 = 12.",
+"There is `mut`, so changing is allowed."
+]
+},
+{
+"t": "recap",
+"items": [
+"Variables cannot be changed by default.",
+"`let mut` allows changes.",
+"`x += 1` is a short form of `x = x + 1`."
+]
+}
+],
+"goals": [
+"Why you cannot simply change a variable",
+"How to allow changes with `mut`"
+]
+},
+{
+"id": "m01-3",
+"title": "Numbers",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Every value has a type",
+"md": "A **type** says what is in the box: a number, text, yes/no.\n\nUsually Rust works out the type by itself. But you can write it explicitly, after a colon:\n\n```\nlet age: i32 = 30;\nlet price: f64 = 99.5;\n```"
+},
+{
+"t": "text",
+"title": "Whole numbers",
+"md": "`i32` is a signed whole number: it can be negative. This is the default type.\n\n- The letter `i` means integer, a whole number.\n- `u` means unsigned: only zero and above. For example `u8`, `u32`, `u64`.\n- The digits say how many bits the number uses. More bits means a bigger maximum.\n\n`u8` holds 0 to 255. `i32` holds about ±2 billion. Usually `i32` is enough."
+},
+{
+"t": "text",
+"title": "Fractional numbers",
+"md": "Fractional numbers use a **dot**: `3.14`.\n\nThe default type is `f64` (f means float, \"floating point\").\n\n!> You cannot add a whole number and a fractional number directly. `5 + 2.5` is an error. Write `5.0 + 2.5`."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let a = 7;\n    let b = 2;\n    println!(\"Sum: {}\", a + b);\n    println!(\"Difference: {}\", a - b);\n    println!(\"Product: {}\", a * b);\n    println!(\"Integer division: {}\", a / b);\n    println!(\"Remainder: {}\", a % b);\n    println!(\"Fractional division: {}\", 7.0 / 2.0);\n}",
+"out": "Sum: 9\nDifference: 5\nProduct: 14\nInteger division: 3\nRemainder: 1\nFractional division: 3.5",
+"after": "Notice: `7 / 2` with whole numbers gives `3`. The fractional part is simply dropped."
+},
+{
+"t": "quiz",
+"md": "What is `10 % 3`?",
+"options": [
+"3",
+"1",
+"3.33"
+],
+"answer": 1,
+"why": [
+"`%` is not division. It is the remainder of division.",
+"Correct. 10 = 3 × 3 + 1. The remainder is 1.",
+"Whole numbers have no fractional part."
+]
+},
+{
+"t": "text",
+"title": "Turning a whole number into a fractional one",
+"md": "To mix whole and fractional numbers, convert the type with the word `as`:\n\n```\nlet apples = 7;\nlet half = apples as f64 / 2.0; // 3.5\n```"
+},
+{
+"t": "task",
+"md": "You have a temperature in degrees Celsius. Convert it to Fahrenheit with the formula `F = C × 1.8 + 32` and print `Fahrenheit: 77`.",
+"code": "fn main() {\n    let celsius = 25.0;\n    let fahrenheit = 0.0; // fix this line\n    println!(\"Fahrenheit: {fahrenheit}\");\n}",
+"solution": "fn main() {\n    let celsius = 25.0;\n    let fahrenheit = celsius * 1.8 + 32.0;\n    println!(\"Fahrenheit: {fahrenheit}\");\n}",
+"expect": "Fahrenheit: 77",
+"hints": [
+"Multiplication is `*`, addition is `+`.",
+"Remember: the fractional number is written `32.0`, not `32`."
+]
+},
+{
+"t": "text",
+"title": "Writing big numbers",
+"md": "You can put underscores in a number to make it easier to read. The computer ignores them:\n\n```\nlet million = 1_000_000;\n```\nYou can also write the type at the end of the number: `5u8`, `10i64`, `2.5f32`."
+},
+{
+"t": "deep",
+"title": "What happens when a number does not fit",
+"md": "Every whole-number type has a limit. `u8` holds at most 255. What happens if you add 1 to 255?\n\n- In a normal run (debug mode) the program **panics**: `attempt to add with overflow`.\n- If you need different behavior, you choose it explicitly with special methods.\n\n- `checked_add` returns \"nothing\" (`None`) if the result does not fit;\n- `wrapping_add` goes around in a circle: after 255 comes 0;\n- `saturating_add` stops at the limit.",
+"code": "fn main() {\n    let x: u8 = 255;\n    println!(\"{:?}\", x.checked_add(1));\n    println!(\"{}\", x.wrapping_add(1));\n    println!(\"{}\", x.saturating_add(1));\n    println!(\"u8 limit: {}, i32 limit: {}\", u8::MAX, i32::MAX);\n}",
+"out": "None\n0\n255\nu8 limit: 255, i32 limit: 2147483647"
+},
+{
+"t": "recap",
+"items": [
+"`i32` is a whole number, `f64` is a fractional number. These are the default types.",
+"Integer division drops the fraction: `7 / 2 == 3`. `%` is the remainder.",
+"Whole to fractional: `x as f64`."
+]
+}
+],
+"goals": [
+"Whole numbers and fractional numbers",
+"What `i32` and `f64` mean",
+"Arithmetic"
+]
+},
+{
+"id": "m01-4",
+"title": "Yes, no, and characters",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "bool — true or false",
+"md": "The `bool` type holds one of two values: `true` or `false`.\n\n```\nlet is_raining = true;\nlet has_umbrella = false;\n```\nAnalogy: a light switch is either on or off."
+},
+{
+"t": "text",
+"title": "Comparisons give a bool",
+"md": "- `==` equal (two signs! one `=` is assignment)\n- `!=` not equal\n- `<`, `>` less, greater\n- `<=`, `>=` less or equal, greater or equal\n\n```\nlet adult = 20 >= 18; // true\n```"
+},
+{
+"t": "text",
+"title": "And, or, not",
+"md": "- `&&` means \"and\": true if both parts are true.\n- `||` means \"or\": true if at least one part is true.\n- `!` means \"not\": it flips the value.\n\n```\nlet go_outside = !is_raining || has_umbrella;\n```\nRead it as: \"we go outside if it is not raining or if we have an umbrella\"."
+},
+{
+"t": "quiz",
+"md": "What is `5 > 3 && 2 > 4`?",
+"options": [
+"true",
+"false"
+],
+"answer": 1,
+"why": [
+"The first part is true, but the second is not. `&&` needs both.",
+"Correct. `2 > 4` is false, so the whole expression is false."
+]
+},
+{
+"t": "text",
+"title": "char — one character",
+"md": "The `char` type holds **one** character. It is written in **single** quotes:\n\n```\nlet letter = 'Z';\nlet smile = '☺';\n```\n!> `'a'` is a character (char). `\"a\"` is text (a string). They are different types."
+},
+{
+"t": "quiz",
+"md": "Which one is a `char`?",
+"options": [
+"`\"B\"`",
+"`'B'`",
+"`B`"
+],
+"answer": 1,
+"why": [
+"Double quotes mean a string, even with one letter.",
+"Correct. Single quotes mean one character.",
+"Without quotes the compiler thinks it is a variable name."
+]
+},
+{
+"t": "deep",
+"title": "How much space a char takes",
+"md": "A `char` in Rust takes **4 bytes**. It can hold any Unicode character: letters of all alphabets, Chinese characters, emoji.\n\nEvery character has a number in the Unicode table. You can get it with `as u32`:",
+"code": "fn main() {\n    println!(\"{}\", 'A' as u32);\n    println!(\"{}\", 'Я' as u32);\n    println!(\"{}\", char::from_u32(1071).unwrap());\n}",
+"out": "65\n1071\nЯ"
+},
+{
+"t": "recap",
+"items": [
+"`bool`: `true` or `false`.",
+"`==` compares, `=` assigns.",
+"`&&` and, `||` or, `!` not.",
+"`char` is one character in single quotes."
+]
+}
+],
+"goals": [
+"The `bool` type: true or false",
+"The `char` type: one character",
+"Comparisons"
+]
+},
+{
+"id": "m01-5",
+"title": "Constants and shadowing",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "A constant",
+"md": "A **constant** is a value that never changes. For example, the number of seconds in a minute.\n\n```\nconst SECONDS_IN_MINUTE: u32 = 60;\n```\nRules:\n- It is written in capital letters.\n- The type is **required**.\n- `mut` is not allowed."
+},
+{
+"t": "text",
+"title": "Shadowing",
+"md": "You can write `let` again with the same name. This creates a **new** variable, and the old one becomes hidden. This is called **shadowing**.\n\n```\nlet x = 5;\nlet x = x * 2; // a new x = 10\n```\n> Analogy: a new label stuck over the old label. The old box still exists, but we cannot see it anymore."
+},
+{
+"t": "code",
+"md": "Shadowing even lets you change the type:",
+"code": "fn main() {\n    let input = \"42\";\n    let input: i32 = input.parse().unwrap();\n    println!(\"The number plus one: {}\", input + 1);\n}",
+"out": "The number plus one: 43",
+"after": "Here `parse()` turns text into a number. For now `unwrap()` just means \"we trust that it worked\". Details are in the module about errors."
+},
+{
+"t": "quiz",
+"md": "What will the program print?\n```\nfn main() {\n    let a = 3;\n    let a = a + 1;\n    let a = a * 10;\n    println!(\"{a}\");\n}\n```",
+"options": [
+"3",
+"40",
+"An error: the variable has no mut"
+],
+"answer": 1,
+"why": [
+"Each `let` creates a new `a` from the old one. Count step by step.",
+"Correct: 3 → 4 → 40.",
+"Shadowing is not changing. It is a new variable. `mut` is not needed."
+]
+},
+{
+"t": "task",
+"md": "Create a constant `MAX_LIVES` of type `u32` with the value 3 and print `Lives: 3`.",
+"code": "// create the constant here\n\nfn main() {\n    println!(\"Lives: {}\", MAX_LIVES);\n}",
+"solution": "const MAX_LIVES: u32 = 3;\n\nfn main() {\n    println!(\"Lives: {}\", MAX_LIVES);\n}",
+"expect": "Lives: 3",
+"hints": [
+"The format: `const NAME: type = value;`",
+"`const MAX_LIVES: u32 = 3;`"
+]
+},
+{
+"t": "deep",
+"title": "Why changing is not allowed by default",
+"md": "In big programs, a lot of code reads the same data. If data can change at any moment, it is hard to find where a bug comes from.\n\nRust makes immutability the normal case. Then `mut` works as a marker: \"attention, the value changes here\". Such code is easier to read.\n\nThere is a second reason: immutable data can be safely given to several parts of a program at once, and even to several threads. Threads are in module 17."
+},
+{
+"t": "recap",
+"items": [
+"`const NAME: type = value;` is a constant forever.",
+"Writing `let` again with the same name is shadowing: a new variable.",
+"Shadowing can change the type, `mut` cannot."
+]
+}
+],
+"goals": [
+"Constants with `const`",
+"Shadowing: a new variable with an old name"
+]
+},
+{
+"id": "m01-p",
+"title": "Practice: variables and numbers",
+"min": 10,
+"cards": [
+{
+"t": "fill",
+"md": "Fill in the types: a signed whole number, a fractional number, a boolean, a character.",
+"code": "let a: ___ = -5;\nlet b: ___ = 2.5;\nlet c: ___ = true;\nlet d: ___ = 'z';",
+"answers": [
+[
+"i32",
+"i64",
+"i8",
+"i16",
+"i128",
+"isize"
+],
+[
+"f64",
+"f32"
+],
+[
+"bool"
+],
+[
+"char"
+]
+]
+},
+{
+"t": "task",
+"md": "Calculate the area and the perimeter of a 7 by 3 rectangle. Print two lines: `Area: 21` and `Perimeter: 20`.",
+"code": "fn main() {\n    let width = 7;\n    let height = 3;\n}",
+"solution": "fn main() {\n    let width = 7;\n    let height = 3;\n    println!(\"Area: {}\", width * height);\n    println!(\"Perimeter: {}\", 2 * (width + height));\n}",
+"expect": "Area: 21\nPerimeter: 20",
+"hints": [
+"The area is `width * height`. The perimeter is `2 * (width + height)`.",
+"`println!(\"Area: {}\", width * height);`"
+]
+},
+{
+"t": "task",
+"md": "Convert 135 seconds into minutes and seconds. Print `2 min 15 sec`.",
+"code": "fn main() {\n    let total = 135;\n}",
+"solution": "fn main() {\n    let total = 135;\n    let minutes = total / 60;\n    let seconds = total % 60;\n    println!(\"{minutes} min {seconds} sec\");\n}",
+"expect": "2 min 15 sec",
+"hints": [
+"Integer division `/` gives the minutes. The remainder `%` gives the seconds.",
+"`let minutes = total / 60; let seconds = total % 60;`"
+]
+},
+{
+"t": "task",
+"md": "Fix the program. It must print `Average: 2.5`.",
+"code": "fn main() {\n    let sum = 10;\n    let count = 4;\n    let avg = sum / count;\n    println!(\"Average: {avg}\");\n}",
+"solution": "fn main() {\n    let sum = 10;\n    let count = 4;\n    let avg = sum as f64 / count as f64;\n    println!(\"Average: {avg}\");\n}",
+"expect": "Average: 2.5",
+"hints": [
+"Right now the division is integer division, and the fractional part is lost.",
+"Convert both numbers to `f64`: `sum as f64 / count as f64`."
+]
+},
+{
+"t": "task",
+"md": "A player has a score of 15. Add 50 points, then subtract 20, then double it. Print `Score: 90`. Use `+=`, `-=`, `*=`.",
+"code": "fn main() {\n    let score = 15;\n    println!(\"Score: {score}\");\n}",
+"solution": "fn main() {\n    let mut score = 15;\n    score += 50;\n    score -= 20;\n    score *= 2;\n    println!(\"Score: {score}\");\n}",
+"expect": "Score: 90",
+"hints": [
+"The variable must be `mut`.",
+"15 + 50 = 65, 65 − 20 = 45, 45 × 2 = 90."
+]
+},
+{
+"t": "quiz",
+"md": "What does `println!(\"{}\", 17 / 5 * 5 + 17 % 5);` print?",
+"options": [
+"17",
+"17.0",
+"3"
+],
+"answer": 0,
+"why": [
+"Correct. 17 / 5 = 3, 3 × 5 = 15, 17 % 5 = 2, 15 + 2 = 17.",
+"All numbers are whole, so there is no decimal point.",
+"That is only the first part: 17 / 5."
+]
+},
+{
+"t": "recap",
+"items": [
+"Whole numbers divide without a remainder; the remainder comes from `%`.",
+"For a fractional result you need `as f64`.",
+"If you change a variable, you need `mut`."
+]
+}
+],
+"practice": true,
+"goals": [
+"Create variables and change them",
+"Calculate with whole and fractional numbers"
+]
+}
+]
+},
+{
+"id": "m02",
+"title": "Functions",
+"sub": "How to split a program into small pieces",
+"lessons": [
+{
+"id": "m02-1",
+"title": "Your own function",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "A function is a small program",
+"md": "A **function** is a piece of code with a name. You write it once and call it as many times as you want.\n\n> Analogy: a button on a remote control. You press \"louder\" and do not think about what happens inside.\n\n`main` is also a function. It is special: everything starts with it."
+},
+{
+"t": "code",
+"code": "fn greet() {\n    println!(\"Hello!\");\n    println!(\"Nice to see you.\");\n}\n\nfn main() {\n    greet();\n    greet();\n}",
+"out": "Hello!\nNice to see you.\nHello!\nNice to see you.",
+"after": "`greet();` is a **call**: \"run the function greet\". The parentheses are required."
+},
+{
+"t": "quiz",
+"md": "How many times is \"Hello!\" printed if `main` has `greet();` three times?",
+"options": [
+"1",
+"3",
+"6"
+],
+"answer": 1,
+"why": [
+"Every call runs the function again.",
+"Correct. One call means one run.",
+"`greet` has one \"Hello!\" line. Three calls means three times."
+]
+},
+{
+"t": "order",
+"md": "Build the program: the function `hello` and its call from `main`.",
+"lines": [
+"fn hello() {",
+"    println!(\"hello\");",
+"}",
+"fn main() {",
+"    hello();",
+"}"
+]
+},
+{
+"t": "text",
+"title": "Comments for a function",
+"md": "Before a function you can write a comment with **three** slashes `///`. This is a **documentation comment**. The editor shows it when you hover the mouse over the function name.\n\n```\n/// Prints a greeting.\nfn greet() {\n    println!(\"Hello!\");\n}\n```\nFunction names are written like variable names: lowercase letters with `_`. For example `print_report`."
+},
+{
+"t": "recap",
+"items": [
+"`fn name() { ... }` declares a function.",
+"`name();` calls it.",
+"The order of functions in a file does not matter."
+]
+}
+],
+"goals": [
+"Why functions are needed",
+"How to write your own function and call it"
+]
+},
+{
+"id": "m02-2",
+"title": "Parameters",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Functions need data",
+"md": "The function `greet` always says the same thing. Boring. We want to pass it a name.\n\nFor that there are **parameters** — variables in the parentheses:\n\n```\nfn greet(name: &str) {\n    println!(\"Hello, {name}!\");\n}\n```\n`&str` is the type of text. More about it in the module about borrowing."
+},
+{
+"t": "text",
+"title": "The parameter type is required",
+"md": "Inside a function Rust works out types by itself. For parameters it does **not**. You must always write the type.\n\n```\nfn show_age(age: i32) { ... }\nfn area(width: f64, height: f64) { ... }\n```\nSeveral parameters are separated by commas."
+},
+{
+"t": "code",
+"code": "fn print_sum(a: i32, b: i32) {\n    println!(\"{a} + {b} = {}\", a + b);\n}\n\nfn main() {\n    print_sum(2, 3);\n    print_sum(10, -4);\n}",
+"out": "2 + 3 = 5\n10 + -4 = 6"
+},
+{
+"t": "fill",
+"explain": "A parameter is written as `name: type`.",
+"md": "Complete the function so it takes a number `n` of type `i32`.",
+"code": "fn print_double(___: ___) {\n    println!(\"{}\", n * 2);\n}",
+"answers": [
+[
+"n"
+],
+[
+"i32"
+]
+]
+},
+{
+"t": "task",
+"md": "Write a function `say_twice` that prints the given text two times. The call is already in `main`.",
+"code": "// write the function say_twice here\n\nfn main() {\n    say_twice(\"Rust\");\n}",
+"solution": "fn say_twice(text: &str) {\n    println!(\"{text}\");\n    println!(\"{text}\");\n}\n\nfn main() {\n    say_twice(\"Rust\");\n}",
+"expect": "Rust\nRust",
+"hints": [
+"Start with `fn say_twice(text: &str) {`",
+"Inside — two lines `println!(\"{text}\");`"
+]
+},
+{
+"t": "recap",
+"items": [
+"Parameters are the input data of a function.",
+"Always write the parameter type: `fn f(x: i32)`.",
+"When calling, pass values: `f(5)`."
+]
+}
+],
+"goals": [
+"Pass data into a function",
+"Write the types of parameters"
+]
+},
+{
+"id": "m02-3",
+"title": "Returning a value",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "A function can give something back",
+"md": "A function can not only print, but also **return** a result. Analogy: a calculator. You give it numbers, you get an answer.\n\nThe result type is written after an arrow `->`:\n\n```\nfn double(x: i32) -> i32 {\n    x * 2\n}\n```"
+},
+{
+"t": "text",
+"title": "The last line has no semicolon",
+"md": "Notice: `x * 2` is written **without** `;`. This is not a typo.\n\nIn Rust, the last line of a function without `;` is the result. It is called an **expression**: it has a value.\n\nA line with `;` is a **statement**. It does something, but gives no value."
+},
+{
+"t": "code",
+"code": "fn square(n: i32) -> i32 {\n    n * n\n}\n\nfn main() {\n    let result = square(7);\n    println!(\"7 squared = {result}\");\n    println!(\"3 squared = {}\", square(3));\n}",
+"out": "7 squared = 49\n3 squared = 9"
+},
+{
+"t": "code",
+"fails": true,
+"md": "Now with an extra `;`. Run it and look at the error.",
+"code": "fn square(n: i32) -> i32 {\n    n * n;\n}\n\nfn main() {\n    println!(\"{}\", square(3));\n}",
+"after": "The compiler writes `mismatched types`: the function promised to return `i32`, but returned \"nothing\" `()`. It also suggests: `remove this semicolon`."
+},
+{
+"t": "text",
+"title": "The word return",
+"md": "You can also return a value explicitly with `return`. Usually this is used to leave **before** the end of the function:\n\n```\nfn safe_div(a: i32, b: i32) -> i32 {\n    if b == 0 {\n        return 0;\n    }\n    a / b\n}\n```"
+},
+{
+"t": "quiz",
+"md": "What does this function return for `add_one(5)`?\n```\nfn add_one(x: i32) -> i32 {\n    x + 1\n}\n```",
+"options": [
+"6",
+"5",
+"Nothing, because there is no `return`"
+],
+"answer": 0,
+"why": [
+"Correct. The last line without `;` is the result.",
+"The function adds one.",
+"`return` is not needed: the last expression is returned automatically."
+]
+},
+{
+"t": "task",
+"md": "Write a function `max` that returns the larger of two numbers. The program must print `9`.",
+"code": "fn max(a: i32, b: i32) -> i32 {\n    // your code\n}\n\nfn main() {\n    println!(\"{}\", max(4, 9));\n}",
+"solution": "fn max(a: i32, b: i32) -> i32 {\n    if a > b { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", max(4, 9));\n}",
+"expect": "9",
+"hints": [
+"You need `if a > b { ... } else { ... }`. Details about `if` are in the next module.",
+"`if` also returns a value: `if a > b { a } else { b }` — without semicolons."
+]
+},
+{
+"t": "deep",
+"title": "What () is",
+"md": "A function without `->` also returns something: the value `()`. It is called **unit**. It is the value \"nothing useful\".\n\nThat is why the error with an extra `;` says `expected i32, found ()`: a line with `;` gives `()`, not a number.",
+"code": "fn nothing() {}\n\nfn main() {\n    let x = nothing();\n    println!(\"{:?}\", x);\n}",
+"out": "()"
+},
+{
+"t": "recap",
+"items": [
+"`-> type` says what the function returns.",
+"The last expression without `;` is the result.",
+"An extra `;` at the end turns the result into \"nothing\" `()`.",
+"`return` leaves the function early."
+]
+}
+],
+"goals": [
+"How a function returns a result",
+"The difference between an expression and a statement",
+"Why the last line without `;` matters"
+]
+},
+{
+"id": "m02-4",
+"title": "Blocks and scope",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "A block is also an expression",
+"md": "Any curly braces `{ }` form a **block**. The last expression of a block is the value of the block.\n\n```\nlet total = {\n    let a = 2;\n    let b = 3;\n    a + b\n}; // total = 5\n```"
+},
+{
+"t": "text",
+"title": "A variable lives inside its block",
+"md": "**Scope** is the part of the code where a variable is visible. Usually it is the block where the variable was created.\n\n```\nfn main() {\n    {\n        let secret = 42;\n        println!(\"{secret}\"); // visible here\n    }\n    // println!(\"{secret}\"); // not here anymore — an error\n}\n```\n> Analogy: a room. A thing left inside is not visible from the hallway."
+},
+{
+"t": "quiz",
+"md": "What happens if you uncomment the last line in the example above?",
+"options": [
+"It prints 42",
+"A compile error: `secret` is not found",
+"It prints 0"
+],
+"answer": 1,
+"why": [
+"The variable `secret` disappeared together with its block.",
+"Correct. After the closing `}` the variable no longer exists.",
+"Rust does not invent values. It just does not find the variable."
+]
+},
+{
+"t": "deep",
+"title": "The call stack",
+"md": "When `main` calls a function `a`, and `a` calls `b`, the computer remembers the chain: `main → a → b`. This chain is called the **call stack**.\n\n- Each call puts its own \"frame\" on the stack: parameters and local variables.\n- When a function ends, its frame is removed, and its variables disappear.\n\nThat is why a function's variables are not visible outside: their frame is already gone. If a program panics, Rust can show this stack — it is called a **backtrace**."
+},
+{
+"t": "recap",
+"items": [
+"`{ ... }` is a block. Its value is the last expression.",
+"A variable is visible only inside the block where it was created."
+]
+}
+],
+"goals": [
+"What a block `{ }` is",
+"Where a variable \"lives\""
+]
+},
+{
+"id": "m02-p",
+"title": "Practice: functions",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Write a function `is_even` that returns `true` for an even number.",
+"code": "fn is_even(n: i32) -> bool {\n}\n\nfn main() {\n    println!(\"{} {}\", is_even(4), is_even(7));\n}",
+"solution": "fn is_even(n: i32) -> bool {\n    n % 2 == 0\n}\n\nfn main() {\n    println!(\"{} {}\", is_even(4), is_even(7));\n}",
+"expect": "true false",
+"hints": [
+"A number is even if the remainder of dividing by 2 is 0.",
+"The body is one line without `;`: `n % 2 == 0`"
+]
+},
+{
+"t": "task",
+"md": "Write a function `average3` that returns the average of three fractional numbers.",
+"code": "// write the function average3\n\nfn main() {\n    println!(\"{}\", average3(2.0, 4.0, 9.0));\n}",
+"solution": "fn average3(a: f64, b: f64, c: f64) -> f64 {\n    (a + b + c) / 3.0\n}\n\nfn main() {\n    println!(\"{}\", average3(2.0, 4.0, 9.0));\n}",
+"expect": "5",
+"hints": [
+"The header: `fn average3(a: f64, b: f64, c: f64) -> f64`",
+"The body: `(a + b + c) / 3.0`"
+]
+},
+{
+"t": "task",
+"md": "Fix the function. It must print `Total: 30`.",
+"code": "fn total(price: i32, count: i32) {\n    price * count;\n}\n\nfn main() {\n    println!(\"Total: {}\", total(10, 3));\n}",
+"solution": "fn total(price: i32, count: i32) -> i32 {\n    price * count\n}\n\nfn main() {\n    println!(\"Total: {}\", total(10, 3));\n}",
+"expect": "Total: 30",
+"hints": [
+"There are two mistakes: the function does not promise to return a number, and the last line has an extra `;`.",
+"You need `-> i32` in the header and `price * count` without `;`."
+]
+},
+{
+"t": "task",
+"md": "Write a function `greet(name: &str, times: i32)` that prints `Hello, name!` the given number of times.",
+"code": "// write the function greet\n\nfn main() {\n    greet(\"Anna\", 2);\n}",
+"solution": "fn greet(name: &str, times: i32) {\n    for _ in 0..times {\n        println!(\"Hello, {name}!\");\n    }\n}\n\nfn main() {\n    greet(\"Anna\", 2);\n}",
+"expect": "Hello, Anna!\nHello, Anna!",
+"hints": [
+"The loop `for _ in 0..times { ... }` repeats code. Loops are explained in the next module.",
+"Inside the loop: `println!(\"Hello, {name}!\");`"
+]
+},
+{
+"t": "task",
+"md": "The function `clamp_score` must return the number, but not less than 0 and not more than 100. Use `return` to leave early.",
+"code": "fn clamp_score(x: i32) -> i32 {\n    x\n}\n\nfn main() {\n    println!(\"{} {} {}\", clamp_score(-5), clamp_score(50), clamp_score(140));\n}",
+"solution": "fn clamp_score(x: i32) -> i32 {\n    if x < 0 {\n        return 0;\n    }\n    if x > 100 {\n        return 100;\n    }\n    x\n}\n\nfn main() {\n    println!(\"{} {} {}\", clamp_score(-5), clamp_score(50), clamp_score(140));\n}",
+"expect": "0 50 100",
+"hints": [
+"Two checks: `if x < 0 { return 0; }` and `if x > 100 { return 100; }`.",
+"At the end return `x` without `;`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`-> type` is needed if the function returns a value.",
+"The last expression without `;` is the result.",
+"`return` leaves early."
+]
+}
+],
+"practice": true,
+"goals": [
+"Write functions with parameters and results",
+"Fix mistakes in functions"
+]
+}
+]
+},
+{
+"id": "m03",
+"title": "Conditions and loops",
+"sub": "How a program chooses and repeats",
+"lessons": [
+{
+"id": "m03-1",
+"title": "if and else",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "If… then…",
+"md": "`if` runs a block only when the condition is true.\n\n```\nif temperature > 30 {\n    println!(\"It is hot!\");\n}\n```\nThe condition must be of type `bool`. Parentheses around the condition are not needed."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let hour = 14;\n    if hour < 12 {\n        println!(\"Good morning\");\n    } else if hour < 18 {\n        println!(\"Good afternoon\");\n    } else {\n        println!(\"Good evening\");\n    }\n}",
+"out": "Good afternoon",
+"after": "Rust checks the conditions from top to bottom and runs the **first** matching branch. Change `hour` and run it again."
+},
+{
+"t": "quiz",
+"md": "What does the program print with `hour = 9`?",
+"options": [
+"Good morning",
+"Good afternoon",
+"Good morning and Good afternoon"
+],
+"answer": 0,
+"why": [
+"Correct. The very first condition `9 < 12` is true.",
+"The second branch is never reached: the first one already matched.",
+"Only one branch runs."
+]
+},
+{
+"t": "text",
+"title": "if returns a value",
+"md": "Like a block, `if` also gives a value. You can put it into a variable:\n\n```\nlet label = if age >= 18 { \"adult\" } else { \"child\" };\n```\n!> Both branches must return **the same type**."
+},
+{
+"t": "task",
+"md": "Write a program: if `number` is even, print `even`, otherwise print `odd`. Right now `number = 7`.",
+"code": "fn main() {\n    let number = 7;\n    // your code\n}",
+"solution": "fn main() {\n    let number = 7;\n    if number % 2 == 0 {\n        println!(\"even\");\n    } else {\n        println!(\"odd\");\n    }\n}",
+"expect": "odd",
+"hints": [
+"A number is even if the remainder of dividing by 2 is 0.",
+"The condition: `number % 2 == 0`."
+]
+},
+{
+"t": "deep",
+"title": "Why Rust has no \"?:\" operator",
+"md": "Many languages have a short form of a condition: `condition ? yes : no`. Rust does not.\n\nIt is not needed: in Rust, `if` itself returns a value. So the same thing is written like this:\n\n```\nlet price = if is_member { 90 } else { 100 };\n```\nThis is one of Rust's ideas: almost everything is an **expression** and gives a value. That means fewer special rules."
+},
+{
+"t": "recap",
+"items": [
+"`if condition { } else if condition { } else { }`.",
+"The first matching branch runs.",
+"`if` can return a value; the branch types must match."
+]
+}
+],
+"goals": [
+"Run code only when a condition holds",
+"Choose between options"
+]
+},
+{
+"id": "m03-2",
+"title": "The loop loop",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Repeat until I say stop",
+"md": "A **loop** repeats code. The simplest one is `loop`. It repeats forever until it reaches `break`."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let mut count = 1;\n    loop {\n        println!(\"Round {count}\");\n        if count == 3 {\n            break;\n        }\n        count += 1;\n    }\n    println!(\"Done!\");\n}",
+"out": "Round 1\nRound 2\nRound 3\nDone!"
+},
+{
+"t": "text",
+"title": "continue — skip a step",
+"md": "`continue` jumps straight to the next repetition and skips the rest of the block.\n\n> Analogy: `break` means leaving the room. `continue` means leaving and immediately coming back in."
+},
+{
+"t": "quiz",
+"md": "What happens if a `loop` has no `break`?",
+"options": [
+"The loop runs once",
+"The loop runs forever",
+"A compile error"
+],
+"answer": 1,
+"why": [
+"`loop` repeats the block again and again.",
+"Yes. The program hangs until someone stops it.",
+"The compiler allows infinite loops: sometimes they are really needed."
+]
+},
+{
+"t": "text",
+"title": "break can return a value",
+"md": "```\nlet mut n = 1;\nlet result = loop {\n    n *= 2;\n    if n > 100 {\n        break n;\n    }\n};\n// result = 128\n```"
+},
+{
+"t": "deep",
+"title": "Loop labels",
+"md": "If one loop is inside another, `break` leaves only the **inner** one. To leave the outer loop directly, give the loop a **label** — a name with an apostrophe:\n\n`continue 'outer` works the same way: it goes to the next step of the outer loop.",
+"code": "fn main() {\n    'outer: for a in 1..=3 {\n        for b in 1..=3 {\n            if a * b == 4 {\n                println!(\"Found: {a} × {b}\");\n                break 'outer;\n            }\n        }\n    }\n}",
+"out": "Found: 2 × 2"
+},
+{
+"t": "recap",
+"items": [
+"`loop { }` repeats forever.",
+"`break` leaves, `break value` leaves with a result.",
+"`continue` goes straight to the next repetition."
+]
+}
+],
+"goals": [
+"Repeat code forever",
+"Leave a loop with `break`"
+]
+},
+{
+"id": "m03-3",
+"title": "while and for loops",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "while — as long as it is true",
+"md": "`while` repeats a block as long as the condition is true.\n\n```\nlet mut fuel = 3;\nwhile fuel > 0 {\n    println!(\"Flying! Fuel: {fuel}\");\n    fuel -= 1;\n}\n```"
+},
+{
+"t": "text",
+"title": "for and ranges",
+"md": "`for` goes through values one by one. Most often these are numbers from a **range**:\n\n- `1..5` means 1 to 4. The right end is **not included**.\n- `1..=5` means 1 to 5. The `=` sign includes the right end."
+},
+{
+"t": "code",
+"code": "fn main() {\n    for i in 1..=3 {\n        println!(\"Push-up number {i}\");\n    }\n    for i in (1..=3).rev() {\n        println!(\"{i}...\");\n    }\n    println!(\"Go!\");\n}",
+"out": "Push-up number 1\nPush-up number 2\nPush-up number 3\n3...\n2...\n1...\nGo!",
+"after": "`.rev()` reverses the range: we count backwards."
+},
+{
+"t": "quiz",
+"md": "How many times does `for i in 0..10` run?",
+"options": [
+"11",
+"10",
+"9"
+],
+"answer": 1,
+"why": [
+"The right end `10` is not included in `0..10`.",
+"Correct: the numbers from 0 to 9.",
+"Zero also counts. From 0 to 9 there are ten numbers."
+]
+},
+{
+"t": "task",
+"md": "Calculate the sum of the numbers from 1 to 100 inclusive and print it.",
+"code": "fn main() {\n    let mut sum = 0;\n    // the loop goes here\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let mut sum = 0;\n    for i in 1..=100 {\n        sum += i;\n    }\n    println!(\"{sum}\");\n}",
+"expect": "5050",
+"hints": [
+"You need `for i in 1..=100`.",
+"Inside the loop: `sum += i;`"
+]
+},
+{
+"t": "text",
+"title": "A step bigger than one",
+"md": "The method `.step_by(n)` goes through the numbers in steps of `n`:\n\n```\nfor i in (0..=10).step_by(5) {\n    println!(\"{i}\"); // 0, 5, 10\n}\n```\n`for` can go through more than numbers. For example, the letters of a string or the items of a list. This comes in the next modules."
+},
+{
+"t": "recap",
+"items": [
+"`while condition { }` runs as long as the condition is true.",
+"`for x in 1..=n { }` goes through values.",
+"`a..b` excludes the right end, `a..=b` includes it."
+]
+}
+],
+"goals": [
+"The `while` loop with a condition",
+"Going through numbers with `for` and ranges"
+]
+},
+{
+"id": "m03-4",
+"title": "Practice: FizzBuzz",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "The FizzBuzz task",
+"md": "This is a famous job interview task. The rules for the numbers from 1 to 15:\n\n- divisible by 3 and by 5 — print `FizzBuzz`;\n- divisible only by 3 — `Fizz`;\n- divisible only by 5 — `Buzz`;\n- otherwise — the number itself.\n\n> Hint: put the check \"by 3 and by 5\" **first**. Otherwise it is never reached."
+},
+{
+"t": "fill",
+"explain": "A number is divisible by both 3 and 5 only if it is divisible by 15.",
+"md": "Fill in the conditions.",
+"code": "fn main() {\n    for n in 1..=15 {\n        if n % 15 == 0 {\n            println!(\"FizzBuzz\");\n        } else if n % ___ == 0 {\n            println!(\"Fizz\");\n        } else if n % ___ == 0 {\n            println!(\"Buzz\");\n        } else {\n            println!(\"{n}\");\n        }\n    }\n}",
+"answers": [
+[
+"3"
+],
+[
+"5"
+]
+]
+},
+{
+"t": "task",
+"md": "Now on your own. Write FizzBuzz for the numbers from 1 to 15.",
+"code": "fn main() {\n    for n in 1..=15 {\n        // your code\n    }\n}",
+"solution": "fn main() {\n    for n in 1..=15 {\n        if n % 15 == 0 {\n            println!(\"FizzBuzz\");\n        } else if n % 3 == 0 {\n            println!(\"Fizz\");\n        } else if n % 5 == 0 {\n            println!(\"Buzz\");\n        } else {\n            println!(\"{n}\");\n        }\n    }\n}",
+"expect": "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz",
+"hints": [
+"First check `n % 15 == 0`.",
+"Then `else if n % 3 == 0`, then `else if n % 5 == 0`, and finally `else`."
+]
+},
+{
+"t": "recap",
+"items": [
+"The order of conditions matters: the narrowest one goes first.",
+"`%` helps check divisibility."
+]
+}
+],
+"goals": [
+"Combine `for`, `if` and `%`",
+"Solve a classic task"
+]
+},
+{
+"id": "m03-p",
+"title": "Practice: conditions and loops",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Print a row of the multiplication table for 7: from `7 × 1 = 7` to `7 × 5 = 35`, each on its own line.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    for i in 1..=5 {\n        println!(\"7 × {i} = {}\", 7 * i);\n    }\n}",
+"expect": "7 × 1 = 7\n7 × 2 = 14\n7 × 3 = 21\n7 × 4 = 28\n7 × 5 = 35",
+"hints": [
+"The loop `for i in 1..=5`.",
+"`println!(\"7 × {i} = {}\", 7 * i);`"
+]
+},
+{
+"t": "task",
+"md": "Calculate the sum of only the even numbers from 1 to 20.",
+"code": "fn main() {\n    let mut sum = 0;\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let mut sum = 0;\n    for i in 1..=20 {\n        if i % 2 == 0 {\n            sum += i;\n        }\n    }\n    println!(\"{sum}\");\n}",
+"expect": "110",
+"hints": [
+"Inside the loop add `i` only if `i % 2 == 0`.",
+"Or like this: `for i in (2..=20).step_by(2) { sum += i; }`"
+]
+},
+{
+"t": "task",
+"md": "With `while`, count down from 5 to 1, and at the end print `Launch!`.",
+"code": "fn main() {\n    let mut n = 5;\n}",
+"solution": "fn main() {\n    let mut n = 5;\n    while n > 0 {\n        println!(\"{n}\");\n        n -= 1;\n    }\n    println!(\"Launch!\");\n}",
+"expect": "5\n4\n3\n2\n1\nLaunch!",
+"hints": [
+"The loop condition: `while n > 0`.",
+"Do not forget to decrease `n` inside the loop: `n -= 1;`"
+]
+},
+{
+"t": "task",
+"md": "Using `loop` and `break` with a value, find the first number greater than 50 that is divisible by both 7 and 4. Print it.",
+"code": "fn main() {\n    let mut n = 51;\n    let found = 0; // replace with a loop\n    println!(\"{found}\");\n}",
+"solution": "fn main() {\n    let mut n = 51;\n    let found = loop {\n        if n % 7 == 0 && n % 4 == 0 {\n            break n;\n        }\n        n += 1;\n    };\n    println!(\"{found}\");\n}",
+"expect": "56",
+"hints": [
+"`let found = loop { ... };` — a `;` is needed after `}`.",
+"Inside: if it fits — `break n;`, otherwise `n += 1;`"
+]
+},
+{
+"t": "task",
+"md": "Print a triangle of stars with a height of 4. You need two loops: the outer one for rows, the inner one for stars.",
+"code": "fn main() {\n}",
+"solution": "fn main() {\n    for row in 1..=4 {\n        for _ in 0..row {\n            print!(\"*\");\n        }\n        println!();\n    }\n}",
+"expect": "*\n**\n***\n****",
+"hints": [
+"The outer loop is `for row in 1..=4`. Inside it, print `*` with `print!` `row` times.",
+"After the inner loop — `println!();` to move to a new line."
+]
+},
+{
+"t": "recap",
+"items": [
+"A loop with an `if` inside is a common pattern.",
+"`loop` with `break value` is handy for searching.",
+"Nested loops: the outer one goes over rows, the inner one over the items of a row."
+]
+}
+],
+"practice": true,
+"goals": [
+"Combine loops and conditions",
+"Write nested loops"
+]
+}
+]
+},
+{
+"id": "m04",
+"title": "Tuples, arrays, vectors",
+"sub": "How to store many values at once",
+"lessons": [
+{
+"id": "m04-1",
+"title": "Tuples",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "A tuple is a set of different things",
+"md": "A **tuple** is several values in one pair of parentheses. The types can be different.\n\n```\nlet person = (\"Anna\", 25, true);\n```\n> Analogy: a backpack holds a book, a bottle and keys. Different things, but together."
+},
+{
+"t": "code",
+"md": "To get an element, write a dot and a number. Numbering starts from **zero**.",
+"code": "fn main() {\n    let person = (\"Anna\", 25, true);\n    println!(\"Name: {}\", person.0);\n    println!(\"Age: {}\", person.1);\n\n    let (name, age, student) = person;\n    println!(\"{name}, {age}, student: {student}\");\n}",
+"out": "Name: Anna\nAge: 25\nAnna, 25, student: true",
+"after": "The second part is **unpacking**: three variables at once from one tuple."
+},
+{
+"t": "text",
+"title": "A function can return a tuple",
+"md": "This is a handy way to return two results at once:\n\n```\nfn min_max(a: i32, b: i32) -> (i32, i32) {\n    if a < b { (a, b) } else { (b, a) }\n}\n```"
+},
+{
+"t": "quiz",
+"md": "How do you get `true` out of `let t = (10, \"yes\", true);`?",
+"options": [
+"`t.3`",
+"`t.2`",
+"`t[2]`"
+],
+"answer": 1,
+"why": [
+"Numbering starts from zero: 0, 1, 2.",
+"Correct. The third element has the number 2.",
+"Square brackets are for arrays. A tuple uses a dot."
+]
+},
+{
+"t": "deep",
+"title": "The empty tuple",
+"md": "Remember the value `()` from the module about functions? It is an **empty tuple** — a tuple with zero elements.\n\nSo a function \"without a result\" really returns an empty tuple. The type and the value are written the same way: `()`."
+},
+{
+"t": "recap",
+"items": [
+"`(a, b, c)` is a tuple; the types can differ.",
+"`t.0`, `t.1` give access by number, starting from zero.",
+"`let (x, y) = t;` unpacks."
+]
+}
+],
+"goals": [
+"Keep several different values together",
+"Get them by number and by unpacking"
+]
+},
+{
+"id": "m04-2",
+"title": "Arrays",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "An array is a row of identical cells",
+"md": "An **array** is a row of values of **one** type. The length is fixed: it cannot change.\n\n```\nlet days = [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"];\nlet zeros = [0; 10]; // ten zeros\n```\n> Analogy: an egg carton has ten identical cells, no more and no fewer."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let scores = [7, 9, 4, 10];\n    println!(\"First score: {}\", scores[0]);\n    println!(\"Number of scores: {}\", scores.len());\n    for s in scores {\n        println!(\"Score {s}\");\n    }\n}",
+"out": "First score: 7\nNumber of scores: 4\nScore 7\nScore 9\nScore 4\nScore 10"
+},
+{
+"t": "code",
+"md": "What happens if you ask for a cell that does not exist? Run it.",
+"code": "fn main() {\n    let a = [1, 2, 3];\n    for i in 0..=3 {\n        println!(\"{}\", a[i]);\n    }\n}",
+"after": "Three numbers are printed, and at `a[3]` the program **panics**: `index out of bounds`. Rust does not let a program read someone else's memory. This is protection, not breakage."
+},
+{
+"t": "quiz",
+"md": "What is the index of the last element of an array with 5 elements?",
+"options": [
+"5",
+"4",
+"-1"
+],
+"answer": 1,
+"why": [
+"Indexes start from zero, so the last one is one less than the length.",
+"Correct: 0, 1, 2, 3, 4.",
+"Rust has no negative indexes."
+]
+},
+{
+"t": "task",
+"md": "Find the highest score in the array and print it.",
+"code": "fn main() {\n    let scores = [7, 9, 4, 10, 6];\n    let mut best = scores[0];\n    // go through scores with a loop and update best\n    println!(\"Best: {best}\");\n}",
+"solution": "fn main() {\n    let scores = [7, 9, 4, 10, 6];\n    let mut best = scores[0];\n    for s in scores {\n        if s > best {\n            best = s;\n        }\n    }\n    println!(\"Best: {best}\");\n}",
+"expect": "Best: 10",
+"hints": [
+"`for s in scores { ... }`",
+"Inside: if `s > best`, then `best = s;`"
+]
+},
+{
+"t": "text",
+"title": "The type of an array",
+"md": "The type of an array is written like this: `[type; length]`.\n\n```\nlet days: [&str; 7] = [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\", \"sat\", \"sun\"];\n```\nThe length is part of the type. `[i32; 3]` and `[i32; 4]` are **different** types."
+},
+{
+"t": "deep",
+"title": "A table: an array of arrays",
+"md": "An array can hold other arrays. This makes a table:\n\nThe type of `grid` is `[[i32; 3]; 2]`: two rows of three numbers.",
+"code": "fn main() {\n    let grid = [[1, 2, 3], [4, 5, 6]];\n    println!(\"Row 1, column 2: {}\", grid[1][2]);\n    for row in grid {\n        for cell in row {\n            print!(\"{cell} \");\n        }\n        println!();\n    }\n}",
+"out": "Row 1, column 2: 6\n1 2 3\n4 5 6"
+},
+{
+"t": "recap",
+"items": [
+"`[a, b, c]` is an array of one type; the length is fixed.",
+"`a[0]` is the first element, `a.len()` is the length.",
+"Going out of bounds is a panic, not a silent error."
+]
+}
+],
+"goals": [
+"Store many values of one type",
+"Go through an array with a loop"
+]
+},
+{
+"id": "m04-3",
+"title": "A first look at Vec",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Vec is a growing list",
+"md": "An array cannot grow. But often you need to add elements as you go. For that there is the **vector** `Vec`.\n\n```\nlet mut list = Vec::new();\nlist.push(\"bread\");\nlist.push(\"milk\");\n```\nThere is also a short form: `let v = vec![1, 2, 3];`"
+},
+{
+"t": "code",
+"code": "fn main() {\n    let mut todo = vec![\"wake up\", \"wash\"];\n    todo.push(\"learn Rust\");\n    println!(\"Tasks: {}\", todo.len());\n    for task in &todo {\n        println!(\"- {task}\");\n    }\n}",
+"out": "Tasks: 3\n- wake up\n- wash\n- learn Rust",
+"after": "The `&` before `todo` means \"just look\". Why it is needed, you will learn in the module about ownership. It is the most important topic in Rust."
+},
+{
+"t": "quiz",
+"md": "How is `Vec` different from an array?",
+"options": [
+"A Vec can grow and shrink",
+"A Vec can hold values of different types",
+"A Vec is numbered from one"
+],
+"answer": 0,
+"why": [
+"Correct. Analogy: an array is a fixed box, a vector is a rubber one.",
+"No, a vector also holds values of one type.",
+"It is also numbered from zero, like an array."
+]
+},
+{
+"t": "deep",
+"title": "Length and capacity of a Vec",
+"md": "A vector has two numbers:\n- `len()` — how many elements it holds right now;\n- `capacity()` — how many elements it already has space for.\n\nWhen there is not enough space, the vector takes a new piece of memory, usually twice as big, and moves the elements there. This happens rarely, so `push` is fast on average.\n\nIf you know in advance how many elements there will be, you can ask for the space right away: `Vec::with_capacity(100)`."
+},
+{
+"t": "recap",
+"items": [
+"`Vec::new()` or `vec![...]` creates a vector.",
+"`push` adds to the end, `len` gives the length.",
+"A vector must be `mut` to add to it."
+]
+}
+],
+"goals": [
+"A list that can grow",
+"Add elements with `push`"
+]
+},
+{
+"id": "m04-p",
+"title": "Practice: tuples, arrays, vectors",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Calculate the sum of all the numbers in the array.",
+"code": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n    let mut sum = 0;\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n    let mut sum = 0;\n    for n in nums {\n        sum += n;\n    }\n    println!(\"{sum}\");\n}",
+"expect": "108",
+"hints": [
+"`for n in nums { ... }`",
+"Inside: `sum += n;`"
+]
+},
+{
+"t": "task",
+"md": "Count how many negative numbers the array has.",
+"code": "fn main() {\n    let temps = [3, -2, 0, -7, 5, -1];\n}",
+"solution": "fn main() {\n    let temps = [3, -2, 0, -7, 5, -1];\n    let mut count = 0;\n    for t in temps {\n        if t < 0 {\n            count += 1;\n        }\n    }\n    println!(\"{count}\");\n}",
+"expect": "3",
+"hints": [
+"You need a counter: `let mut count = 0;`.",
+"In the loop: if `t < 0`, then `count += 1;`"
+]
+},
+{
+"t": "task",
+"md": "Write a function `swap` that takes a tuple `(i32, i32)` and returns it with the elements in reverse order.",
+"code": "// write the function swap\n\nfn main() {\n    let p = swap((1, 2));\n    println!(\"{} {}\", p.0, p.1);\n}",
+"solution": "fn swap(pair: (i32, i32)) -> (i32, i32) {\n    (pair.1, pair.0)\n}\n\nfn main() {\n    let p = swap((1, 2));\n    println!(\"{} {}\", p.0, p.1);\n}",
+"expect": "2 1",
+"hints": [
+"The header: `fn swap(pair: (i32, i32)) -> (i32, i32)`",
+"The body: `(pair.1, pair.0)`"
+]
+},
+{
+"t": "task",
+"md": "Find the position (index) of the number 23 in the array. Go through the indexes from 0 to the length of the array.",
+"code": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n}",
+"solution": "fn main() {\n    let nums = [4, 8, 15, 16, 23, 42];\n    for i in 0..nums.len() {\n        if nums[i] == 23 {\n            println!(\"{i}\");\n        }\n    }\n}",
+"expect": "4",
+"hints": [
+"`for i in 0..nums.len()` goes through the indexes.",
+"Inside: `if nums[i] == 23 { println!(\"{i}\"); }`"
+]
+},
+{
+"t": "task",
+"md": "Build a vector of the squares of the numbers from 1 to 5 and print it with `{:?}`.",
+"code": "fn main() {\n    let mut squares = Vec::new();\n    println!(\"{:?}\", squares);\n}",
+"solution": "fn main() {\n    let mut squares = Vec::new();\n    for i in 1..=5 {\n        squares.push(i * i);\n    }\n    println!(\"{:?}\", squares);\n}",
+"expect": "[1, 4, 9, 16, 25]",
+"hints": [
+"The loop `for i in 1..=5`.",
+"Inside: `squares.push(i * i);`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`for x in array` goes through the values, `for i in 0..a.len()` goes through the indexes.",
+"`Vec::new()` + `push` collects a list as you go.",
+"`{:?}` prints whole arrays and vectors."
+]
+}
+],
+"practice": true,
+"goals": [
+"Go through arrays with loops",
+"Collect data into a Vec"
+]
+}
+]
+},
+{
+"id": "m05",
+"title": "Владение",
+"sub": "Главная идея Rust. Медленно и по шагам",
+"lessons": [
+{
+"id": "m05-1",
+"title": "Где живут данные: стек и куча",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Зачем этот модуль",
+"md": "Это **самая важная** тема Rust. Именно она делает Rust быстрым и надёжным.\n\nОна же кажется самой странной. Поэтому здесь уроки особенно маленькие. Не торопись. Если что-то не щёлкнуло с первого раза — это нормально."
+},
+{
+"t": "text",
+"title": "Память программы",
+"md": "Пока программа работает, данные лежат в **памяти**. У памяти есть два места:\n\n- **стек** (stack) — быстрая полка для вещей известного размера;\n- **куча** (heap) — большой склад для вещей, размер которых может меняться."
+},
+{
+"t": "text",
+"title": "Стек — стопка тарелок",
+"md": "Числа, `bool`, `char` всегда одного размера. Они лежат на **стеке**.\n\n> Стек — как стопка тарелок. Кладут сверху, берут сверху. Очень быстро и просто.\n\nКогда функция заканчивается, её тарелки снимаются со стопки сами."
+},
+{
+"t": "text",
+"title": "Куча — склад",
+"md": "Текст, который может расти, хранится в **куче**. Например, тип `String`.\n\n> Куча — как склад. Кладовщик находит свободное место, кладёт вещь и выдаёт тебе **номерок**. Номерок лежит на стеке, а сама вещь — на складе.\n\nГлавный вопрос: **кто и когда освободит место на складе?** Вот на него и отвечает владение."
+},
+{
+"t": "quiz",
+"md": "Где хранится текст `String`, который может расти?",
+"options": [
+"Только на стеке",
+"В куче, а на стеке — указатель на него",
+"Нигде, он вычисляется на лету"
+],
+"answer": 1,
+"why": [
+"На стеке лежит лишь «номерок»: адрес, длина, вместимость.",
+"Верно. Как вещь на складе и номерок в кармане.",
+"Данные всегда где-то лежат в памяти."
+]
+},
+{
+"t": "text",
+"title": "Как другие языки убирают склад",
+"md": "- В C программист убирает **вручную**. Забыл — память течёт. Убрал дважды — программа падает.\n- В Python, Java, C# работает **сборщик мусора**. Он сам ходит и убирает. Удобно, но тратит время.\n- В Rust уборка расписана **заранее**, ещё при компиляции. Это и есть **владение**."
+},
+{
+"t": "recap",
+"items": [
+"Стек — быстрая стопка для данных известного размера.",
+"Куча — склад для данных, которые могут расти.",
+"Владение решает, кто и когда освобождает место в куче."
+]
+}
+],
+"goals": [
+"Что такое стек и куча",
+"Почему это вообще важно"
+]
+},
+{
+"id": "m05-2",
+"title": "Три правила владения",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Три правила",
+"md": "Вся система владения — это всего три правила:\n\n1. У каждого значения есть **владелец** — переменная.\n2. Владелец в каждый момент **только один**.\n3. Когда владелец выходит из области видимости, значение **удаляется**.\n\n> Как с книгой. У книги один хозяин. Хозяин уехал навсегда — книгу сдали в макулатуру."
+},
+{
+"t": "code",
+"md": "Правило 3 в деле. Создадим `String` внутри блока.",
+"code": "fn main() {\n    {\n        let s = String::from(\"привет\");\n        println!(\"{s}\");\n    } // здесь s выходит из области видимости — память освобождается\n    println!(\"блок закончился\");\n}",
+"out": "привет\nблок закончился",
+"after": "`String::from(\"...\")` создаёт строку в куче. На `}` Rust сам вызывает уборку. Писать ничего не нужно."
+},
+{
+"t": "quiz",
+"md": "Когда освобождается память строки `s` в примере выше?",
+"options": [
+"В конце `main`",
+"На закрывающей `}` блока, где создана `s`",
+"Никогда, пока программа работает"
+],
+"answer": 1,
+"why": [
+"Раньше: `s` живёт только внутри своего блока.",
+"Верно. Владелец ушёл — значение удалено.",
+"В Rust память освобождается сразу, как только владелец исчез."
+]
+},
+{
+"t": "fill",
+"explain": "Это всё, на чём держится владение.",
+"md": "Вспомни правила. Заполни пропуски одним словом.",
+"code": "// 1. У каждого значения есть ___.\n// 2. Владелец в каждый момент только ___.\n// 3. Владелец ушёл — значение ___.",
+"answers": [
+[
+"владелец"
+],
+[
+"один",
+"одна",
+"1"
+],
+[
+"удаляется",
+"удалится",
+"удалено"
+]
+]
+},
+{
+"t": "recap",
+"items": [
+"У значения один владелец.",
+"Владелец вышел из блока — значение удалено.",
+"Уборку пишет компилятор, а не ты."
+]
+}
+],
+"goals": [
+"Выучить три правила владения",
+"Понять, когда значение удаляется"
+]
+},
+{
+"id": "m05-3",
+"title": "Перемещение (move)",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Отдал книгу — её у тебя нет",
+"md": "Что будет, если написать `let b = a;`, где `a` — `String`?\n\nПравило 2: владелец один. Значит, книга **переходит** к `b`. А у `a` её больше нет.\n\nЭто называется **перемещение** (move)."
+},
+{
+"t": "code",
+"fails": true,
+"md": "Запусти. Что скажет компилятор?",
+"code": "fn main() {\n    let a = String::from(\"книга\");\n    let b = a;\n    println!(\"{a}\");\n}",
+"after": "Ошибка `E0382: borrow of moved value: a` — «использование перемещённого значения». Значение уехало в `b`. Переменная `a` теперь пустая."
+},
+{
+"t": "text",
+"title": "Почему так сделано",
+"md": "Если бы `a` и `b` обе владели строкой, на `}` её удалили бы **дважды**. В C это классическая авария.\n\nRust просто запрещает так делать. Ошибка ловится на компиляции, а не у пользователя."
+},
+{
+"t": "quiz",
+"md": "Что напечатает программа?\n```\nfn main() {\n    let a = String::from(\"кот\");\n    let b = a;\n    println!(\"{b}\");\n}\n```",
+"options": [
+"кот",
+"Ошибка компиляции",
+"Пустую строку"
+],
+"answer": 0,
+"why": [
+"Верно. Теперь владелец — `b`, и печатать его можно.",
+"Ошибка была бы при обращении к `a`. А `b` — законный владелец.",
+"Данные никуда не делись, просто сменился хозяин."
+]
+},
+{
+"t": "text",
+"title": "Функция тоже забирает",
+"md": "Передать значение в функцию — это тоже перемещение. Функция становится владельцем.\n\n```\nfn eat(food: String) {\n    println!(\"Съел {food}\");\n} // тут food удаляется\n\nfn main() {\n    let apple = String::from(\"яблоко\");\n    eat(apple);\n    // apple больше нельзя использовать\n}\n```"
+},
+{
+"t": "quiz",
+"md": "После `eat(apple);` можно ли напечатать `apple`?",
+"options": [
+"Да, функция только посмотрела",
+"Нет, значение переехало в функцию"
+],
+"answer": 1,
+"why": [
+"Без `&` функция не смотрит, а забирает.",
+"Верно. И удалилось в конце `eat`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`let b = a;` со `String` перемещает значение.",
+"После перемещения старой переменной пользоваться нельзя: ошибка E0382.",
+"Передача в функцию — тоже перемещение."
+]
+}
+],
+"goals": [
+"Что происходит при `let b = a;` со строкой",
+"Почему старая переменная перестаёт работать"
+]
+},
+{
+"id": "m05-4",
+"title": "clone и Copy",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "clone — ксерокопия",
+"md": "Нужно, чтобы данные были и у `a`, и у `b`? Сделай **копию**: `.clone()`.\n\n```\nlet a = String::from(\"текст\");\nlet b = a.clone();\nprintln!(\"{a} и {b}\"); // работает\n```\n> Это ксерокопия книги. Теперь у каждого своя. Но копировать большую книгу — долго, поэтому делай это осознанно."
+},
+{
+"t": "code",
+"md": "А с числами всё работает и без `clone`. Почему?",
+"code": "fn main() {\n    let x = 5;\n    let y = x;\n    println!(\"x = {x}, y = {y}\");\n}",
+"out": "x = 5, y = 5"
+},
+{
+"t": "text",
+"title": "Тип Copy",
+"md": "Маленькие простые значения лежат на стеке. Копировать их дёшево. Поэтому Rust копирует их **сам**.\n\nТакие типы называются **Copy**: все числа, `bool`, `char` и кортежи из них.\n\n> Число — как записка с цифрой. Её легко переписать на другую бумажку. А `String` — целая книга."
+},
+{
+"t": "quiz",
+"md": "Какой из этих типов НЕ копируется сам при `let b = a;`?",
+"options": [
+"`i32`",
+"`bool`",
+"`String`",
+"`char`"
+],
+"answer": 2,
+"why": [
+"Целые числа — Copy.",
+"`bool` — Copy.",
+"Верно. `String` лежит в куче, он перемещается.",
+"`char` — Copy."
+]
+},
+{
+"t": "task",
+"md": "Почини программу: добавь копию, чтобы обе строки напечатались.",
+"code": "fn main() {\n    let original = String::from(\"Rust\");\n    let copy = original;\n    println!(\"{original} и {copy}\");\n}",
+"solution": "fn main() {\n    let original = String::from(\"Rust\");\n    let copy = original.clone();\n    println!(\"{original} и {copy}\");\n}",
+"expect": "Rust и Rust",
+"hints": [
+"Сейчас значение переезжает в `copy`. Нужна копия.",
+"`let copy = original.clone();`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`.clone()` делает полную копию. Работает, но стоит времени.",
+"Числа, `bool`, `char` — тип Copy, копируются сами.",
+"`String`, `Vec` — перемещаются."
+]
+}
+],
+"goals": [
+"Как сделать копию через `.clone()`",
+"Почему числа копируются сами"
+]
+},
+{
+"id": "m05-5",
+"title": "Возврат владения",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Функция может отдать обратно",
+"md": "Функция забрала значение. Но может его и **вернуть**:\n\n```\nfn add_world(mut s: String) -> String {\n    s.push_str(\", мир\");\n    s\n}\n```\n`push_str` дописывает текст в конец строки."
+},
+{
+"t": "code",
+"code": "fn add_world(mut s: String) -> String {\n    s.push_str(\", мир\");\n    s\n}\n\nfn main() {\n    let greeting = String::from(\"Привет\");\n    let greeting = add_world(greeting);\n    println!(\"{greeting}\");\n}",
+"out": "Привет, мир"
+},
+{
+"t": "text",
+"title": "Неудобно, правда?",
+"md": "Каждый раз отдавать и забирать обратно — утомительно. Как давать другу книгу, только чтобы он сказал, сколько в ней страниц.\n\nХочется дать **посмотреть**, не отдавая. В Rust это есть. Называется **заимствование** — тема следующего модуля."
+},
+{
+"t": "quiz",
+"md": "Зачем `add_world` возвращает `s`?",
+"options": [
+"Чтобы вернуть владение строкой обратно в `main`",
+"Чтобы напечатать её",
+"Так требует синтаксис любой функции"
+],
+"answer": 0,
+"why": [
+"Верно. Иначе строка удалилась бы в конце функции.",
+"Печатает `main`, а не функция.",
+"Функции не обязаны ничего возвращать."
+]
+},
+{
+"t": "recap",
+"items": [
+"Функция может вернуть владение через результат.",
+"Это работает, но неудобно.",
+"Удобный способ — заимствование (`&`). Дальше о нём."
+]
+}
+],
+"goals": [
+"Как функция может вернуть владение",
+"Почему это неудобно и что будет дальше"
+]
+}
+]
+},
+{
+"id": "m06",
+"title": "Заимствование и срезы",
+"sub": "Дать посмотреть, не отдавая",
+"lessons": [
+{
+"id": "m06-1",
+"title": "Ссылки: дать посмотреть",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Ссылка — это «посмотри, но не забирай»",
+"md": "**Ссылка** — это доступ к значению без владения. Пишется через `&`.\n\n```\nlet book = String::from(\"Война и мир\");\nlet r = &book; // r смотрит на book\n```\nСоздание ссылки называется **заимствованием** (borrowing).\n\n> Ты даёшь другу книгу почитать. Книга по-прежнему твоя. Друг вернёт её, когда дочитает."
+},
+{
+"t": "code",
+"code": "fn count_letters(s: &String) -> usize {\n    s.chars().count()\n}\n\nfn main() {\n    let word = String::from(\"привет\");\n    let n = count_letters(&word);\n    println!(\"В слове «{word}» {n} букв\");\n}",
+"out": "В слове «привет» 6 букв",
+"after": "`word` всё ещё наша: функция только посмотрела. `usize` — тип для размеров и количеств."
+},
+{
+"t": "quiz",
+"md": "Что значит `&word` при вызове функции?",
+"options": [
+"Отдать `word` функции навсегда",
+"Дать функции посмотреть на `word`",
+"Сделать копию `word`"
+],
+"answer": 1,
+"why": [
+"Это было бы без `&`. Со знаком `&` владение остаётся.",
+"Верно. Функция получает ссылку, владелец не меняется.",
+"Копию делает `.clone()`. Ссылка ничего не копирует."
+]
+},
+{
+"t": "task",
+"md": "Функция забирает строку, и потом её нельзя напечатать. Почини, используя ссылку.",
+"code": "fn shout(s: String) {\n    println!(\"{}!!!\", s);\n}\n\nfn main() {\n    let msg = String::from(\"Ура\");\n    shout(msg);\n    println!(\"{msg}\");\n}",
+"solution": "fn shout(s: &String) {\n    println!(\"{}!!!\", s);\n}\n\nfn main() {\n    let msg = String::from(\"Ура\");\n    shout(&msg);\n    println!(\"{msg}\");\n}",
+"expect": "Ура!!!\nУра",
+"hints": [
+"Изменить надо два места: тип параметра и вызов.",
+"`fn shout(s: &String)` и `shout(&msg);`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`&x` — ссылка, доступ без владения.",
+"Функция с параметром `&T` только смотрит.",
+"После такого вызова переменная остаётся твоей."
+]
+}
+],
+"goals": [
+"Что такое ссылка `&`",
+"Как передать значение в функцию, не отдавая его"
+]
+},
+{
+"id": "m06-2",
+"title": "Изменяемые ссылки",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "&mut — дать подписать на полях",
+"md": "Обычная ссылка `&` только читает. Чтобы функция могла **изменить** значение, нужна изменяемая ссылка `&mut`.\n\n```\nfn add_smile(s: &mut String) {\n    s.push_str(\" :)\");\n}\n```\nСама переменная тоже должна быть `mut`."
+},
+{
+"t": "code",
+"code": "fn add_smile(s: &mut String) {\n    s.push_str(\" :)\");\n}\n\nfn main() {\n    let mut text = String::from(\"Привет\");\n    add_smile(&mut text);\n    add_smile(&mut text);\n    println!(\"{text}\");\n}",
+"out": "Привет :) :)"
+},
+{
+"t": "text",
+"title": "Главное правило",
+"md": "В каждый момент можно **одно** из двух:\n\n- сколько угодно **читателей** `&`;\n- или ровно **один писатель** `&mut`.\n\n> Как документ в общей папке. Читать могут все сразу. Но если кто-то правит — остальные ждут, чтобы не увидеть кашу.\n\nЭто правило спасает от целого класса ошибок, когда данные меняются под ногами."
+},
+{
+"t": "code",
+"fails": true,
+"md": "Две изменяемые ссылки одновременно. Запусти.",
+"code": "fn main() {\n    let mut s = String::from(\"текст\");\n    let a = &mut s;\n    let b = &mut s;\n    a.push_str(\"1\");\n    b.push_str(\"2\");\n}",
+"after": "Ошибка `E0499`: нельзя взять `&mut` дважды, пока первая ссылка ещё используется."
+},
+{
+"t": "text",
+"title": "Ссылка «живёт» до последнего использования",
+"md": "Хорошая новость: ссылка заканчивается после **последнего** места, где её использовали. Не на `}`.\n\n```\nlet mut s = String::from(\"a\");\nlet r1 = &s;\nprintln!(\"{r1}\"); // r1 больше не нужна\nlet r2 = &mut s;  // теперь можно\nr2.push_str(\"b\");\n```"
+},
+{
+"t": "quiz",
+"md": "Какой набор ссылок разрешён одновременно?",
+"options": [
+"Три ссылки `&`",
+"Две ссылки `&mut`",
+"Одна `&` и одна `&mut`"
+],
+"answer": 0,
+"why": [
+"Верно. Читателей может быть сколько угодно.",
+"Писатель может быть только один.",
+"Пока кто-то читает, писать нельзя."
+]
+},
+{
+"t": "recap",
+"items": [
+"`&mut x` — ссылка, через которую можно менять.",
+"Или много `&`, или один `&mut`.",
+"Ссылка живёт до последнего использования."
+]
+}
+],
+"goals": [
+"Как дать изменить значение: `&mut`",
+"Главное правило ссылок"
+]
+},
+{
+"id": "m06-3",
+"title": "Висячих ссылок не бывает",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Ссылка в никуда",
+"md": "**Висячая ссылка** указывает на значение, которого уже нет. Как адрес снесённого дома.\n\nВ C такие ссылки — частая причина взломов и падений. В Rust их **не бывает**: компилятор следит."
+},
+{
+"t": "code",
+"fails": true,
+"md": "Функция пытается вернуть ссылку на свою локальную строку. Запусти.",
+"code": "fn make() -> &String {\n    let s = String::from(\"привет\");\n    &s\n}\n\nfn main() {\n    let r = make();\n}",
+"after": "Компилятор не пропускает. Строка `s` умрёт на `}` функции, и ссылка указывала бы в пустоту. Ошибка говорит про **lifetime** — время жизни. О нём будет отдельный модуль."
+},
+{
+"t": "text",
+"title": "Как исправить",
+"md": "Верни саму строку, а не ссылку. Тогда владение просто переедет наружу:\n\n```\nfn make() -> String {\n    String::from(\"привет\")\n}\n```"
+},
+{
+"t": "quiz",
+"md": "Почему нельзя вернуть `&s`, где `s` создана внутри функции?",
+"options": [
+"Ссылки вообще нельзя возвращать",
+"`s` удалится в конце функции, и ссылка повиснет",
+"Строки нельзя создавать в функциях"
+],
+"answer": 1,
+"why": [
+"Можно, если значение живёт дольше функции.",
+"Верно. Ссылка не может пережить своё значение.",
+"Можно, просто вернуть надо её саму."
+]
+},
+{
+"t": "recap",
+"items": [
+"Ссылка не может пережить значение.",
+"Создал внутри функции — возвращай значение, а не ссылку."
+]
+}
+],
+"goals": [
+"Что такое висячая ссылка",
+"Как Rust её не допускает"
+]
+},
+{
+"id": "m06-4",
+"title": "Срезы и &str",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Срез — окошко в часть данных",
+"md": "**Срез** — ссылка на кусок последовательности. Не копия, а окошко.\n\n```\nlet nums = [10, 20, 30, 40, 50];\nlet middle = &nums[1..4]; // [20, 30, 40]\n```\n> Как рамка, которую положили на фото: видно только часть, но фото то же самое."
+},
+{
+"t": "text",
+"title": "String и &str",
+"md": "- `String` — **владеющая** строка в куче. Может расти.\n- `&str` — **срез строки**: окошко в чужой текст.\n\nТекст в кавычках `\"привет\"` — это `&str`. Он вшит прямо в программу.\n\n> Правило: в параметрах функций пиши `&str`. Туда подойдут и `&String`, и `\"текст\"`."
+},
+{
+"t": "code",
+"code": "fn greet(name: &str) {\n    println!(\"Привет, {name}!\");\n}\n\nfn main() {\n    let owned = String::from(\"Аня\");\n    greet(&owned);\n    greet(\"Боря\");\n    let part = &owned[0..2];\n    println!(\"Первые байты: {part}\");\n}",
+"out": "Привет, Аня!\nПривет, Боря!\nПервые байты: А",
+"after": "Стоп. `0..2` дало **одну** букву «А», а не две. Почему?"
+},
+{
+"t": "text",
+"title": "Русские буквы занимают 2 байта",
+"md": "Строки в Rust хранятся в **UTF-8**. Латинская буква — 1 байт. Русская — 2 байта.\n\nСрез `[0..2]` берёт **байты**, а не буквы. Если разрезать букву пополам, программа запаникует.\n\n!> Для русского текста не режь строку по номерам. Используй `.chars()` — перебор по буквам."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let word = \"привет\";\n    println!(\"Байт: {}\", word.len());\n    println!(\"Букв: {}\", word.chars().count());\n    let first: String = word.chars().take(3).collect();\n    println!(\"Первые три буквы: {first}\");\n}",
+"out": "Байт: 12\nБукв: 6\nПервые три буквы: при"
+},
+{
+"t": "quiz",
+"md": "Что вернёт `\"мир\".len()`?",
+"options": [
+"3",
+"6",
+"1"
+],
+"answer": 1,
+"why": [
+"`len()` считает байты. В русской букве их два.",
+"Верно. Три русские буквы × 2 байта.",
+"Это количество слов, а `len()` о другом."
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `first_word`, которая возвращает первое слово строки (до пробела). Если пробела нет — всю строку.",
+"code": "fn first_word(s: &str) -> &str {\n    // подсказка: s.split(' ').next()\n    s\n}\n\nfn main() {\n    println!(\"{}\", first_word(\"hello world\"));\n    println!(\"{}\", first_word(\"rust\"));\n}",
+"solution": "fn first_word(s: &str) -> &str {\n    match s.find(' ') {\n        Some(i) => &s[..i],\n        None => s,\n    }\n}\n\nfn main() {\n    println!(\"{}\", first_word(\"hello world\"));\n    println!(\"{}\", first_word(\"rust\"));\n}",
+"expect": "hello\nrust",
+"hints": [
+"`s.split(' ')` режет строку по пробелам. `.next()` даёт первый кусок.",
+"Короткое решение: `s.split(' ').next().unwrap()`. `unwrap` подробно разберём позже."
+]
+},
+{
+"t": "recap",
+"items": [
+"Срез `&a[1..3]` — окошко в часть данных.",
+"`String` владеет текстом, `&str` — смотрит на текст.",
+"В параметрах функций пиши `&str`.",
+"`len()` — байты. Для букв — `.chars()`."
+]
+}
+],
+"goals": [
+"Что такое срез",
+"Разница между `String` и `&str`",
+"Ловушка с русскими буквами"
+]
+}
+]
+},
+{
+"id": "m07",
+"title": "Структуры",
+"sub": "Свои типы данных",
+"lessons": [
+{
+"id": "m07-1",
+"title": "Структура — анкета",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Анкета с полями",
+"md": "**Структура** (struct) — свой тип из нескольких именованных полей.\n\n```\nstruct User {\n    name: String,\n    age: u32,\n    active: bool,\n}\n```\n> Как бланк анкеты: графы «имя», «возраст», «активен». Сам бланк — это тип. Заполненная анкета — значение.\n\nИмена структур пишут с большой буквы: `User`, `GameCharacter`."
+},
+{
+"t": "code",
+"code": "struct User {\n    name: String,\n    age: u32,\n}\n\nfn main() {\n    let mut user = User {\n        name: String::from(\"Аня\"),\n        age: 25,\n    };\n    println!(\"{} — {} лет\", user.name, user.age);\n    user.age += 1;\n    println!(\"С днём рождения! Теперь {}\", user.age);\n}",
+"out": "Аня — 25 лет\nС днём рождения! Теперь 26",
+"after": "Поле читают через точку: `user.age`. Менять можно, только если вся переменная `mut`."
+},
+{
+"t": "fill",
+"md": "Заполни, чтобы создать точку с координатами 3 и 4.",
+"code": "struct Point {\n    x: i32,\n    y: i32,\n}\n\nfn main() {\n    let p = ___ { x: 3, ___: 4 };\n    println!(\"{}, {}\", p.x, p.y);\n}",
+"answers": [
+[
+"Point"
+],
+[
+"y"
+]
+]
+},
+{
+"t": "text",
+"title": "Короткая запись полей",
+"md": "Если переменная называется так же, как поле, можно не повторять:\n\n```\nfn new_user(name: String, age: u32) -> User {\n    User { name, age } // вместо name: name, age: age\n}\n```"
+},
+{
+"t": "recap",
+"items": [
+"`struct Имя { поле: тип, ... }` — свой тип.",
+"Значение: `Имя { поле: значение, ... }`.",
+"Поле: `значение.поле`."
+]
+}
+],
+"goals": [
+"Создать свой тип через `struct`",
+"Читать и менять поля"
+]
+},
+{
+"id": "m07-2",
+"title": "Печать структуры: Debug",
+"min": 5,
+"cards": [
+{
+"t": "code",
+"fails": true,
+"md": "Попробуем напечатать структуру через `{}`. Запусти.",
+"code": "struct Cat {\n    name: String,\n    lives: u8,\n}\n\nfn main() {\n    let cat = Cat { name: String::from(\"Мурка\"), lives: 9 };\n    println!(\"{}\", cat);\n}",
+"after": "Ошибка `E0277`: Rust не знает, **как** красиво показать твою структуру. Это не число и не строка."
+},
+{
+"t": "text",
+"title": "derive(Debug) — печать для разработчика",
+"md": "Добавь над структурой строчку `#[derive(Debug)]` и печатай через `{:?}`.\n\n- `#[derive(Debug)]` — «научи этот тип печататься для отладки».\n- `{:?}` — «напечатай отладочный вид».\n- `{:#?}` — то же, но красиво, в несколько строк."
+},
+{
+"t": "code",
+"code": "#[derive(Debug)]\nstruct Cat {\n    name: String,\n    lives: u8,\n}\n\nfn main() {\n    let cat = Cat { name: String::from(\"Мурка\"), lives: 9 };\n    println!(\"{:?}\", cat);\n    println!(\"{cat:#?}\");\n}",
+"out": "Cat { name: \"Мурка\", lives: 9 }\nCat {\n    name: \"Мурка\",\n    lives: 9,\n}"
+},
+{
+"t": "quiz",
+"md": "Что нужно, чтобы напечатать структуру через `{:?}`?",
+"options": [
+"Ничего, работает само",
+"Добавить `#[derive(Debug)]` над структурой",
+"Написать функцию `print`"
+],
+"answer": 1,
+"why": [
+"Без `derive(Debug)` компилятор выдаст ошибку E0277.",
+"Верно.",
+"Можно, но есть способ короче."
+]
+},
+{
+"t": "recap",
+"items": [
+"`#[derive(Debug)]` + `{:?}` — быстрая печать для отладки.",
+"`{:#?}` — то же самое, но в столбик."
+]
+}
+],
+"goals": [
+"Как напечатать структуру целиком",
+"Что такое `#[derive(Debug)]`"
+]
+},
+{
+"id": "m07-3",
+"title": "Методы: impl",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Метод — функция «внутри» типа",
+"md": "**Метод** — функция, которая принадлежит типу. Их пишут в блоке `impl` (implementation — реализация).\n\n```\nimpl Rectangle {\n    fn area(&self) -> u32 {\n        self.width * self.height\n    }\n}\n```\n`self` — «тот, у кого вызвали метод». Вызов: `rect.area()`."
+},
+{
+"t": "code",
+"code": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    fn area(&self) -> u32 {\n        self.width * self.height\n    }\n\n    fn grow(&mut self, by: u32) {\n        self.width += by;\n        self.height += by;\n    }\n}\n\nfn main() {\n    let mut r = Rectangle { width: 3, height: 4 };\n    println!(\"Площадь: {}\", r.area());\n    r.grow(1);\n    println!(\"После роста: {}\", r.area());\n}",
+"out": "Площадь: 12\nПосле роста: 20"
+},
+{
+"t": "text",
+"title": "Три вида self",
+"md": "- `&self` — метод только **смотрит**. Самый частый.\n- `&mut self` — метод **меняет** структуру.\n- `self` — метод **забирает** структуру целиком. Бывает редко.\n\nЭто те же правила владения и заимствования. Просто про саму структуру."
+},
+{
+"t": "quiz",
+"md": "Какой `self` нужен методу `rename`, который меняет поле `name`?",
+"options": [
+"`&self`",
+"`&mut self`",
+"Никакой, методы не меняют поля"
+],
+"answer": 1,
+"why": [
+"Через `&self` можно только читать.",
+"Верно. Менять — значит нужна изменяемая ссылка.",
+"Ещё как меняют, если есть `&mut self`."
+]
+},
+{
+"t": "task",
+"md": "Добавь метод `can_hold`, который возвращает `true`, если прямоугольник `self` больше `other` и по ширине, и по высоте.",
+"code": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    // твой метод can_hold\n}\n\nfn main() {\n    let big = Rectangle { width: 10, height: 8 };\n    let small = Rectangle { width: 3, height: 2 };\n    println!(\"{}\", big.can_hold(&small));\n    println!(\"{}\", small.can_hold(&big));\n}",
+"solution": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    fn can_hold(&self, other: &Rectangle) -> bool {\n        self.width > other.width && self.height > other.height\n    }\n}\n\nfn main() {\n    let big = Rectangle { width: 10, height: 8 };\n    let small = Rectangle { width: 3, height: 2 };\n    println!(\"{}\", big.can_hold(&small));\n    println!(\"{}\", small.can_hold(&big));\n}",
+"expect": "true\nfalse",
+"hints": [
+"Заголовок: `fn can_hold(&self, other: &Rectangle) -> bool`",
+"Тело: `self.width > other.width && self.height > other.height`"
+]
+},
+{
+"t": "recap",
+"items": [
+"Методы пишут в `impl Тип { ... }`.",
+"`&self` читает, `&mut self` меняет, `self` забирает.",
+"Вызов: `значение.метод()`."
+]
+}
+],
+"goals": [
+"Прикрепить функции к структуре",
+"Разница между `&self`, `&mut self` и `self`"
+]
+},
+{
+"id": "m07-4",
+"title": "Конструктор new",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Ассоциированные функции",
+"md": "В `impl` можно писать функции **без** `self`. Их вызывают через `::`, а не через точку.\n\nОбычно так делают **конструктор** — функцию, которая создаёт новое значение. По традиции её называют `new`.\n\n```\nimpl Counter {\n    fn new() -> Counter {\n        Counter { count: 0 }\n    }\n}\nlet c = Counter::new();\n```\nТы уже видел такое: `String::new()`, `Vec::new()`."
+},
+{
+"t": "text",
+"title": "Self — короткое имя своего типа",
+"md": "Внутри `impl` вместо имени типа можно писать `Self` с большой буквы:\n\n```\nfn new() -> Self {\n    Self { count: 0 }\n}\n```"
+},
+{
+"t": "task",
+"md": "Допиши конструктор `Player::new(name)`, который создаёт игрока с 100 очками здоровья.",
+"code": "#[derive(Debug)]\nstruct Player {\n    name: String,\n    hp: u32,\n}\n\nimpl Player {\n    fn new(name: &str) -> Self {\n        // твой код\n    }\n}\n\nfn main() {\n    let p = Player::new(\"Герой\");\n    println!(\"{} {}\", p.name, p.hp);\n}",
+"solution": "#[derive(Debug)]\nstruct Player {\n    name: String,\n    hp: u32,\n}\n\nimpl Player {\n    fn new(name: &str) -> Self {\n        Self { name: name.to_string(), hp: 100 }\n    }\n}\n\nfn main() {\n    let p = Player::new(\"Герой\");\n    println!(\"{} {}\", p.name, p.hp);\n}",
+"expect": "Герой 100",
+"hints": [
+"Нужно вернуть `Self { name: ..., hp: 100 }`.",
+"Из `&str` сделай `String` через `name.to_string()`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Функция в `impl` без `self` вызывается через `Тип::функция()`.",
+"Конструктор по традиции — `new`.",
+"`Self` — короткое имя текущего типа."
+]
+}
+],
+"goals": [
+"Функции без `self` в `impl`",
+"Обычай называть конструктор `new`"
+]
+}
+]
+},
+{
+"id": "m08",
+"title": "Перечисления и match",
+"sub": "Один из нескольких вариантов",
+"lessons": [
+{
+"id": "m08-1",
+"title": "enum — один вариант из списка",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Выбор из списка",
+"md": "**Перечисление** (enum) — тип, значение которого — **один** вариант из заранее известного списка.\n\n```\nenum Light {\n    Red,\n    Yellow,\n    Green,\n}\nlet now = Light::Red;\n```\n> Как светофор. Он горит красным, жёлтым или зелёным. Ничего другого быть не может."
+},
+{
+"t": "text",
+"title": "Варианты могут нести данные",
+"md": "У каждого варианта могут быть свои данные:\n\n```\nenum Message {\n    Quit,                    // без данных\n    Move { x: i32, y: i32 }, // как структура\n    Write(String),           // одно значение\n}\n```\nОдин тип `Message`, но внутри — разные виды сообщений."
+},
+{
+"t": "quiz",
+"md": "Сколько вариантов одновременно хранит значение типа `Light`?",
+"options": [
+"Ровно один",
+"Все три",
+"Ноль или один"
+],
+"answer": 0,
+"why": [
+"Верно. В этом и смысл enum.",
+"Это была бы структура с тремя полями.",
+"Пустым значение enum быть не может. Хотя для «может не быть» есть Option — скоро о нём."
+]
+},
+{
+"t": "recap",
+"items": [
+"`enum` — один вариант из списка.",
+"Вариант пишется через `::` — `Light::Red`.",
+"Варианты могут хранить данные."
+]
+}
+],
+"goals": [
+"Что такое перечисление `enum`",
+"Как хранить в вариантах данные"
+]
+},
+{
+"id": "m08-2",
+"title": "match — разбор вариантов",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "match — сортировочная машина",
+"md": "`match` смотрит на значение и выбирает подходящую ветку. Это **сопоставление с образцом**.\n\n```\nmatch light {\n    Light::Red => println!(\"Стой\"),\n    Light::Yellow => println!(\"Жди\"),\n    Light::Green => println!(\"Иди\"),\n}\n```\n> Как сортировщик посылок: по адресу отправляет в нужное окно."
+},
+{
+"t": "code",
+"code": "enum Coin {\n    Ruble1,\n    Ruble5,\n    Ruble10,\n}\n\nfn value(c: Coin) -> u32 {\n    match c {\n        Coin::Ruble1 => 1,\n        Coin::Ruble5 => 5,\n        Coin::Ruble10 => 10,\n    }\n}\n\nfn main() {\n    let total = value(Coin::Ruble5) + value(Coin::Ruble10);\n    println!(\"Всего: {total} руб.\");\n}",
+"out": "Всего: 15 руб.",
+"after": "`match` тоже выражение: возвращает значение выбранной ветки."
+},
+{
+"t": "text",
+"title": "match проверяет всё",
+"md": "Если забыть вариант, компилятор не пропустит: ошибка `E0004`.\n\nЭто огромная помощь. Добавил новый вариант в enum — компилятор покажет **все** места, которые надо обновить.\n\nНе хочешь перечислять всё? Ветка `_` ловит «всё остальное»:\n\n```\nmatch number {\n    1 => println!(\"один\"),\n    2 => println!(\"два\"),\n    _ => println!(\"много\"),\n}\n```"
+},
+{
+"t": "code",
+"md": "Данные из варианта достаются прямо в `match`:",
+"code": "enum Shape {\n    Circle(f64),\n    Rect(f64, f64),\n}\n\nfn area(s: &Shape) -> f64 {\n    match s {\n        Shape::Circle(r) => 3.14 * r * r,\n        Shape::Rect(w, h) => w * h,\n    }\n}\n\nfn main() {\n    println!(\"{}\", area(&Shape::Rect(2.0, 3.0)));\n    println!(\"{}\", area(&Shape::Circle(1.0)));\n}",
+"out": "6\n3.14"
+},
+{
+"t": "quiz",
+"md": "Что делает ветка `_ =>` в `match`?",
+"options": [
+"Ловит ошибки",
+"Подходит под любое значение, которое не поймали раньше",
+"Пропускает `match` целиком"
+],
+"answer": 1,
+"why": [
+"Это не про ошибки, а про оставшиеся варианты.",
+"Верно. Это «всё остальное».",
+"Ветка `_` выполняется, если до неё ничего не подошло."
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `describe`, которая для числа печатает: `0` → `ноль`, `1` → `один`, любое другое → `другое`. Используй `match`.",
+"code": "fn describe(n: i32) -> &'static str {\n    // твой match\n}\n\nfn main() {\n    println!(\"{}\", describe(0));\n    println!(\"{}\", describe(1));\n    println!(\"{}\", describe(42));\n}",
+"solution": "fn describe(n: i32) -> &'static str {\n    match n {\n        0 => \"ноль\",\n        1 => \"один\",\n        _ => \"другое\",\n    }\n}\n\nfn main() {\n    println!(\"{}\", describe(0));\n    println!(\"{}\", describe(1));\n    println!(\"{}\", describe(42));\n}",
+"expect": "ноль\nодин\nдругое",
+"hints": [
+"`&'static str` — это просто «текст в кавычках». Странную метку `'static` разберём позже.",
+"Ветки: `0 => \"ноль\",`, `1 => \"один\",`, `_ => \"другое\",`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`match` выбирает ветку по образцу.",
+"Нужно разобрать все варианты, иначе ошибка.",
+"`_` — «всё остальное»."
+]
+}
+],
+"goals": [
+"Разобрать enum через `match`",
+"Понять, почему `match` требует все варианты"
+]
+},
+{
+"id": "m08-3",
+"title": "Option: может быть, а может нет",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Значения может не быть",
+"md": "Часто результата может не оказаться. Например, ищем пользователя, а его нет.\n\nВо многих языках для этого есть `null` — «ничего». Его изобретатель назвал `null` своей «ошибкой на миллиард долларов»: программы постоянно падали, забыв проверить.\n\nВ Rust `null` нет. Вместо него — `Option`."
+},
+{
+"t": "text",
+"title": "Option — коробка, которая может быть пустой",
+"md": "```\nenum Option<T> {\n    Some(T), // внутри есть значение\n    None,    // пусто\n}\n```\n> Подарочная коробка. Внутри может лежать подарок (`Some`), а может быть пусто (`None`). Пока не откроешь — не знаешь. И Rust заставит открыть.\n\n`T` — «любой тип». Об этом подробно в модуле про обобщения."
+},
+{
+"t": "code",
+"code": "fn divide(a: i32, b: i32) -> Option<i32> {\n    if b == 0 {\n        None\n    } else {\n        Some(a / b)\n    }\n}\n\nfn main() {\n    for b in [2, 0] {\n        match divide(10, b) {\n            Some(result) => println!(\"10 / {b} = {result}\"),\n            None => println!(\"На {b} делить нельзя\"),\n        }\n    }\n}",
+"out": "10 / 2 = 5\nНа 0 делить нельзя"
+},
+{
+"t": "quiz",
+"md": "Можно ли сложить `Option<i32>` и `i32` напрямую: `Some(5) + 3`?",
+"options": [
+"Да, Rust сам достанет 5",
+"Нет, сначала нужно достать значение из Option"
+],
+"answer": 1,
+"why": [
+"Нет. Сначала надо проверить, что коробка не пустая.",
+"Верно. Это и защищает от «забыл проверить»."
+]
+},
+{
+"t": "text",
+"title": "Удобные способы открыть коробку",
+"md": "- `if let Some(x) = value { ... }` — сделать что-то, только если есть значение.\n- `value.unwrap_or(0)` — достать значение или взять 0, если пусто.\n- `value.unwrap()` — достать, а если пусто — **паника**. Только когда уверен.\n\n```\nlet first = vec![3, 1, 2].first().copied().unwrap_or(0);\n```"
+},
+{
+"t": "code",
+"md": "`if let` — короткий `match` на один вариант:",
+"code": "fn main() {\n    let names = vec![\"Аня\", \"Боря\"];\n    if let Some(name) = names.get(1) {\n        println!(\"Второй: {name}\");\n    }\n    if let Some(name) = names.get(5) {\n        println!(\"Шестой: {name}\");\n    } else {\n        println!(\"Шестого нет\");\n    }\n}",
+"out": "Второй: Боря\nШестого нет",
+"after": "`get(i)` возвращает `Option`: элемента может не быть. Безопаснее, чем `[i]`."
+},
+{
+"t": "recap",
+"items": [
+"`null` в Rust нет. Есть `Option<T>`: `Some(x)` или `None`.",
+"Rust заставляет проверить, есть ли значение.",
+"`if let Some(x) = ...`, `unwrap_or(запасное)`, `unwrap()` — только когда уверен."
+]
+}
+],
+"goals": [
+"Почему в Rust нет `null`",
+"Как работать с `Option`"
+]
+},
+{
+"id": "m08-4",
+"title": "let else и цепочки let",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "let else — «достань или уходи»",
+"md": "Часто нужно: «достань значение, а если его нет — выйди из функции». Для этого есть `let ... else`:\n\n```\nfn greet_first(names: &[&str]) {\n    let Some(first) = names.first() else {\n        println!(\"Никого нет\");\n        return;\n    };\n    println!(\"Привет, {first}!\");\n}\n```\nПосле этого блока `first` — уже обычное значение, без `Some`."
+},
+{
+"t": "text",
+"title": "Цепочки let (Rust 2024)",
+"md": "В новой редакции Rust 2024 в `if` можно склеивать проверки через `&&`:\n\n```\nif let Some(age) = maybe_age && age >= 18 {\n    println!(\"Взрослый\");\n}\n```\nРаньше для этого приходилось вкладывать `if` в `if`."
+},
+{
+"t": "code",
+"code": "fn parse_age(text: &str) -> Option<u32> {\n    let Ok(n) = text.parse::<u32>() else {\n        return None;\n    };\n    Some(n)\n}\n\nfn main() {\n    for t in [\"25\", \"abc\", \"15\"] {\n        if let Some(age) = parse_age(t) && age >= 18 {\n            println!(\"{t}: взрослый\");\n        } else {\n            println!(\"{t}: нет\");\n        }\n    }\n}",
+"out": "25: взрослый\nabc: нет\n15: нет",
+"after": "`Ok(n)` — вариант из типа `Result`. Он про ошибки, мы разберём его в отдельном модуле."
+},
+{
+"t": "quiz",
+"md": "Что обязательно должно быть в блоке `else` у `let ... else`?",
+"options": [
+"Ничего, можно оставить пустым",
+"Выход: `return`, `break`, `continue` или паника"
+],
+"answer": 1,
+"why": [
+"Нет: после `else` программа не может идти дальше без значения.",
+"Верно. Блок обязан «уйти», ведь значения нет."
+]
+},
+{
+"t": "recap",
+"items": [
+"`let Some(x) = opt else { return; };` — достань или выйди.",
+"`if let Some(x) = opt && условие` — цепочка в Rust 2024."
+]
+}
+],
+"goals": [
+"Ранний выход через `let ... else`",
+"Несколько условий через `&&` в `if let`"
+]
+}
+]
+},
+{
+"id": "m09",
+"title": "Коллекции",
+"sub": "Vec, String и HashMap поближе",
+"lessons": [
+{
+"id": "m09-1",
+"title": "Vec подробнее",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Главные операции",
+"md": "```\nlet mut v = vec![10, 20, 30];\nv.push(40);          // добавить в конец\nlet last = v.pop();  // забрать последний: Some(40)\nv[0] = 5;            // заменить первый\nv.remove(1);         // удалить по индексу\nv.insert(0, 1);      // вставить в начало\nv.contains(&30);     // есть ли элемент: true\n```"
+},
+{
+"t": "text",
+"title": "[] или get",
+"md": "- `v[i]` — быстро, но если элемента нет — **паника**.\n- `v.get(i)` — возвращает `Option`. Нет элемента — `None`, без паники.\n\n> Если индекс приходит от пользователя или из файла, бери `get`."
+},
+{
+"t": "code",
+"md": "Перебор с изменением: `&mut` даёт менять каждый элемент.",
+"code": "fn main() {\n    let mut prices = vec![100, 250, 80];\n    for p in &mut prices {\n        *p = *p * 2;\n    }\n    println!(\"{:?}\", prices);\n    println!(\"{:?}\", prices.get(10));\n}",
+"out": "[200, 500, 160]\nNone",
+"after": "`*p` — **разыменование**: «значение, на которое смотрит ссылка». Без `*` мы бы меняли саму ссылку."
+},
+{
+"t": "quiz",
+"md": "Что вернёт `vec![1, 2, 3].get(3)`?",
+"options": [
+"3",
+"None",
+"Программа запаникует"
+],
+"answer": 1,
+"why": [
+"Индекс 3 — это четвёртый элемент. Его нет.",
+"Верно. Элемента нет, и `get` честно говорит об этом.",
+"Паникует `[3]`, а `get` — нет."
+]
+},
+{
+"t": "task",
+"md": "Удали из вектора все нечётные числа и напечатай результат. Подсказка: у вектора есть метод `retain`.",
+"code": "fn main() {\n    let mut nums = vec![1, 2, 3, 4, 5, 6];\n    // твой код\n    println!(\"{:?}\", nums);\n}",
+"solution": "fn main() {\n    let mut nums = vec![1, 2, 3, 4, 5, 6];\n    nums.retain(|n| n % 2 == 0);\n    println!(\"{:?}\", nums);\n}",
+"expect": "[2, 4, 6]",
+"hints": [
+"`retain` оставляет только элементы, для которых условие правда.",
+"`nums.retain(|n| n % 2 == 0);` — запись `|n| ...` называется замыканием. Подробно — в модуле про итераторы."
+]
+},
+{
+"t": "recap",
+"items": [
+"`push`, `pop`, `insert`, `remove`, `contains`.",
+"`v[i]` паникует за границей, `v.get(i)` возвращает `Option`.",
+"`for x in &mut v` — менять элементы, `*x` — само значение."
+]
+}
+],
+"goals": [
+"Добавлять, удалять и менять элементы вектора",
+"Безопасный доступ через `get`"
+]
+},
+{
+"id": "m09-2",
+"title": "String подробнее",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Как собрать строку",
+"md": "```\nlet mut s = String::from(\"Hello\");\ns.push_str(\", world\"); // дописать текст\ns.push('!');           // дописать один символ\nlet name = \"Аня\";\nlet msg = format!(\"Привет, {name}!\"); // как println!, но в строку\n```\n`format!` — самый удобный способ. Он ничего не печатает, а возвращает `String`."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let text = \"  Rust делает   код надёжным  \";\n    let clean = text.trim();\n    println!(\"[{clean}]\");\n    println!(\"Слов: {}\", clean.split_whitespace().count());\n    println!(\"Большими: {}\", clean.to_uppercase());\n    println!(\"Есть «код»: {}\", clean.contains(\"код\"));\n    println!(\"{}\", clean.replace(\"надёжным\", \"быстрым\"));\n}",
+"out": "[Rust делает   код надёжным]\nСлов: 4\nБольшими: RUST ДЕЛАЕТ   КОД НАДЁЖНЫМ\nЕсть «код»: true\nRust делает   код быстрым",
+"after": "- `trim` — убрать пробелы по краям.\n- `split_whitespace` — разрезать по пробелам на слова."
+},
+{
+"t": "quiz",
+"md": "Чем `format!` отличается от `println!`?",
+"options": [
+"`format!` возвращает строку, а не печатает её",
+"`format!` печатает без перевода строки",
+"Ничем"
+],
+"answer": 0,
+"why": [
+"Верно. Потом её можно сохранить, передать, напечатать.",
+"Так делает `print!`.",
+"Отличие важное: один печатает, другой создаёт `String`."
+]
+},
+{
+"t": "task",
+"md": "Переверни каждое слово строки задом наперёд, сохраняя порядок слов. Для «привет мир» должно выйти «тевирп рим».",
+"code": "fn main() {\n    let text = \"привет мир\";\n    let mut result = Vec::new();\n    for word in text.split_whitespace() {\n        // переверни word и положи в result\n    }\n    println!(\"{}\", result.join(\" \"));\n}",
+"solution": "fn main() {\n    let text = \"привет мир\";\n    let mut result = Vec::new();\n    for word in text.split_whitespace() {\n        let reversed: String = word.chars().rev().collect();\n        result.push(reversed);\n    }\n    println!(\"{}\", result.join(\" \"));\n}",
+"expect": "тевирп рим",
+"hints": [
+"Буквы перебирает `word.chars()`, переворачивает `.rev()`.",
+"Собрать обратно в строку: `let r: String = word.chars().rev().collect();`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`push_str`, `push`, `format!` — собрать строку.",
+"`trim`, `split_whitespace`, `contains`, `replace`, `to_uppercase`.",
+"Буквы — через `.chars()`."
+]
+}
+],
+"goals": [
+"Собирать строки из кусочков",
+"Перебирать слова и буквы"
+]
+},
+{
+"id": "m09-3",
+"title": "HashMap — словарь",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Словарь",
+"md": "**HashMap** хранит пары «ключ → значение». По ключу быстро находится значение.\n\n> Как телефонная книга: по имени находишь номер. Не нужно листать всё подряд.\n\nHashMap нужно подключить строчкой `use std::collections::HashMap;`."
+},
+{
+"t": "code",
+"code": "use std::collections::HashMap;\n\nfn main() {\n    let mut phones = HashMap::new();\n    phones.insert(\"Аня\", \"111-22-33\");\n    phones.insert(\"Боря\", \"444-55-66\");\n\n    match phones.get(\"Аня\") {\n        Some(num) => println!(\"Номер Ани: {num}\"),\n        None => println!(\"Не знаю такого\"),\n    }\n    println!(\"Есть Вася? {}\", phones.contains_key(\"Вася\"));\n    println!(\"Всего контактов: {}\", phones.len());\n}",
+"out": "Номер Ани: 111-22-33\nЕсть Вася? false\nВсего контактов: 2",
+"after": "!> Порядок элементов в HashMap не гарантирован. Если важен порядок — используй `BTreeMap`: он хранит ключи отсортированными."
+},
+{
+"t": "text",
+"title": "entry — «найди или создай»",
+"md": "Частая задача: увеличить счётчик, а если ключа нет — начать с нуля.\n\n```\n*counts.entry(word).or_insert(0) += 1;\n```\nЧитается: «найди запись `word`; если нет — вставь 0; прибавь 1»."
+},
+{
+"t": "task",
+"md": "Посчитай, сколько раз встречается каждое слово. Используем `BTreeMap`, чтобы вывод шёл по алфавиту.",
+"code": "use std::collections::BTreeMap;\n\nfn main() {\n    let text = \"кот пёс кот рыба кот пёс\";\n    let mut counts = BTreeMap::new();\n    for word in text.split_whitespace() {\n        // увеличь счётчик word\n    }\n    for (word, n) in &counts {\n        println!(\"{word}: {n}\");\n    }\n}",
+"solution": "use std::collections::BTreeMap;\n\nfn main() {\n    let text = \"кот пёс кот рыба кот пёс\";\n    let mut counts = BTreeMap::new();\n    for word in text.split_whitespace() {\n        *counts.entry(word).or_insert(0) += 1;\n    }\n    for (word, n) in &counts {\n        println!(\"{word}: {n}\");\n    }\n}",
+"expect": "кот: 3\nпёс: 2\nрыба: 1",
+"hints": [
+"Используй `entry(word).or_insert(0)`.",
+"Целиком: `*counts.entry(word).or_insert(0) += 1;`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`HashMap` — ключ → значение. Нужен `use std::collections::HashMap;`.",
+"`insert`, `get` (вернёт `Option`), `contains_key`.",
+"`*map.entry(k).or_insert(0) += 1;` — счётчик.",
+"`BTreeMap` — то же, но ключи по порядку."
+]
+}
+],
+"goals": [
+"Хранить пары «ключ → значение»",
+"Считать частоту слов"
+]
+}
+]
+},
+{
+"id": "m10",
+"title": "Обработка ошибок",
+"sub": "Что делать, когда что-то пошло не так",
+"lessons": [
+{
+"id": "m10-1",
+"title": "panic! — аварийная остановка",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Два вида проблем",
+"md": "1. **Неисправимые.** Программа в состоянии, где дальше идти нельзя. Например, баг в логике. Тут — **паника**.\n2. **Исправимые.** Файла нет, пользователь ввёл буквы вместо числа. Это нормальная жизнь. Тут — `Result`."
+},
+{
+"t": "code",
+"md": "`panic!` останавливает программу с сообщением.",
+"code": "fn main() {\n    println!(\"Начинаю\");\n    let level = 0;\n    if level == 0 {\n        panic!(\"Уровень не может быть нулём!\");\n    }\n    println!(\"Сюда не дойдём\");\n}",
+"after": "Программа напечатает «Начинаю» и остановится с сообщением `panicked at ... Уровень не может быть нулём!`."
+},
+{
+"t": "quiz",
+"md": "Пользователь ввёл «abc» вместо возраста. Что лучше сделать?",
+"options": [
+"`panic!`",
+"Вернуть ошибку и попросить ввести снова"
+],
+"answer": 1,
+"why": [
+"Ошибка ввода — обычное дело. Падать из-за неё грубо.",
+"Верно. Это исправимая ситуация — для неё `Result`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Паника — аварийная остановка. Для багов и невозможных ситуаций.",
+"Ожидаемые проблемы обрабатывают через `Result`."
+]
+}
+],
+"goals": [
+"Что такое паника",
+"Когда паниковать нормально"
+]
+},
+{
+"id": "m10-2",
+"title": "Result: успех или ошибка",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Result — посылка с запиской",
+"md": "```\nenum Result<T, E> {\n    Ok(T),  // всё хорошо, внутри результат\n    Err(E), // ошибка, внутри описание\n}\n```\n> Посылка. Внутри либо заказанная вещь (`Ok`), либо записка «товар закончился» (`Err`). Похоже на `Option`, только вместо пустоты — объяснение."
+},
+{
+"t": "code",
+"md": "`parse` превращает текст в число и возвращает `Result`:",
+"code": "fn main() {\n    for input in [\"42\", \"сорок два\"] {\n        match input.parse::<i32>() {\n            Ok(n) => println!(\"Число: {n}\"),\n            Err(e) => println!(\"Не число «{input}»: {e}\"),\n        }\n    }\n}",
+"out": "Число: 42\nНе число «сорок два»: invalid digit found in string",
+"after": "`::<i32>` говорит `parse`, какое число мы хотим."
+},
+{
+"t": "text",
+"title": "Свой Result",
+"md": "Функция сама может вернуть `Result`:\n\n```\nfn check_age(age: i32) -> Result<i32, String> {\n    if age < 0 {\n        Err(String::from(\"Возраст не бывает отрицательным\"))\n    } else {\n        Ok(age)\n    }\n}\n```"
+},
+{
+"t": "quiz",
+"md": "Что вернёт `\"7\".parse::<i32>()`?",
+"options": [
+"`Ok(7)`",
+"`7`",
+"`Some(7)`"
+],
+"answer": 0,
+"why": [
+"Верно. Разбор удался — результат в `Ok`.",
+"`parse` всегда заворачивает ответ в `Result`.",
+"`Some` — это `Option`. У `parse` тип `Result`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`Result<T, E>`: `Ok(значение)` или `Err(ошибка)`.",
+"Разбирать через `match`, как Option.",
+"`parse::<i32>()` возвращает `Result`."
+]
+}
+],
+"goals": [
+"Как устроен `Result`",
+"Разбирать его через `match`"
+]
+},
+{
+"id": "m10-3",
+"title": "unwrap, expect и ?",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "unwrap и expect",
+"md": "- `unwrap()` — достать `Ok`, а при `Err` — паника.\n- `expect(\"сообщение\")` — то же, но со своим текстом паники. Удобнее искать, где упало.\n\n> Используй их в примерах и там, где ошибка правда невозможна. В настоящей программе — осторожно."
+},
+{
+"t": "text",
+"title": "Оператор ? — «если ошибка, отдай её наверх»",
+"md": "Знак `?` после `Result`:\n- если `Ok(x)` — даёт `x` и идёт дальше;\n- если `Err(e)` — сразу **возвращает** эту ошибку из функции.\n\n```\nfn sum(a: &str, b: &str) -> Result<i32, std::num::ParseIntError> {\n    let x = a.parse::<i32>()?;\n    let y = b.parse::<i32>()?;\n    Ok(x + y)\n}\n```\n!> `?` работает только в функции, которая сама возвращает `Result` (или `Option`)."
+},
+{
+"t": "code",
+"code": "use std::num::ParseIntError;\n\nfn sum(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    let x = a.parse::<i32>()?;\n    let y = b.parse::<i32>()?;\n    Ok(x + y)\n}\n\nfn main() {\n    println!(\"{:?}\", sum(\"2\", \"3\"));\n    println!(\"{:?}\", sum(\"2\", \"три\"));\n}",
+"out": "Ok(5)\nErr(ParseIntError { kind: InvalidDigit })"
+},
+{
+"t": "quiz",
+"md": "Что делает `?`, если результат — `Err`?",
+"options": [
+"Паникует",
+"Возвращает ошибку из текущей функции",
+"Пропускает строку"
+],
+"answer": 1,
+"why": [
+"Паникует `unwrap`. А `?` мягче.",
+"Верно. Пусть разбирается тот, кто вызвал.",
+"Ошибку нельзя просто пропустить: функция заканчивается."
+]
+},
+{
+"t": "task",
+"md": "Допиши функцию с `?`: она разбирает два числа из строк и возвращает их произведение.",
+"code": "use std::num::ParseIntError;\n\nfn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    // твой код с ?\n}\n\nfn main() {\n    println!(\"{:?}\", multiply(\"6\", \"7\"));\n    println!(\"{}\", multiply(\"6\", \"x\").is_err());\n}",
+"solution": "use std::num::ParseIntError;\n\nfn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    let x: i32 = a.parse()?;\n    let y: i32 = b.parse()?;\n    Ok(x * y)\n}\n\nfn main() {\n    println!(\"{:?}\", multiply(\"6\", \"7\"));\n    println!(\"{}\", multiply(\"6\", \"x\").is_err());\n}",
+"expect": "Ok(42)\ntrue",
+"hints": [
+"`let x: i32 = a.parse()?;` — то же для `b`.",
+"В конце верни `Ok(x * y)`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`unwrap()` / `expect(\"...\")` — достать или запаниковать.",
+"`?` — достать или вернуть ошибку наверх.",
+"`?` работает в функциях, которые возвращают `Result`/`Option`."
+]
+}
+],
+"goals": [
+"Быстрые способы открыть Result",
+"Передавать ошибку наверх оператором `?`"
+]
+},
+{
+"id": "m10-4",
+"title": "Свои ошибки",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Ошибки как перечисление",
+"md": "Хороший приём: перечислить все ошибки своей функции в `enum`. Тогда вызывающий код точно знает, что может пойти не так.\n\n```\n#[derive(Debug)]\nenum AgeError {\n    NotANumber,\n    Negative,\n    TooOld,\n}\n```"
+},
+{
+"t": "code",
+"code": "#[derive(Debug)]\nenum AgeError {\n    NotANumber,\n    Negative,\n    TooOld,\n}\n\nfn parse_age(s: &str) -> Result<u32, AgeError> {\n    let n: i64 = s.trim().parse().map_err(|_| AgeError::NotANumber)?;\n    if n < 0 {\n        return Err(AgeError::Negative);\n    }\n    if n > 150 {\n        return Err(AgeError::TooOld);\n    }\n    Ok(n as u32)\n}\n\nfn main() {\n    for s in [\"30\", \"-5\", \"сто\", \"200\"] {\n        println!(\"{s}: {:?}\", parse_age(s));\n    }\n}",
+"out": "30: Ok(30)\n-5: Err(Negative)\nсто: Err(NotANumber)\n200: Err(TooOld)",
+"after": "`map_err` превращает одну ошибку в другую — здесь ошибку `parse` в нашу `NotANumber`."
+},
+{
+"t": "text",
+"title": "main тоже может вернуть Result",
+"md": "Тогда внутри `main` можно использовать `?`:\n\n```\nfn main() -> Result<(), String> {\n    let n: i32 = \"5\".parse().map_err(|_| \"не число\".to_string())?;\n    println!(\"{n}\");\n    Ok(())\n}\n```\n`()` — «пустое значение»: успех без результата."
+},
+{
+"t": "quiz",
+"md": "Зачем описывать ошибки через `enum`, а не просто текстом?",
+"options": [
+"Вызывающий код может разобрать каждую ошибку через `match`",
+"Так программа работает быстрее",
+"Компилятор не разрешает текстовые ошибки"
+],
+"answer": 0,
+"why": [
+"Верно. А по тексту надёжно разобрать нельзя.",
+"Дело не в скорости, а в понятности и надёжности.",
+"Разрешает: `Result<T, String>` вполне законен."
+]
+},
+{
+"t": "recap",
+"items": [
+"Ошибки удобно описывать своим `enum`.",
+"`map_err` превращает чужую ошибку в свою.",
+"`fn main() -> Result<(), E>` разрешает `?` в `main`."
+]
+}
+],
+"goals": [
+"Описать возможные ошибки через `enum`",
+"Вернуть `Result` из `main`"
+]
+}
+]
+},
+{
+"id": "m11",
+"title": "Модули и Cargo",
+"sub": "Как устроен настоящий проект",
+"lessons": [
+{
+"id": "m11-1",
+"title": "Модули: mod, pub, use",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Модуль — папка для кода",
+"md": "Большую программу делят на **модули** (`mod`). Это как ящики в шкафу: инструменты отдельно, документы отдельно.\n\n```\nmod math {\n    pub fn double(x: i32) -> i32 {\n        x * 2\n    }\n    fn secret() {} // видно только внутри math\n}\n```"
+},
+{
+"t": "text",
+"title": "pub — открыть наружу",
+"md": "По умолчанию всё внутри модуля **закрыто**. Чтобы пользоваться снаружи, пометь `pub` (public — публичный).\n\nОбращаются через `::` — `math::double(5)`.\n\n`use` создаёт короткое имя: после `use math::double;` можно писать просто `double(5)`."
+},
+{
+"t": "code",
+"code": "mod shop {\n    pub struct Item {\n        pub name: String,\n        price: u32,\n    }\n\n    impl Item {\n        pub fn new(name: &str, price: u32) -> Self {\n            Item { name: name.to_string(), price }\n        }\n        pub fn price_with_tax(&self) -> u32 {\n            self.price * 120 / 100\n        }\n    }\n}\n\nuse shop::Item;\n\nfn main() {\n    let it = Item::new(\"чай\", 100);\n    println!(\"{}: {} руб.\", it.name, it.price_with_tax());\n}",
+"out": "чай: 120 руб.",
+"after": "Поле `price` закрыто: снаружи его не прочесть и не испортить. Доступ — только через метод."
+},
+{
+"t": "quiz",
+"md": "Что будет, если вызвать `math::secret()` из `main`?",
+"options": [
+"Сработает",
+"Ошибка: функция приватная"
+],
+"answer": 1,
+"why": [
+"`secret` без `pub`, значит она закрыта.",
+"Верно. Без `pub` — только для своих."
+]
+},
+{
+"t": "recap",
+"items": [
+"`mod имя { }` — модуль.",
+"Всё закрыто, пока не помечено `pub`.",
+"`use путь::имя;` — короткое имя."
+]
+}
+],
+"goals": [
+"Раскладывать код по модулям",
+"Решать, что видно снаружи"
+]
+},
+{
+"id": "m11-2",
+"title": "Установка Rust на компьютер",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Пора на свой компьютер",
+"md": "До сих пор мы запускали код в браузере. Для настоящих проектов Rust ставят на компьютер.\n\nОфициальный установщик называется **rustup**. Он ставит компилятор `rustc`, менеджер проектов `cargo` и документацию."
+},
+{
+"t": "text",
+"title": "Windows",
+"md": "1. Открой [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).\n2. Скачай `rustup-init.exe` и запусти.\n3. Он предложит поставить Visual Studio Build Tools — соглашайся. Это нужно для сборки программ.\n4. Жми Enter на стандартных настройках.\n\n> Установка занимает 5–15 минут. Хороший момент для перерыва."
+},
+{
+"t": "text",
+"title": "macOS и Linux",
+"md": "Открой терминал и вставь одну команду:\n\n```sh\ncurl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh\n```\nНа Linux ещё понадобится компилятор C: пакет `build-essential` (Ubuntu) или похожий."
+},
+{
+"t": "text",
+"title": "Проверь, что всё работает",
+"md": "Открой **новое** окно терминала и введи:\n\n```sh\nrustc --version\ncargo --version\n```\nДолжны появиться номера версий. Например, `rustc 1.99.1`. Версии выходят каждые 6 недель. Обновиться: `rustup update`."
+},
+{
+"t": "text",
+"title": "Редактор",
+"md": "- **VS Code** + расширение **rust-analyzer**. Бесплатно. Подсветка, подсказки, ошибки прямо в коде.\n- **RustRover** от JetBrains. Бесплатен для некоммерческого использования.\n\n> rust-analyzer показывает типы переменных серым прямо в коде. Для новичка это очень помогает."
+},
+{
+"t": "quiz",
+"md": "Как называется официальный установщик Rust?",
+"options": [
+"rustup",
+"cargo",
+"npm"
+],
+"answer": 0,
+"why": [
+"Верно. Он ставит и обновляет весь набор инструментов.",
+"`cargo` ставится вместе с Rust. Это менеджер проектов.",
+"Это менеджер пакетов JavaScript."
+]
+},
+{
+"t": "recap",
+"items": [
+"Установка — через rustup с rust-lang.org.",
+"Проверка: `rustc --version`, обновление: `rustup update`.",
+"Редактор: VS Code + rust-analyzer или RustRover."
+]
+}
+],
+"goals": [
+"Установить Rust через rustup",
+"Выбрать редактор"
+]
+},
+{
+"id": "m11-3",
+"title": "Cargo: первый проект",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Cargo — завхоз проекта",
+"md": "**Cargo** создаёт проекты, собирает их, запускает, скачивает библиотеки и гоняет тесты. Почти всё делают через него."
+},
+{
+"t": "text",
+"title": "Новый проект",
+"md": "```sh\ncargo new hello\ncd hello\ncargo run\n```\nТы увидишь `Hello, world!`. Cargo уже написал программу за тебя."
+},
+{
+"t": "text",
+"title": "Что внутри",
+"md": "```sh\nhello/\n├── Cargo.toml     ← описание проекта\n└── src/\n    └── main.rs    ← твой код\n```\n`Cargo.toml` выглядит так:\n\n```sh\n[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n```\n`edition = \"2024\"` — какая редакция языка. Мы весь курс пишем на 2024."
+},
+{
+"t": "text",
+"title": "Главные команды",
+"md": "- `cargo run` — собрать и запустить.\n- `cargo check` — только проверить ошибки. Очень быстро.\n- `cargo build --release` — собрать быструю версию для пользователей.\n- `cargo test` — запустить тесты.\n- `cargo fmt` — красиво выровнять код.\n- `cargo clippy` — подсказки, как писать лучше."
+},
+{
+"t": "quiz",
+"md": "Какая команда быстрее всего покажет ошибки компиляции, ничего не запуская?",
+"options": [
+"`cargo run`",
+"`cargo check`",
+"`cargo build --release`"
+],
+"answer": 1,
+"why": [
+"Она ещё и запускает. Медленнее.",
+"Верно. Только проверка, без сборки программы.",
+"Это самая долгая сборка: с оптимизацией."
+]
+},
+{
+"t": "recap",
+"items": [
+"`cargo new имя` — новый проект.",
+"Код в `src/main.rs`, настройки в `Cargo.toml`.",
+"`run`, `check`, `build --release`, `test`, `fmt`, `clippy`."
+]
+}
+],
+"goals": [
+"Создать проект командой `cargo new`",
+"Собрать и запустить его"
+]
+},
+{
+"id": "m11-4",
+"title": "Крейты и библиотеки",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Крейт — единица кода",
+"md": "**Крейт** (crate) — то, что собирается за один раз: программа или библиотека.\n\nТысячи готовых библиотек лежат на сайте [crates.io](https://crates.io). Не нужно писать всё самому."
+},
+{
+"t": "text",
+"title": "Подключаем библиотеку",
+"md": "Например, библиотеку случайных чисел `rand`. В папке проекта:\n\n```sh\ncargo add rand\n```\nCargo сам допишет её в `Cargo.toml` и скачает при сборке. Потом в коде:\n\n```\nuse rand::Rng;\nlet n = rand::rng().random_range(1..=6);\n```\n!> Rust Playground знает только самые популярные библиотеки. Поэтому в задачах курса мы обходимся стандартной библиотекой `std`."
+},
+{
+"t": "text",
+"title": "Модули в разных файлах",
+"md": "В настоящем проекте модуль часто лежит в своём файле. Если в `main.rs` написать `mod shop;` (с точкой с запятой), Cargo возьмёт код из `src/shop.rs`."
+},
+{
+"t": "quiz",
+"md": "Где искать готовые библиотеки для Rust?",
+"options": [
+"crates.io",
+"В Rust Playground",
+"В Cargo.toml"
+],
+"answer": 0,
+"why": [
+"Верно. Это официальный реестр крейтов.",
+"Playground лишь запускает код. Библиотеки живут на crates.io.",
+"В `Cargo.toml` их только перечисляют, а лежат они на crates.io."
+]
+},
+{
+"t": "recap",
+"items": [
+"Крейт — программа или библиотека.",
+"Библиотеки — на crates.io, подключать: `cargo add имя`.",
+"`mod shop;` берёт код из файла `src/shop.rs`."
+]
+}
+],
+"goals": [
+"Что такое крейт",
+"Как подключить чужую библиотеку"
+]
+}
+]
+},
+{
+"id": "m12",
+"title": "Обобщения и трейты",
+"sub": "Один код для многих типов",
+"lessons": [
+{
+"id": "m12-1",
+"title": "Обобщения: <T>",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Не повторяйся",
+"md": "Допустим, нужна функция «первый элемент» для списка чисел. Потом — для списка строк. Потом — для списка дробных. Три одинаковые функции?\n\nНет. Пишем одну **обобщённую** функцию с параметром типа `T`:\n\n```\nfn first<T>(list: &[T]) -> &T {\n    &list[0]\n}\n```\n`<T>` читается «для любого типа T»."
+},
+{
+"t": "code",
+"code": "fn first<T>(list: &[T]) -> &T {\n    &list[0]\n}\n\nstruct Pair<T> {\n    a: T,\n    b: T,\n}\n\nfn main() {\n    println!(\"{}\", first(&[3, 1, 2]));\n    println!(\"{}\", first(&[\"кот\", \"пёс\"]));\n    let p = Pair { a: 1.5, b: 2.5 };\n    println!(\"{} {}\", p.a, p.b);\n}",
+"out": "3\nкот\n1.5 2.5",
+"after": "Ты уже встречал обобщения: `Vec<T>`, `Option<T>`, `Result<T, E>`."
+},
+{
+"t": "quiz",
+"md": "Что означает `T` в `Vec<T>`?",
+"options": [
+"Тип text",
+"Тип элементов, любой",
+"Количество элементов"
+],
+"answer": 1,
+"why": [
+"Это не текст, а «какой-то тип».",
+"Верно. `Vec<i32>`, `Vec<String>` — это один и тот же `Vec<T>`.",
+"Количество — это длина, а `T` — тип."
+]
+},
+{
+"t": "recap",
+"items": [
+"`<T>` — параметр типа, «любой тип».",
+"Работает для функций, структур, enum.",
+"`Vec<T>`, `Option<T>` — тоже обобщения."
+]
+}
+],
+"goals": [
+"Писать функции для любого типа",
+"Читать запись `<T>`"
+]
+},
+{
+"id": "m12-2",
+"title": "Трейты — умения типа",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Трейт — удостоверение навыка",
+"md": "**Трейт** (trait) описывает **умение**: какие методы должны быть у типа. Иногда по-русски говорят «типаж» — это то же самое.\n\n```\ntrait Speak {\n    fn speak(&self) -> String;\n}\n```\n> Как права на вождение. Неважно, кто ты — если есть права, ты умеешь водить. Трейт `Speak` — «умеет говорить»."
+},
+{
+"t": "code",
+"code": "trait Speak {\n    fn speak(&self) -> String;\n\n    fn greet(&self) -> String {\n        format!(\"Я говорю: {}\", self.speak())\n    }\n}\n\nstruct Dog;\nstruct Cat;\n\nimpl Speak for Dog {\n    fn speak(&self) -> String {\n        \"Гав\".to_string()\n    }\n}\n\nimpl Speak for Cat {\n    fn speak(&self) -> String {\n        \"Мяу\".to_string()\n    }\n}\n\nfn main() {\n    println!(\"{}\", Dog.greet());\n    println!(\"{}\", Cat.greet());\n}",
+"out": "Я говорю: Гав\nЯ говорю: Мяу",
+"after": "`greet` — метод **по умолчанию**: он написан прямо в трейте. Типам достаточно реализовать `speak`."
+},
+{
+"t": "fill",
+"explain": "Шаблон: `impl Трейт for Тип { ... }`.",
+"md": "Допиши реализацию трейта для типа `Robot`.",
+"code": "___ Speak ___ Robot {\n    fn speak(&self) -> String {\n        \"Бип\".to_string()\n    }\n}",
+"answers": [
+[
+"impl"
+],
+[
+"for"
+]
+]
+},
+{
+"t": "recap",
+"items": [
+"`trait Имя { fn метод(&self); }` — описание умения.",
+"`impl Трейт for Тип { ... }` — научить тип.",
+"В трейте могут быть методы по умолчанию."
+]
+}
+],
+"goals": [
+"Что такое трейт",
+"Как реализовать трейт для своего типа"
+]
+},
+{
+"id": "m12-3",
+"title": "Трейт как требование",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Не любой тип, а умеющий",
+"md": "Обобщённой функции часто нужно, чтобы `T` что-то **умел**. Например, сравниваться.\n\n```\nfn largest<T: PartialOrd>(list: &[T]) -> &T { ... }\n```\n`T: PartialOrd` — «любой T, который умеет сравниваться через `<` и `>`». Это называется **ограничение трейтом**."
+},
+{
+"t": "code",
+"code": "fn largest<T: PartialOrd>(list: &[T]) -> &T {\n    let mut best = &list[0];\n    for item in list {\n        if item > best {\n            best = item;\n        }\n    }\n    best\n}\n\nfn main() {\n    println!(\"{}\", largest(&[3, 9, 4]));\n    println!(\"{}\", largest(&['я', 'б', 'ю']));\n}",
+"out": "9\nя"
+},
+{
+"t": "text",
+"title": "impl Трейт — короче",
+"md": "Если тип нужен один раз, есть сокращение:\n\n```\nfn announce(x: &impl Speak) {\n    println!(\"{}\", x.speak());\n}\n```\nЭто то же, что `fn announce<T: Speak>(x: &T)`.\n\nДлинный список требований удобно выносить в `where`:\n\n```\nfn show<T>(x: T) where T: std::fmt::Debug + Clone { ... }\n```"
+},
+{
+"t": "quiz",
+"md": "Что значит `T: PartialOrd`?",
+"options": [
+"T — это число",
+"T должен уметь сравниваться",
+"T можно копировать"
+],
+"answer": 1,
+"why": [
+"Не обязательно число. Буквы и строки тоже сравниваются.",
+"Верно. Это требование к типу.",
+"Копирование — это трейт `Copy` или `Clone`."
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `print_all`, которая печатает каждый элемент среза через `{:?}`. Подойдёт любой `T`, который умеет `Debug`.",
+"code": "use std::fmt::Debug;\n\n// напиши print_all\n\nfn main() {\n    print_all(&[1, 2]);\n    print_all(&[\"а\", \"б\"]);\n}",
+"solution": "use std::fmt::Debug;\n\nfn print_all<T: Debug>(items: &[T]) {\n    for x in items {\n        println!(\"{:?}\", x);\n    }\n}\n\nfn main() {\n    print_all(&[1, 2]);\n    print_all(&[\"а\", \"б\"]);\n}",
+"expect": "1\n2\n\"а\"\n\"б\"",
+"hints": [
+"Заголовок: `fn print_all<T: Debug>(items: &[T])`",
+"Внутри цикл `for x in items { println!(\"{:?}\", x); }`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`<T: Трейт>` — T должен уметь это.",
+"`impl Трейт` — короткая запись.",
+"`where` — для длинных списков требований."
+]
+}
+],
+"goals": [
+"Требовать от `T` умение: `T: Трейт`",
+"Короткая запись `impl Трейт`"
+]
+},
+{
+"id": "m12-4",
+"title": "Полезные трейты стандартной библиотеки",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "derive — трейты бесплатно",
+"md": "Многие трейты компилятор умеет написать сам:\n\n```\n#[derive(Debug, Clone, PartialEq, Default)]\nstruct Point { x: i32, y: i32 }\n```\n- `Debug` — печать через `{:?}`;\n- `Clone` — метод `.clone()`;\n- `PartialEq` — сравнение `==`;\n- `Default` — значение «по умолчанию» (нули)."
+},
+{
+"t": "code",
+"md": "`Display` — печать через `{}` — пишут руками. Ты решаешь, как выглядит тип.",
+"code": "use std::fmt;\n\nstruct Money {\n    rubles: u32,\n    kopecks: u32,\n}\n\nimpl fmt::Display for Money {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"{} руб. {:02} коп.\", self.rubles, self.kopecks)\n    }\n}\n\nfn main() {\n    let price = Money { rubles: 99, kopecks: 5 };\n    println!(\"Цена: {price}\");\n}",
+"out": "Цена: 99 руб. 05 коп.",
+"after": "`{:02}` — «минимум две цифры, слева нули»."
+},
+{
+"t": "text",
+"title": "From и Into — превращения",
+"md": "Трейт `From` описывает, как сделать один тип из другого.\n\n```\nlet s = String::from(\"текст\");  // String из &str\nlet n: i64 = i64::from(5i32);    // i64 из i32\nlet s2: String = \"ещё\".into();   // into — тот же From, но с другой стороны\n```\nЕсли ты реализовал `From<A> for B`, то `into()` у `A` появляется сам."
+},
+{
+"t": "text",
+"title": "dyn Трейт — разные типы в одном списке",
+"md": "Можно сложить в один вектор **разные** типы, если у них общий трейт:\n\n```\nlet animals: Vec<Box<dyn Speak>> = vec![Box::new(Dog), Box::new(Cat)];\nfor a in &animals {\n    println!(\"{}\", a.speak());\n}\n```\n`dyn` — «какой-то тип с этим умением». `Box` разберём в модуле про умные указатели."
+},
+{
+"t": "quiz",
+"md": "Какой трейт нужен, чтобы печатать тип через `{}`?",
+"options": [
+"`Debug`",
+"`Display`",
+"`Clone`"
+],
+"answer": 1,
+"why": [
+"`Debug` — для `{:?}`.",
+"Верно. Его реализуют вручную.",
+"`Clone` про копирование, а не про печать."
+]
+},
+{
+"t": "recap",
+"items": [
+"`#[derive(Debug, Clone, PartialEq, Default)]` — трейты одной строкой.",
+"`Display` пишут вручную, чтобы печатать через `{}`.",
+"`From`/`Into` — превращения типов.",
+"`Box<dyn Трейт>` — разные типы с общим умением."
+]
+}
+],
+"goals": [
+"Display: печать через `{}`",
+"derive: трейты одной строчкой",
+"From/Into: превращения типов"
+]
+}
+]
+},
+{
+"id": "m13",
+"title": "Времена жизни",
+"sub": "Сколько живёт ссылка",
+"lessons": [
+{
+"id": "m13-1",
+"title": "Зачем нужны времена жизни",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Вспомним висячие ссылки",
+"md": "Мы уже знаем: ссылка не может пережить значение.\n\nОбычно компилятор сам видит, сколько что живёт. Но иногда ему **непонятно**. Тогда он просит подсказку — **метку времени жизни** (lifetime): `'a`.\n\n!> Метка ничего не продлевает. Она только **описывает** связь: «эта ссылка живёт не дольше той»."
+},
+{
+"t": "code",
+"fails": true,
+"md": "Функция возвращает ссылку на одну из двух строк. Запусти.",
+"code": "fn longest(a: &str, b: &str) -> &str {\n    if a.len() > b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", longest(\"кот\", \"бегемот\"));\n}",
+"after": "Ошибка `E0106`: «нужен параметр времени жизни». Компилятор не знает, от **какой** из двух строк зависит результат."
+},
+{
+"t": "text",
+"title": "Подсказываем компилятору",
+"md": "```\nfn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() > b.len() { a } else { b }\n}\n```\nЧитается так: «есть время жизни `'a`. Обе строки живут хотя бы `'a`. Результат тоже живёт `'a`».\n\nПроще: **результат проживёт столько, сколько короче живущая из двух строк**."
+},
+{
+"t": "code",
+"code": "fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() > b.len() { a } else { b }\n}\n\nfn main() {\n    let first = String::from(\"кот\");\n    let result;\n    {\n        let second = String::from(\"бегемот\");\n        result = longest(&first, &second);\n        println!(\"Длиннее: {result}\");\n    }\n}",
+"out": "Длиннее: бегемот",
+"after": "Попробуй перенести `println!` за закрывающую `}`. Компилятор не разрешит: `second` уже умерла, а `result` может на неё смотреть."
+},
+{
+"t": "quiz",
+"md": "Что делает метка `'a` в `fn f<'a>(x: &'a str) -> &'a str`?",
+"options": [
+"Заставляет `x` жить дольше",
+"Говорит: результат живёт не дольше, чем `x`",
+"Делает ссылку изменяемой"
+],
+"answer": 1,
+"why": [
+"Метки ничего не продлевают.",
+"Верно. Это описание связи для компилятора.",
+"За изменяемость отвечает `mut`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Время жизни — сколько живёт ссылка.",
+"Метка `'a` описывает связь между ссылками, но не продлевает жизнь.",
+"Компилятор просит метки, когда сам не может понять связь."
+]
+}
+],
+"goals": [
+"Что такое время жизни ссылки",
+"Почему компилятор иногда просит `'a`"
+]
+},
+{
+"id": "m13-2",
+"title": "Когда метки не нужны",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Компилятор часто догадывается сам",
+"md": "Правила угадывания называют **элизией** (пропуском). Главные случаи:\n\n- Одна входная ссылка → результат живёт столько же, сколько она.\n- Метод с `&self` → результат живёт столько же, сколько `self`.\n\nПоэтому `fn first_word(s: &str) -> &str` работает без меток. Метки нужны, когда входных ссылок **несколько** и непонятно, какая главная."
+},
+{
+"t": "text",
+"title": "'static — живёт всю программу",
+"md": "`'static` — особое время жизни: «до конца программы».\n\nТекст в кавычках — `&'static str`. Он вшит прямо в программу и живёт всегда.\n\n```\nlet s: &'static str = \"я живу вечно\";\n```"
+},
+{
+"t": "quiz",
+"md": "Нужна ли метка времени жизни в `fn trim(s: &str) -> &str`?",
+"options": [
+"Нет, ссылка на входе одна, компилятор догадается",
+"Да, всегда, когда возвращается ссылка"
+],
+"answer": 0,
+"why": [
+"Верно. Это правило элизии.",
+"Только если компилятор не может догадаться сам."
+]
+},
+{
+"t": "recap",
+"items": [
+"При одной входной ссылке или `&self` метки обычно не нужны.",
+"`'static` — живёт всю программу. Строки в кавычках — `&'static str`."
+]
+}
+],
+"goals": [
+"Правила, по которым компилятор угадывает сам",
+"Что такое `'static`"
+]
+},
+{
+"id": "m13-3",
+"title": "Ссылки в структурах",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Структура со ссылкой",
+"md": "Структура может не владеть данными, а смотреть на чужие. Тогда нужна метка: структура не должна пережить то, на что смотрит.\n\n```\nstruct Quote<'a> {\n    text: &'a str,\n}\n```"
+},
+{
+"t": "code",
+"code": "struct Highlight<'a> {\n    part: &'a str,\n}\n\nimpl<'a> Highlight<'a> {\n    fn show(&self) {\n        println!(\"Главное: «{}»\", self.part);\n    }\n}\n\nfn main() {\n    let book = String::from(\"Rust надёжен. И быстр.\");\n    let first = book.split('.').next().unwrap();\n    let h = Highlight { part: first };\n    h.show();\n}",
+"out": "Главное: «Rust надёжен»"
+},
+{
+"t": "text",
+"title": "Совет новичку",
+"md": "Сомневаешься? Храни в структуре `String`, а не `&str`. Структура будет владеть данными, и меток не понадобится.\n\nСсылки в структурах — это оптимизация. К ней можно прийти потом."
+},
+{
+"t": "quiz",
+"md": "Что проще всего сделать, если метки в структуре запутали?",
+"options": [
+"Хранить `String` вместо `&str`",
+"Поставить `'static` везде",
+"Удалить структуру"
+],
+"answer": 0,
+"why": [
+"Верно. Владеющий тип не требует меток.",
+"Тогда в структуру можно будет класть только вечные строки. Это неудобно.",
+"Слишком радикально. Достаточно поменять тип поля."
+]
+},
+{
+"t": "recap",
+"items": [
+"Структура со ссылкой: `struct S<'a> { x: &'a str }`.",
+"Структура не может пережить данные, на которые смотрит.",
+"Хранить `String` вместо `&str` — простой выход."
+]
+}
+],
+"goals": [
+"Хранить ссылку внутри структуры",
+"Понимать запись `struct Name<'a>`"
+]
+}
+]
+},
+{
+"id": "m14",
+"title": "Замыкания и итераторы",
+"sub": "Конвейер для данных",
+"lessons": [
+{
+"id": "m14-1",
+"title": "Замыкания",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Функция на лету",
+"md": "**Замыкание** (closure) — маленькая функция без имени, которую пишут прямо на месте. Параметры — между палочками `| |`.\n\n```\nlet double = |x| x * 2;\nprintln!(\"{}\", double(5)); // 10\n```\nТипы обычно указывать не нужно: компилятор поймёт сам."
+},
+{
+"t": "text",
+"title": "Замыкание видит переменные вокруг",
+"md": "В отличие от `fn`, замыкание **захватывает** переменные из окружения:\n\n```\nlet bonus = 10;\nlet add_bonus = |x| x + bonus;\nprintln!(\"{}\", add_bonus(5)); // 15\n```\n> Как записка, в которой уже вписан адрес. Не нужно передавать его каждый раз."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let mut count = 0;\n    let mut click = || {\n        count += 1;\n        println!(\"Клик номер {count}\");\n    };\n    click();\n    click();\n    println!(\"Всего: {count}\");\n}",
+"out": "Клик номер 1\nКлик номер 2\nВсего: 2",
+"after": "Замыкание меняет `count`, поэтому само должно быть `mut`."
+},
+{
+"t": "text",
+"title": "move — забрать с собой",
+"md": "Слово `move` перед замыканием заставляет его **забрать** переменные во владение, а не одолжить.\n\n```\nlet name = String::from(\"Аня\");\nlet hello = move || println!(\"Привет, {name}\");\n```\nЭто понадобится в модуле про потоки."
+},
+{
+"t": "quiz",
+"md": "Что напечатает `let f = |a, b| a * b; println!(\"{}\", f(3, 4));`?",
+"options": [
+"7",
+"12",
+"Ошибка: у замыкания нет имени"
+],
+"answer": 1,
+"why": [
+"`*` — умножение, а не сложение.",
+"Верно.",
+"Имя ему и не нужно: мы положили его в переменную `f`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`|параметры| выражение` — замыкание.",
+"Замыкание видит переменные вокруг себя.",
+"`move` — забрать их во владение."
+]
+}
+],
+"goals": [
+"Что такое замыкание",
+"Как оно «захватывает» переменные"
+]
+},
+{
+"id": "m14-2",
+"title": "Итераторы и конвейер",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Итератор — конвейер",
+"md": "**Итератор** выдаёт элементы по одному. На него можно навесить операции.\n\n> Конвейерная лента. Элементы едут по ней, по пути их моют (`map`), отбраковывают (`filter`), а в конце складывают в коробку (`collect`).\n\n```\nlet v = vec![1, 2, 3, 4, 5];\nlet even_squares: Vec<i32> = v.iter()\n    .filter(|x| *x % 2 == 0)\n    .map(|x| x * x)\n    .collect();\n// [4, 16]\n```"
+},
+{
+"t": "text",
+"title": "Главные операции",
+"md": "- `map(|x| ...)` — превратить каждый элемент.\n- `filter(|x| ...)` — оставить подходящие.\n- `collect()` — собрать в коллекцию (обычно `Vec`).\n- `sum()`, `count()`, `max()`, `min()` — посчитать итог.\n- `enumerate()` — дать номер каждому элементу.\n- `zip(другой)` — шагать по двум спискам парами."
+},
+{
+"t": "code",
+"code": "fn main() {\n    let prices = vec![120, 45, 300, 80];\n    let total: i32 = prices.iter().sum();\n    let cheap = prices.iter().filter(|p| **p < 100).count();\n    let with_tax: Vec<i32> = prices.iter().map(|p| p * 12 / 10).collect();\n    println!(\"Сумма: {total}, дешёвых: {cheap}\");\n    println!(\"С налогом: {:?}\", with_tax);\n    for (i, p) in prices.iter().enumerate() {\n        println!(\"{}. {p}\", i + 1);\n    }\n}",
+"out": "Сумма: 545, дешёвых: 2\nС налогом: [144, 54, 360, 96]\n1. 120\n2. 45\n3. 300\n4. 80",
+"after": "`**p` — два разыменования. `iter()` даёт ссылки, а `filter` даёт ссылку на ссылку. Если звёздочки путают — пиши `|&&p| p < 100` или просто следуй подсказкам компилятора."
+},
+{
+"t": "order",
+"md": "Собери конвейер: сумма квадратов чисел от 1 до 3.",
+"lines": [
+"let total: i32 = (1..=3)",
+"    .map(|x| x * x)",
+"    .sum();"
+]
+},
+{
+"t": "quiz",
+"md": "Что вернёт `vec![1, 2, 3].iter().map(|x| x + 10).collect::<Vec<i32>>()`?",
+"options": [
+"`[11, 12, 13]`",
+"`[1, 2, 3]`",
+"`36`"
+],
+"answer": 0,
+"why": [
+"Верно. `map` меняет каждый элемент.",
+"`map` не просто перебирает, он превращает.",
+"Это было бы `sum()`, а не `collect()`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`.iter()` — ссылки на элементы.",
+"`map`, `filter`, `enumerate`, `zip` — по пути.",
+"`collect`, `sum`, `count`, `max` — в конце."
+]
+}
+],
+"goals": [
+"Что такое итератор",
+"Главные операции: `map`, `filter`, `collect`, `sum`"
+]
+},
+{
+"id": "m14-3",
+"title": "Ленивость и виды перебора",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Конвейер не едет без команды",
+"md": "Итераторы **ленивые**. Пока ты не попросишь результат (`collect`, `sum`, `for`), ничего не происходит.\n\n```\nlet v = vec![1, 2, 3];\nv.iter().map(|x| println!(\"{x}\")); // ничего не напечатает!\n```\nКомпилятор даже предупредит: «iterators are lazy and do nothing unless consumed».\n\n> Это экономно: если взять только первые 3 элемента через `.take(3)`, остальные даже не будут обработаны."
+},
+{
+"t": "text",
+"title": "Три способа перебора",
+"md": "- `iter()` — смотреть: даёт `&T`.\n- `iter_mut()` — менять: даёт `&mut T`.\n- `into_iter()` — забрать: даёт `T`, вектор после этого исчезает.\n\n`for x in &v` — то же, что `v.iter()`. `for x in v` — то же, что `v.into_iter()`."
+},
+{
+"t": "task",
+"md": "Из списка слов собери новый вектор: только слова длиннее 3 букв, большими буквами.",
+"code": "fn main() {\n    let words = vec![\"кот\", \"собака\", \"ёж\", \"попугай\"];\n    let result: Vec<String> = words\n        .iter()\n        // твой конвейер\n        .collect();\n    println!(\"{:?}\", result);\n}",
+"solution": "fn main() {\n    let words = vec![\"кот\", \"собака\", \"ёж\", \"попугай\"];\n    let result: Vec<String> = words\n        .iter()\n        .filter(|w| w.chars().count() > 3)\n        .map(|w| w.to_uppercase())\n        .collect();\n    println!(\"{:?}\", result);\n}",
+"expect": "[\"СОБАКА\", \"ПОПУГАЙ\"]",
+"hints": [
+"Длина в буквах — `w.chars().count()`, не `len()`: русские буквы занимают два байта.",
+"`.filter(|w| w.chars().count() > 3).map(|w| w.to_uppercase())`"
+]
+},
+{
+"t": "recap",
+"items": [
+"Итераторы ленивые: работа начинается в `collect`/`sum`/`for`.",
+"`iter` — смотреть, `iter_mut` — менять, `into_iter` — забрать."
+]
+}
+],
+"goals": [
+"Почему итераторы ленивые",
+"Разница `iter`, `iter_mut`, `into_iter`"
+]
+}
+]
+},
+{
+"id": "m15",
+"title": "Тесты",
+"sub": "Как убедиться, что код работает",
+"lessons": [
+{
+"id": "m15-1",
+"title": "Первый тест",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Тест — автоматическая проверка",
+"md": "**Тест** — маленькая функция, которая проверяет другую функцию. Написал один раз — проверяешь хоть тысячу раз, одной командой.\n\n> Как чек-лист пилота перед взлётом. Скучно, но спасает."
+},
+{
+"t": "text",
+"title": "Как выглядит тест",
+"md": "```\n#[test]\nfn two_plus_two() {\n    assert_eq!(add(2, 2), 4);\n}\n```\n- `#[test]` — «это тест».\n- `assert_eq!(a, b)` — «a должно равняться b». Не равно — тест провален.\n- `assert!(условие)` — «условие должно быть правдой»."
+},
+{
+"t": "code",
+"tests": true,
+"md": "Здесь нет `main`. Кнопка «Запустить» прогонит тесты.",
+"code": "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn adds_positive() {\n        assert_eq!(add(2, 3), 5);\n    }\n\n    #[test]\n    fn adds_negative() {\n        assert_eq!(add(-2, -3), -5);\n    }\n}",
+"after": "В выводе будет `test result: ok. 2 passed`. Поменяй `a + b` на `a - b` и запусти снова: увидишь провал и что именно не совпало."
+},
+{
+"t": "text",
+"title": "Что за mod tests",
+"md": "- `#[cfg(test)]` — «собирать этот модуль только при тестах». В готовую программу он не попадёт.\n- `use super::*;` — «взять всё из модуля выше». Иначе тесты не увидят `add`.\n\nНа своём компьютере тесты запускают командой `cargo test`."
+},
+{
+"t": "quiz",
+"md": "Что делает `assert_eq!(x, 10)`?",
+"options": [
+"Присваивает `x` значение 10",
+"Проваливает тест, если `x` не равен 10",
+"Печатает `x`"
+],
+"answer": 1,
+"why": [
+"Это проверка, а не присваивание.",
+"Верно.",
+"Печатает только при провале, чтобы показать разницу."
+]
+},
+{
+"t": "recap",
+"items": [
+"`#[test] fn имя() { ... }` — тест.",
+"`assert_eq!(a, b)`, `assert!(условие)` — проверки.",
+"Тесты кладут в `#[cfg(test)] mod tests`, запускают `cargo test`."
+]
+}
+],
+"goals": [
+"Написать тест с `#[test]`",
+"Проверять результат через `assert_eq!`"
+]
+},
+{
+"id": "m15-2",
+"title": "Тесты на ошибки",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "should_panic",
+"md": "Иногда правильное поведение — паника. Это проверяют атрибутом `#[should_panic]`:\n\n```\n#[test]\n#[should_panic]\nfn divide_by_zero_panics() {\n    divide(1, 0);\n}\n```"
+},
+{
+"t": "text",
+"title": "Тест может вернуть Result",
+"md": "Тогда внутри можно использовать `?`. Ошибка = провал теста.\n\n```\n#[test]\nfn parses() -> Result<(), std::num::ParseIntError> {\n    let n: i32 = \"42\".parse()?;\n    assert_eq!(n, 42);\n    Ok(())\n}\n```"
+},
+{
+"t": "task",
+"tests": true,
+"mustContain": [
+"#[test]"
+],
+"explain": "Тесты прошли. Так и пишут надёжные программы: функция + проверки.",
+"md": "Напиши функцию `is_adult(age: u32) -> bool` (взрослый — от 18) и два теста к ней: для 20 и для 10.",
+"code": "pub fn is_adult(age: u32) -> bool {\n    // твой код\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    // твои тесты\n}",
+"solution": "pub fn is_adult(age: u32) -> bool {\n    age >= 18\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn twenty_is_adult() {\n        assert!(is_adult(20));\n    }\n\n    #[test]\n    fn ten_is_not_adult() {\n        assert!(!is_adult(10));\n    }\n}",
+"hints": [
+"Тело функции — одно выражение: `age >= 18`.",
+"Тест: `#[test] fn twenty() { assert!(is_adult(20)); }`. Для 10 — `assert!(!is_adult(10));`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`#[should_panic]` — тест ждёт панику.",
+"Тест может вернуть `Result` и использовать `?`.",
+"Пиши тесты на обычные случаи и на граничные: 0, пусто, очень много."
+]
+}
+],
+"goals": [
+"Проверить, что функция паникует",
+"Проверять `Result` в тестах"
+]
+}
+]
+},
+{
+"id": "m16",
+"title": "Умные указатели",
+"sub": "Box, Rc и RefCell",
+"lessons": [
+{
+"id": "m16-1",
+"title": "Box — значение в куче",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Умный указатель",
+"md": "**Указатель** — это адрес значения в памяти. **Умный** указатель — адрес плюс правила: кто владеет, когда удалять.\n\nТы уже пользовался умными указателями: `String` и `Vec` — они тоже такие."
+},
+{
+"t": "text",
+"title": "Box — коробка на складе",
+"md": "`Box<T>` кладёт значение в кучу, а у тебя остаётся маленький адрес.\n\n```\nlet b = Box::new(5);\nprintln!(\"{}\", b); // 5\n```\nКогда нужен Box:\n- тип ссылается сам на себя (дерево, список);\n- значение очень большое, и его не хочется копировать;\n- нужен `Box<dyn Трейт>` — разные типы в одном списке."
+},
+{
+"t": "code",
+"md": "Тип, который содержит сам себя. Без `Box` его размер был бы бесконечным.",
+"code": "#[derive(Debug)]\nenum List {\n    Node(i32, Box<List>),\n    End,\n}\n\nuse List::{End, Node};\n\nfn sum(list: &List) -> i32 {\n    match list {\n        Node(value, next) => value + sum(next),\n        End => 0,\n    }\n}\n\nfn main() {\n    let list = Node(1, Box::new(Node(2, Box::new(Node(3, Box::new(End))))));\n    println!(\"{:?}\", list);\n    println!(\"Сумма: {}\", sum(&list));\n}",
+"out": "Node(1, Node(2, Node(3, End)))\nСумма: 6",
+"after": "`sum` вызывает сама себя. Это называется **рекурсия**."
+},
+{
+"t": "quiz",
+"md": "Зачем `Box` в `Node(i32, Box<List>)`?",
+"options": [
+"Чтобы список работал быстрее",
+"Чтобы размер типа был известен: Box — это просто адрес",
+"Чтобы список можно было менять"
+],
+"answer": 1,
+"why": [
+"Скорость тут ни при чём.",
+"Верно. Без Box список вкладывался бы сам в себя бесконечно.",
+"Для изменения нужен `mut`, а не Box."
+]
+},
+{
+"t": "recap",
+"items": [
+"Умный указатель — адрес плюс правила владения.",
+"`Box::new(x)` кладёт `x` в кучу.",
+"Box нужен для рекурсивных типов и `dyn Трейт`."
+]
+}
+],
+"goals": [
+"Что такое умный указатель",
+"Когда нужен `Box`"
+]
+},
+{
+"id": "m16-2",
+"title": "Rc — общий владелец",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Иногда хозяев несколько",
+"md": "Правило «один владелец» иногда мешает. Например, две комнаты в игре используют одну и ту же текстуру.\n\n`Rc<T>` (reference counting — подсчёт ссылок) разрешает **несколько владельцев**. Он считает, сколько их. Последний ушёл — значение удаляется.\n\n> Общий телевизор в общежитии. Есть счётчик зрителей. Ушёл последний — телевизор выключают."
+},
+{
+"t": "code",
+"code": "use std::rc::Rc;\n\nfn main() {\n    let song = Rc::new(String::from(\"Любимая песня\"));\n    println!(\"Владельцев: {}\", Rc::strong_count(&song));\n    let anya = Rc::clone(&song);\n    let borya = Rc::clone(&song);\n    println!(\"Владельцев: {}\", Rc::strong_count(&song));\n    drop(anya);\n    println!(\"Владельцев: {}\", Rc::strong_count(&song));\n    println!(\"{borya}\");\n}",
+"out": "Владельцев: 1\nВладельцев: 3\nВладельцев: 2\nЛюбимая песня",
+"after": "`Rc::clone` не копирует песню, а только увеличивает счётчик. Это дёшево. `drop` — удалить переменную раньше времени."
+},
+{
+"t": "quiz",
+"md": "Что делает `Rc::clone(&x)`?",
+"options": [
+"Копирует данные целиком",
+"Добавляет ещё одного владельца тех же данных",
+"Удаляет `x`"
+],
+"answer": 1,
+"why": [
+"Нет, данные одни. Растёт только счётчик.",
+"Верно.",
+"Наоборот, владельцев становится больше."
+]
+},
+{
+"t": "recap",
+"items": [
+"`Rc<T>` — несколько владельцев одного значения.",
+"`Rc::clone` дёшев: только счётчик +1.",
+"`Rc` только для чтения и только в одном потоке."
+]
+}
+],
+"goals": [
+"Как дать значению несколько владельцев",
+"Что считает `Rc`"
+]
+},
+{
+"id": "m16-3",
+"title": "RefCell — менять через общий доступ",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Проверка не при компиляции, а при работе",
+"md": "`Rc` даёт только читать. А если нескольким владельцам нужно **менять** значение?\n\n`RefCell<T>` переносит проверку правил заимствования с компиляции **на время работы**. Правило то же: много читателей или один писатель. Нарушишь — паника.\n\n- `.borrow()` — взять на чтение;\n- `.borrow_mut()` — взять на запись."
+},
+{
+"t": "code",
+"md": "Общий счётчик, который меняют двое:",
+"code": "use std::cell::RefCell;\nuse std::rc::Rc;\n\nfn main() {\n    let score = Rc::new(RefCell::new(0));\n    let player1 = Rc::clone(&score);\n    let player2 = Rc::clone(&score);\n\n    *player1.borrow_mut() += 10;\n    *player2.borrow_mut() += 5;\n\n    println!(\"Общий счёт: {}\", score.borrow());\n}",
+"out": "Общий счёт: 15"
+},
+{
+"t": "code",
+"md": "А теперь нарушим правило: два писателя одновременно. Запусти.",
+"code": "use std::cell::RefCell;\n\nfn main() {\n    let data = RefCell::new(vec![1, 2, 3]);\n    let a = data.borrow_mut();\n    let b = data.borrow_mut();\n    println!(\"{:?} {:?}\", a, b);\n}",
+"after": "Компилятор пропустит, а программа запаникует: `already borrowed` — «уже занято». Это цена гибкости: ошибку ловит не компилятор, а запуск."
+},
+{
+"t": "quiz",
+"md": "Когда `RefCell` проверяет правила заимствования?",
+"options": [
+"При компиляции",
+"Во время работы программы"
+],
+"answer": 1,
+"why": [
+"Это делают обычные ссылки. RefCell проверяет позже.",
+"Верно. Нарушение — паника."
+]
+},
+{
+"t": "recap",
+"items": [
+"`RefCell<T>` — менять через общий доступ, проверка при запуске.",
+"`Rc<RefCell<T>>` — общее изменяемое значение в одном потоке.",
+"Сначала пробуй обычные ссылки. RefCell — когда без него никак."
+]
+}
+],
+"goals": [
+"Что такое внутренняя изменяемость",
+"Связка `Rc<RefCell<T>>`"
+]
+}
+]
+},
+{
+"id": "m17",
+"title": "Потоки",
+"sub": "Делать несколько дел одновременно",
+"lessons": [
+{
+"id": "m17-1",
+"title": "Первый поток",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Поток — ещё один исполнитель",
+"md": "**Поток** (thread) — отдельная линия выполнения. Несколько потоков работают одновременно, на разных ядрах процессора.\n\n> Как несколько поваров на одной кухне. Работа идёт быстрее, но надо договариваться, кто берёт какой нож.\n\nRust знаменит фразой «бесстрашная многопоточность»: многие ошибки потоков он ловит на компиляции."
+},
+{
+"t": "code",
+"code": "use std::thread;\n\nfn main() {\n    let handle = thread::spawn(|| {\n        for i in 1..=3 {\n            println!(\"помощник: шаг {i}\");\n        }\n        42\n    });\n    println!(\"главный поток ждёт\");\n    let answer = handle.join().unwrap();\n    println!(\"помощник вернул {answer}\");\n}",
+"after": "- `thread::spawn(замыкание)` — запустить поток.\n- `join()` — дождаться его конца и забрать результат.\n\nПорядок строк может меняться от запуска к запуску: потоки идут одновременно."
+},
+{
+"t": "text",
+"title": "move — отдать данные потоку",
+"md": "Поток может жить дольше функции, которая его создала. Поэтому одолжить ему переменную нельзя — только **отдать**:\n\n```\nlet name = String::from(\"Аня\");\nlet h = thread::spawn(move || {\n    println!(\"Привет из потока, {name}\");\n});\nh.join().unwrap();\n```\nБез `move` будет ошибка `E0373`."
+},
+{
+"t": "quiz",
+"md": "Зачем нужен `join()`?",
+"options": [
+"Чтобы запустить поток",
+"Чтобы дождаться окончания потока",
+"Чтобы соединить два потока в один"
+],
+"answer": 1,
+"why": [
+"Запускает `spawn`. `join` — ждёт.",
+"Верно. Иначе `main` может закончиться раньше и прервать поток.",
+"Название сбивает, но нет: это «дождаться»."
+]
+},
+{
+"t": "recap",
+"items": [
+"`thread::spawn(|| ...)` — новый поток.",
+"`handle.join()` — дождаться и получить результат.",
+"`move` — отдать потоку переменные."
+]
+}
+],
+"goals": [
+"Запустить код в отдельном потоке",
+"Дождаться его через `join`"
+]
+},
+{
+"id": "m17-2",
+"title": "Каналы: потоки пишут друг другу",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Канал — пневмопочта",
+"md": "**Канал** — труба между потоками. В один конец кладут сообщения, из другого достают.\n\n```\nlet (tx, rx) = mpsc::channel();\n```\n- `tx` — передатчик (transmitter), им отправляют: `tx.send(x)`.\n- `rx` — приёмник (receiver), им получают: `rx.recv()`.\n\n`mpsc` значит «много отправителей, один получатель»."
+},
+{
+"t": "code",
+"code": "use std::sync::mpsc;\nuse std::thread;\n\nfn main() {\n    let (tx, rx) = mpsc::channel();\n    thread::spawn(move || {\n        for fruit in [\"яблоко\", \"груша\", \"слива\"] {\n            tx.send(fruit).unwrap();\n        }\n    });\n    for got in rx {\n        println!(\"Получил: {got}\");\n    }\n    println!(\"Канал закрыт\");\n}",
+"out": "Получил: яблоко\nПолучил: груша\nПолучил: слива\nКанал закрыт",
+"after": "Цикл `for got in rx` заканчивается сам, когда передатчик исчезает вместе со своим потоком."
+},
+{
+"t": "quiz",
+"md": "Что передаётся через `send`?",
+"options": [
+"Владение значением",
+"Копия значения",
+"Ссылка на значение"
+],
+"answer": 0,
+"why": [
+"Верно. Отправил — у тебя его больше нет. Так потоки не дерутся за данные.",
+"Не обязательно копия: значение переезжает.",
+"Ссылка могла бы повиснуть. Rust отправляет само значение."
+]
+},
+{
+"t": "recap",
+"items": [
+"`mpsc::channel()` — канал `(tx, rx)`.",
+"`tx.send(x)` — отправить, `rx.recv()` или `for x in rx` — получить.",
+"Отправка передаёт владение."
+]
+}
+],
+"goals": [
+"Передавать данные между потоками через канал"
+]
+},
+{
+"id": "m17-3",
+"title": "Общие данные: Arc и Mutex",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Замок на двери",
+"md": "`Mutex` (mutual exclusion — взаимное исключение) пускает к данным **по одному**.\n\n> Ключ от туалета в кафе. Взял ключ — зашёл. Остальные ждут, пока вернёшь.\n\n`lock()` берёт ключ. Ключ возвращается сам, когда переменная с ним исчезает."
+},
+{
+"t": "text",
+"title": "Arc — Rc для потоков",
+"md": "`Rc` нельзя передавать между потоками: его счётчик не защищён. Для потоков есть `Arc` — **атомарный** Rc.\n\nКлассика: `Arc<Mutex<T>>` — общее изменяемое значение для многих потоков."
+},
+{
+"t": "code",
+"code": "use std::sync::{Arc, Mutex};\nuse std::thread;\n\nfn main() {\n    let counter = Arc::new(Mutex::new(0));\n    let mut handles = vec![];\n    for _ in 0..10 {\n        let c = Arc::clone(&counter);\n        handles.push(thread::spawn(move || {\n            let mut n = c.lock().unwrap();\n            *n += 1;\n        }));\n    }\n    for h in handles {\n        h.join().unwrap();\n    }\n    println!(\"Итог: {}\", *counter.lock().unwrap());\n}",
+"out": "Итог: 10",
+"after": "Десять потоков, каждый прибавил 1. Без Mutex результат мог бы быть меньше: потоки затирали бы друг друга."
+},
+{
+"t": "text",
+"title": "thread::scope — проще для коротких задач",
+"md": "Если потоки нужны только внутри одного блока, `thread::scope` разрешает им **одалживать** данные. `move` и `Arc` не нужны:\n\n```\nlet data = vec![1, 2, 3, 4];\nlet (left, right) = data.split_at(2);\nthread::scope(|s| {\n    s.spawn(|| println!(\"{}\", left.iter().sum::<i32>()));\n    s.spawn(|| println!(\"{}\", right.iter().sum::<i32>()));\n});\n```"
+},
+{
+"t": "quiz",
+"md": "Почему для потоков нужен `Arc`, а не `Rc`?",
+"options": [
+"`Arc` быстрее",
+"Счётчик `Arc` безопасно меняется из разных потоков",
+"`Rc` нельзя клонировать"
+],
+"answer": 1,
+"why": [
+"Наоборот, чуть медленнее. Зато безопасен.",
+"Верно. Компилятор не даст отправить `Rc` в поток.",
+"Можно, но только в одном потоке."
+]
+},
+{
+"t": "recap",
+"items": [
+"`Mutex` — доступ по одному, `lock()` — взять ключ.",
+"`Arc` — общий владелец для потоков.",
+"`Arc<Mutex<T>>` — общие изменяемые данные.",
+"`thread::scope` — потоки, которые одалживают данные."
+]
+}
+],
+"goals": [
+"Менять одно значение из многих потоков",
+"Зачем нужны `Arc` и `Mutex`"
+]
+}
+]
+},
+{
+"id": "m18",
+"title": "Async и макросы",
+"sub": "Обзор продвинутых тем",
+"lessons": [
+{
+"id": "m18-1",
+"title": "Async: ждать, не простаивая",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Официант, а не повар на каждый стол",
+"md": "Программа часто **ждёт**: ответа от сервера, чтения файла. Пока ждёт — процессор простаивает.\n\n> Потоки — нанять по повару на каждый стол. Async — один официант: принял заказ, отнёс на кухню и, пока блюдо готовится, обслуживает другие столы.\n\nAsync выгоден, когда задач очень много, а работы у каждой мало: веб-серверы, чаты, сетевые программы."
+},
+{
+"t": "text",
+"title": "async и .await",
+"md": "- `async fn` — функция, которая возвращает не результат, а **обещание** результата (future).\n- `.await` — «дождись обещания, а пока дай поработать другим».\n\n```\nasync fn load_user() -> String {\n    String::from(\"Аня\")\n}\n\nasync fn hello() {\n    let name = load_user().await;\n    println!(\"Привет, {name}\");\n}\n```"
+},
+{
+"t": "text",
+"title": "Нужен исполнитель",
+"md": "Future сам по себе ленивый, как итератор. Его кто-то должен «крутить». Это делает **рантайм** — исполнитель.\n\nВ стандартной библиотеке рантайма нет. В реальных проектах берут крейт **tokio**:\n\n```text\n#[tokio::main]\nasync fn main() {\n    hello().await;\n}\n```"
+},
+{
+"t": "code",
+"md": "Для любопытных: крошечный исполнитель на одной стандартной библиотеке. Понимать каждую строку не нужно.",
+"code": "use std::future::Future;\nuse std::pin::pin;\nuse std::sync::Arc;\nuse std::task::{Context, Poll, Wake};\n\nstruct Noop;\nimpl Wake for Noop {\n    fn wake(self: Arc<Self>) {}\n}\n\nfn block_on<F: Future>(fut: F) -> F::Output {\n    let waker = Arc::new(Noop).into();\n    let mut cx = Context::from_waker(&waker);\n    let mut fut = pin!(fut);\n    loop {\n        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {\n            return v;\n        }\n    }\n}\n\nasync fn load_user() -> String {\n    String::from(\"Аня\")\n}\n\nasync fn hello() -> String {\n    let name = load_user().await;\n    format!(\"Привет, {name}\")\n}\n\nfn main() {\n    println!(\"{}\", block_on(hello()));\n}",
+"out": "Привет, Аня"
+},
+{
+"t": "quiz",
+"md": "Что произойдёт, если вызвать `async fn` без `.await` и без исполнителя?",
+"options": [
+"Функция выполнится сразу",
+"Ничего: создастся future, но он не запустится",
+"Программа запаникует"
+],
+"answer": 1,
+"why": [
+"Future ленивый: без исполнителя ничего не происходит.",
+"Верно. Как итератор без `collect`.",
+"Паники не будет, просто код не выполнится. Компилятор об этом предупредит."
+]
+},
+{
+"t": "recap",
+"items": [
+"Async — много задач, которые в основном ждут.",
+"`async fn` возвращает future, `.await` его дожидается.",
+"Нужен рантайм. В реальных проектах — tokio."
+]
+}
+],
+"goals": [
+"Чем async отличается от потоков",
+"Что значат `async` и `.await`"
+]
+},
+{
+"id": "m18-2",
+"title": "Макросы",
+"min": 6,
+"cards": [
+{
+"t": "text",
+"title": "Макрос пишет код за тебя",
+"md": "Ты весь курс пользуешься макросами: `println!`, `vec!`, `format!`, `assert_eq!`. Восклицательный знак — их метка.\n\n**Макрос** — это код, который **пишет код** ещё до компиляции. Поэтому `println!` может принять любое количество аргументов, а обычная функция — нет."
+},
+{
+"t": "code",
+"md": "Простой макрос через `macro_rules!`:",
+"code": "macro_rules! square {\n    ($x:expr) => {\n        $x * $x\n    };\n}\n\nmacro_rules! hello_all {\n    ($($name:expr),*) => {\n        $( println!(\"Привет, {}!\", $name); )*\n    };\n}\n\nfn main() {\n    println!(\"{}\", square!(7));\n    hello_all!(\"Аня\", \"Боря\", \"Вика\");\n}",
+"out": "49\nПривет, Аня!\nПривет, Боря!\nПривет, Вика!",
+"after": "- `$x:expr` — «сюда подставь любое выражение».\n- `$(...),*` — «повтори сколько угодно раз через запятую»."
+},
+{
+"t": "text",
+"title": "derive — тоже макрос",
+"md": "`#[derive(Debug)]` — это **процедурный макрос**. Он читает твою структуру и дописывает к ней реализацию трейта.\n\nСвои процедурные макросы пишут редко. Но знать, что это они, полезно."
+},
+{
+"t": "text",
+"title": "unsafe — одна строчка правды",
+"md": "В Rust есть слово `unsafe`. Внутри такого блока можно делать то, что компилятор не может проверить: работать с сырыми указателями, вызывать код на C.\n\nНовичку `unsafe` не нужен. Большинство программ на Rust его вообще не содержат."
+},
+{
+"t": "quiz",
+"md": "Почему `println!` — макрос, а не функция?",
+"options": [
+"Он принимает разное число аргументов и проверяет формат при компиляции",
+"Макросы работают быстрее функций",
+"Так исторически сложилось, разницы нет"
+],
+"answer": 0,
+"why": [
+"Верно. Обычная функция в Rust так не умеет.",
+"Дело не в скорости.",
+"Разница есть: макрос раскрывается в код до компиляции."
+]
+},
+{
+"t": "recap",
+"items": [
+"Макросы с `!` генерируют код до компиляции.",
+"`macro_rules!` — свои простые макросы.",
+"`#[derive]` — тоже макрос.",
+"`unsafe` существует, но новичку не нужен."
+]
+}
+],
+"goals": [
+"Чем макрос отличается от функции",
+"Написать простой макрос `macro_rules!`"
+]
+}
+]
+},
+{
+"id": "m19",
+"title": "Итоговый проект",
+"sub": "Собираем всё вместе",
+"lessons": [
+{
+"id": "m19-1",
+"title": "Проект: список дел. Шаг 1 — данные",
+"min": 7,
+"cards": [
+{
+"t": "text",
+"title": "Что строим",
+"md": "Маленький менеджер задач. Он умеет:\n- добавлять задачи;\n- отмечать выполненные;\n- показывать список;\n- выполнять команды из текста вроде `add купить хлеб`.\n\nПойдём по шагам. Каждый шаг — отдельная маленькая победа."
+},
+{
+"t": "text",
+"title": "Типы данных",
+"md": "Начнём с данных. Задача — это структура. Состояние — перечисление.\n\n```\n#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n```"
+},
+{
+"t": "task",
+"md": "Создай структуру `TodoList` с полями `tasks: Vec<Task>` и `next_id: u32`, и конструктор `new()`, где список пуст, а `next_id` равен 1. Программа должна напечатать `0 1`.",
+"code": "#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n\n// твоя структура TodoList и impl с new()\n\nfn main() {\n    let list = TodoList::new();\n    println!(\"{} {}\", list.tasks.len(), list.next_id);\n}",
+"solution": "#[derive(Debug, Clone, PartialEq)]\nenum Status {\n    Todo,\n    Done,\n}\n\n#[derive(Debug, Clone)]\nstruct Task {\n    id: u32,\n    title: String,\n    status: Status,\n}\n\nstruct TodoList {\n    tasks: Vec<Task>,\n    next_id: u32,\n}\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n}\n\nfn main() {\n    let list = TodoList::new();\n    println!(\"{} {}\", list.tasks.len(), list.next_id);\n}",
+"expect": "0 1",
+"hints": [
+"`struct TodoList { tasks: Vec<Task>, next_id: u32 }`",
+"`impl TodoList { fn new() -> Self { TodoList { tasks: Vec::new(), next_id: 1 } } }`"
+]
+},
+{
+"t": "recap",
+"items": [
+"Сначала думаем о данных, потом о действиях.",
+"Структура — для «что это», enum — для «в каком состоянии»."
+]
+}
+],
+"goals": [
+"Спроектировать типы для программы",
+"Собрать структуру и перечисление вместе"
+]
+},
+{
+"id": "m19-2",
+"title": "Шаг 2 — действия",
+"min": 8,
+"cards": [
+{
+"t": "task",
+"md": "Допиши методы `add` (возвращает id новой задачи) и `done` (отмечает задачу; если id не найден — `Err` с текстом). Метод `show` уже готов.",
+"code": "#[derive(Debug, Clone, PartialEq)]\nenum Status { Todo, Done }\n\n#[derive(Debug, Clone)]\nstruct Task { id: u32, title: String, status: Status }\n\nstruct TodoList { tasks: Vec<Task>, next_id: u32 }\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n\n    fn add(&mut self, title: &str) -> u32 {\n        // создай Task, положи в tasks, увеличь next_id, верни id\n        0\n    }\n\n    fn done(&mut self, id: u32) -> Result<(), String> {\n        // найди задачу с таким id и поменяй статус\n        Err(format!(\"Нет задачи {id}\"))\n    }\n\n    fn show(&self) {\n        for t in &self.tasks {\n            let mark = if t.status == Status::Done { \"x\" } else { \" \" };\n            println!(\"[{mark}] {}. {}\", t.id, t.title);\n        }\n    }\n}\n\nfn main() {\n    let mut list = TodoList::new();\n    list.add(\"купить хлеб\");\n    list.add(\"учить Rust\");\n    list.done(2).unwrap();\n    list.show();\n    println!(\"{:?}\", list.done(99));\n}",
+"solution": "#[derive(Debug, Clone, PartialEq)]\nenum Status { Todo, Done }\n\n#[derive(Debug, Clone)]\nstruct Task { id: u32, title: String, status: Status }\n\nstruct TodoList { tasks: Vec<Task>, next_id: u32 }\n\nimpl TodoList {\n    fn new() -> Self {\n        TodoList { tasks: Vec::new(), next_id: 1 }\n    }\n\n    fn add(&mut self, title: &str) -> u32 {\n        let id = self.next_id;\n        self.tasks.push(Task { id, title: title.to_string(), status: Status::Todo });\n        self.next_id += 1;\n        id\n    }\n\n    fn done(&mut self, id: u32) -> Result<(), String> {\n        match self.tasks.iter_mut().find(|t| t.id == id) {\n            Some(task) => {\n                task.status = Status::Done;\n                Ok(())\n            }\n            None => Err(format!(\"Нет задачи {id}\")),\n        }\n    }\n\n    fn show(&self) {\n        for t in &self.tasks {\n            let mark = if t.status == Status::Done { \"x\" } else { \" \" };\n            println!(\"[{mark}] {}. {}\", t.id, t.title);\n        }\n    }\n}\n\nfn main() {\n    let mut list = TodoList::new();\n    list.add(\"купить хлеб\");\n    list.add(\"учить Rust\");\n    list.done(2).unwrap();\n    list.show();\n    println!(\"{:?}\", list.done(99));\n}",
+"expect": "[ ] 1. купить хлеб\n[x] 2. учить Rust\nErr(\"Нет задачи 99\")",
+"hints": [
+"В `add`: запомни `let id = self.next_id;`, потом `self.tasks.push(Task { ... })`, потом `self.next_id += 1;` и верни `id`.",
+"В `done`: `self.tasks.iter_mut().find(|t| t.id == id)` вернёт `Option<&mut Task>`. Разбери его через `match`."
+]
+},
+{
+"t": "recap",
+"items": [
+"`iter_mut().find(...)` — найти элемент, чтобы изменить.",
+"Нет элемента — честный `Err`, а не паника."
+]
+}
+],
+"goals": [
+"Написать методы add, done и показ списка",
+"Вернуть ошибку через `Result`, если задачи нет"
+]
+},
+{
+"id": "m19-3",
+"title": "Шаг 3 — команды",
+"min": 8,
+"cards": [
+{
+"t": "text",
+"title": "Команда как перечисление",
+"md": "Пользователь пишет текст. Превратим его в понятный тип:\n\n```\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n```\nФункция `parse` превращает строку в `Result<Command, String>`. Ошибки ввода — не паника, а `Err`."
+},
+{
+"t": "task",
+"md": "Допиши `parse`: `add текст` → `Add`, `done число` → `Done`, `list` → `List`, остальное — `Err`. Остальная программа уже готова.",
+"code": "#[derive(Debug)]\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n\nfn parse(line: &str) -> Result<Command, String> {\n    let (cmd, rest) = match line.trim().split_once(' ') {\n        Some((c, r)) => (c, r.trim()),\n        None => (line.trim(), \"\"),\n    };\n    match cmd {\n        // твои ветки\n        _ => Err(format!(\"Не знаю команду «{cmd}»\")),\n    }\n}\n\nfn main() {\n    for line in [\"add купить хлеб\", \"done 1\", \"list\", \"done abc\", \"jump\"] {\n        println!(\"{line} -> {:?}\", parse(line));\n    }\n}",
+"solution": "#[derive(Debug)]\nenum Command {\n    Add(String),\n    Done(u32),\n    List,\n}\n\nfn parse(line: &str) -> Result<Command, String> {\n    let (cmd, rest) = match line.trim().split_once(' ') {\n        Some((c, r)) => (c, r.trim()),\n        None => (line.trim(), \"\"),\n    };\n    match cmd {\n        \"add\" if !rest.is_empty() => Ok(Command::Add(rest.to_string())),\n        \"done\" => rest\n            .parse::<u32>()\n            .map(Command::Done)\n            .map_err(|_| format!(\"«{rest}» — не номер задачи\")),\n        \"list\" => Ok(Command::List),\n        _ => Err(format!(\"Не знаю команду «{cmd}»\")),\n    }\n}\n\nfn main() {\n    for line in [\"add купить хлеб\", \"done 1\", \"list\", \"done abc\", \"jump\"] {\n        println!(\"{line} -> {:?}\", parse(line));\n    }\n}",
+"expect": "add купить хлеб -> Ok(Add(\"купить хлеб\"))\ndone 1 -> Ok(Done(1))\nlist -> Ok(List)\ndone abc -> Err(\"«abc» — не номер задачи\")\njump -> Err(\"Не знаю команду «jump»\")",
+"hints": [
+"Ветка для add: `\"add\" => Ok(Command::Add(rest.to_string())),`",
+"Для done разбери число: `match rest.parse::<u32>() { Ok(n) => Ok(Command::Done(n)), Err(_) => Err(format!(\"«{rest}» — не номер задачи\")) }`"
+]
+},
+{
+"t": "text",
+"title": "Ты собрал настоящую программу",
+"md": "Посмотри, что в ней есть:\n- структуры и перечисления;\n- методы и конструктор;\n- `Vec`, итераторы, замыкания;\n- `Option`, `Result`, `match`, ошибки без паник.\n\nЭто и есть основа любой программы на Rust. Дальше — только больше того же."
+},
+{
+"t": "recap",
+"items": [
+"Текст от пользователя → свой `enum` через `parse`.",
+"Ошибки ввода → `Err`, не паника.",
+"Программа = данные + действия + разбор команд."
+]
+}
+],
+"goals": [
+"Разобрать текстовую команду в enum",
+"Связать всё через `match`"
+]
+},
+{
+"id": "m19-4",
+"title": "Что дальше",
+"min": 5,
+"cards": [
+{
+"t": "text",
+"title": "Ты прошёл курс",
+"md": "Это большой путь. Ты разобрался с владением — темой, на которой спотыкаются многие опытные программисты.\n\nНе страшно, если что-то забылось. Загляни в **Шпаргалку** и **Повторение** — они для этого и есть."
+},
+{
+"t": "text",
+"title": "Что почитать и порешать",
+"md": "- [The Rust Book](https://doc.rust-lang.org/book/) — официальная книга. Теперь она будет понятной. Есть [русский перевод](https://doc.rust-lang.ru/book/), но он отстаёт от новых версий.\n- [Rustlings](https://rustlings.rust-lang.org/) — 95 маленьких упражнений на своём компьютере. Очень в духе этого курса.\n- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) — примеры кода по темам.\n- [Exercism, трек Rust](https://exercism.org/tracks/rust) — задачи с проверкой и отзывами наставников."
+},
+{
+"t": "text",
+"title": "Как не бросить",
+"md": "- Пиши маленькие программы для себя: калькулятор расходов, переименователь файлов, бот.\n- 15 минут в день лучше, чем 3 часа раз в месяц.\n- Застрял на ошибке компилятора — прочитай её целиком ещё раз. Там почти всегда есть `help`.\n- Перерывы — часть обучения, а не его провал."
+},
+{
+"t": "quiz",
+"md": "Какой путь лучше всего закрепит знания?",
+"options": [
+"Перечитать весь курс ещё раз",
+"Писать маленькие свои программы и решать упражнения",
+"Сразу взяться за большой сложный проект"
+],
+"answer": 1,
+"why": [
+"Перечитывание запоминается хуже, чем практика.",
+"Верно. Вспоминать и применять — лучший способ учиться.",
+"Можно увязнуть. Лучше много маленьких побед."
+]
+},
+{
+"t": "recap",
+"items": [
+"Дальше: Rust Book, Rustlings, Rust by Example, Exercism.",
+"Маленькие проекты и регулярность.",
+"Шпаргалка и Повторение всегда под рукой."
+]
+}
+],
+"goals": [
+"Куда идти после курса",
+"Как не бросить"
+]
+}
+]
+}
+]
+}
 };
-window.GLOSSARY = [
+window.GLOSSARIES = {
+"ru": [
 {
 "term": "Программа",
 "en": "program",
@@ -4457,4 +9543,6 @@ window.GLOSSARY = [
 "en": "recursion",
 "def": "Функция вызывает сама себя."
 }
-];
+],
+"en": []
+};

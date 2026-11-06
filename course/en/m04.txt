@@ -1,0 +1,359 @@
+# MODULE m04 | Tuples, arrays, vectors | How to store many values at once
+
+## LESSON m04-1 | Tuples | 5
+:: goals
+- Keep several different values together
+- Get them by number and by unpacking
+
+:: text A tuple is a set of different things
+A **tuple** is several values in one pair of parentheses. The types can be different.
+
+```rust
+let person = ("Anna", 25, true);
+```
+> Analogy: a backpack holds a book, a bottle and keys. Different things, but together.
+
+:: code
+To get an element, write a dot and a number. Numbering starts from **zero**.
+```rust
+fn main() {
+    let person = ("Anna", 25, true);
+    println!("Name: {}", person.0);
+    println!("Age: {}", person.1);
+
+    let (name, age, student) = person;
+    println!("{name}, {age}, student: {student}");
+}
+```
+```out
+Name: Anna
+Age: 25
+Anna, 25, student: true
+```
+The second part is **unpacking**: three variables at once from one tuple.
+
+:: text A function can return a tuple
+This is a handy way to return two results at once:
+
+```rust
+fn min_max(a: i32, b: i32) -> (i32, i32) {
+    if a < b { (a, b) } else { (b, a) }
+}
+```
+
+:: quiz
+How do you get `true` out of `let t = (10, "yes", true);`?
+[ ] `t.3` => Numbering starts from zero: 0, 1, 2.
+[x] `t.2` => Correct. The third element has the number 2.
+[ ] `t[2]` => Square brackets are for arrays. A tuple uses a dot.
+
+:: deep The empty tuple
+Remember the value `()` from the module about functions? It is an **empty tuple** — a tuple with zero elements.
+
+So a function "without a result" really returns an empty tuple. The type and the value are written the same way: `()`.
+
+:: recap
+- `(a, b, c)` is a tuple; the types can differ.
+- `t.0`, `t.1` give access by number, starting from zero.
+- `let (x, y) = t;` unpacks.
+
+## LESSON m04-2 | Arrays | 6
+:: goals
+- Store many values of one type
+- Go through an array with a loop
+
+:: text An array is a row of identical cells
+An **array** is a row of values of **one** type. The length is fixed: it cannot change.
+
+```rust
+let days = ["mon", "tue", "wed", "thu", "fri"];
+let zeros = [0; 10]; // ten zeros
+```
+> Analogy: an egg carton has ten identical cells, no more and no fewer.
+
+:: code
+```rust
+fn main() {
+    let scores = [7, 9, 4, 10];
+    println!("First score: {}", scores[0]);
+    println!("Number of scores: {}", scores.len());
+    for s in scores {
+        println!("Score {s}");
+    }
+}
+```
+```out
+First score: 7
+Number of scores: 4
+Score 7
+Score 9
+Score 4
+Score 10
+```
+
+:: code
+What happens if you ask for a cell that does not exist? Run it.
+```rust
+fn main() {
+    let a = [1, 2, 3];
+    for i in 0..=3 {
+        println!("{}", a[i]);
+    }
+}
+```
+Three numbers are printed, and at `a[3]` the program **panics**: `index out of bounds`. Rust does not let a program read someone else's memory. This is protection, not breakage.
+
+:: quiz
+What is the index of the last element of an array with 5 elements?
+[ ] 5 => Indexes start from zero, so the last one is one less than the length.
+[x] 4 => Correct: 0, 1, 2, 3, 4.
+[ ] -1 => Rust has no negative indexes.
+
+:: task
+Find the highest score in the array and print it.
+```rust
+fn main() {
+    let scores = [7, 9, 4, 10, 6];
+    let mut best = scores[0];
+    // go through scores with a loop and update best
+    println!("Best: {best}");
+}
+```
+```solution
+fn main() {
+    let scores = [7, 9, 4, 10, 6];
+    let mut best = scores[0];
+    for s in scores {
+        if s > best {
+            best = s;
+        }
+    }
+    println!("Best: {best}");
+}
+```
+```expect
+Best: 10
+```
+hint: `for s in scores { ... }`
+hint: Inside: if `s > best`, then `best = s;`
+
+:: text The type of an array
+The type of an array is written like this: `[type; length]`.
+
+```rust
+let days: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+```
+The length is part of the type. `[i32; 3]` and `[i32; 4]` are **different** types.
+
+:: deep A table: an array of arrays
+An array can hold other arrays. This makes a table:
+
+```rust
+fn main() {
+    let grid = [[1, 2, 3], [4, 5, 6]];
+    println!("Row 1, column 2: {}", grid[1][2]);
+    for row in grid {
+        for cell in row {
+            print!("{cell} ");
+        }
+        println!();
+    }
+}
+```
+```out
+Row 1, column 2: 6
+1 2 3
+4 5 6
+```
+The type of `grid` is `[[i32; 3]; 2]`: two rows of three numbers.
+
+:: recap
+- `[a, b, c]` is an array of one type; the length is fixed.
+- `a[0]` is the first element, `a.len()` is the length.
+- Going out of bounds is a panic, not a silent error.
+
+## LESSON m04-3 | A first look at Vec | 5
+:: goals
+- A list that can grow
+- Add elements with `push`
+
+:: text Vec is a growing list
+An array cannot grow. But often you need to add elements as you go. For that there is the **vector** `Vec`.
+
+```rust
+let mut list = Vec::new();
+list.push("bread");
+list.push("milk");
+```
+There is also a short form: `let v = vec![1, 2, 3];`
+
+:: code
+```rust
+fn main() {
+    let mut todo = vec!["wake up", "wash"];
+    todo.push("learn Rust");
+    println!("Tasks: {}", todo.len());
+    for task in &todo {
+        println!("- {task}");
+    }
+}
+```
+```out
+Tasks: 3
+- wake up
+- wash
+- learn Rust
+```
+The `&` before `todo` means "just look". Why it is needed, you will learn in the module about ownership. It is the most important topic in Rust.
+
+:: quiz
+How is `Vec` different from an array?
+[x] A Vec can grow and shrink => Correct. Analogy: an array is a fixed box, a vector is a rubber one.
+[ ] A Vec can hold values of different types => No, a vector also holds values of one type.
+[ ] A Vec is numbered from one => It is also numbered from zero, like an array.
+
+:: deep Length and capacity of a Vec
+A vector has two numbers:
+- `len()` — how many elements it holds right now;
+- `capacity()` — how many elements it already has space for.
+
+When there is not enough space, the vector takes a new piece of memory, usually twice as big, and moves the elements there. This happens rarely, so `push` is fast on average.
+
+If you know in advance how many elements there will be, you can ask for the space right away: `Vec::with_capacity(100)`.
+
+:: recap
+- `Vec::new()` or `vec![...]` creates a vector.
+- `push` adds to the end, `len` gives the length.
+- A vector must be `mut` to add to it.
+
+## LESSON m04-p | Practice: tuples, arrays, vectors | 10 | practice
+:: goals
+- Go through arrays with loops
+- Collect data into a Vec
+
+:: task
+Calculate the sum of all the numbers in the array.
+```rust
+fn main() {
+    let nums = [4, 8, 15, 16, 23, 42];
+    let mut sum = 0;
+    println!("{sum}");
+}
+```
+```solution
+fn main() {
+    let nums = [4, 8, 15, 16, 23, 42];
+    let mut sum = 0;
+    for n in nums {
+        sum += n;
+    }
+    println!("{sum}");
+}
+```
+```expect
+108
+```
+hint: `for n in nums { ... }`
+hint: Inside: `sum += n;`
+
+:: task
+Count how many negative numbers the array has.
+```rust
+fn main() {
+    let temps = [3, -2, 0, -7, 5, -1];
+}
+```
+```solution
+fn main() {
+    let temps = [3, -2, 0, -7, 5, -1];
+    let mut count = 0;
+    for t in temps {
+        if t < 0 {
+            count += 1;
+        }
+    }
+    println!("{count}");
+}
+```
+```expect
+3
+```
+hint: You need a counter: `let mut count = 0;`.
+hint: In the loop: if `t < 0`, then `count += 1;`
+
+:: task
+Write a function `swap` that takes a tuple `(i32, i32)` and returns it with the elements in reverse order.
+```rust
+// write the function swap
+
+fn main() {
+    let p = swap((1, 2));
+    println!("{} {}", p.0, p.1);
+}
+```
+```solution
+fn swap(pair: (i32, i32)) -> (i32, i32) {
+    (pair.1, pair.0)
+}
+
+fn main() {
+    let p = swap((1, 2));
+    println!("{} {}", p.0, p.1);
+}
+```
+```expect
+2 1
+```
+hint: The header: `fn swap(pair: (i32, i32)) -> (i32, i32)`
+hint: The body: `(pair.1, pair.0)`
+
+:: task
+Find the position (index) of the number 23 in the array. Go through the indexes from 0 to the length of the array.
+```rust
+fn main() {
+    let nums = [4, 8, 15, 16, 23, 42];
+}
+```
+```solution
+fn main() {
+    let nums = [4, 8, 15, 16, 23, 42];
+    for i in 0..nums.len() {
+        if nums[i] == 23 {
+            println!("{i}");
+        }
+    }
+}
+```
+```expect
+4
+```
+hint: `for i in 0..nums.len()` goes through the indexes.
+hint: Inside: `if nums[i] == 23 { println!("{i}"); }`
+
+:: task
+Build a vector of the squares of the numbers from 1 to 5 and print it with `{:?}`.
+```rust
+fn main() {
+    let mut squares = Vec::new();
+    println!("{:?}", squares);
+}
+```
+```solution
+fn main() {
+    let mut squares = Vec::new();
+    for i in 1..=5 {
+        squares.push(i * i);
+    }
+    println!("{:?}", squares);
+}
+```
+```expect
+[1, 4, 9, 16, 25]
+```
+hint: The loop `for i in 1..=5`.
+hint: Inside: `squares.push(i * i);`
+
+:: recap
+- `for x in array` goes through the values, `for i in 0..a.len()` goes through the indexes.
+- `Vec::new()` + `push` collects a list as you go.
+- `{:?}` prints whole arrays and vectors.

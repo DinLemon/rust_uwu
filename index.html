@@ -10,21 +10,23 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <a class="skip" href="#app">К содержимому</a>
+  <a class="skip" href="#app" data-i18n="skip">К содержимому</a>
   <header class="topbar">
-    <a class="brand" href="#/"><span class="brand-mark">rs</span><span>Rust с нуля</span></a>
+    <a class="brand" href="#/"><span class="brand-mark">rs</span><span data-i18n="siteTitle">Rust с нуля</span></a>
     <nav aria-label="Разделы">
-      <a class="navlink" data-nav="home" href="#/">Курс</a>
-      <a class="navlink" data-nav="review" href="#/review">Повторение</a>
-      <a class="navlink optional" data-nav="cheat" href="#/cheat">Шпаргалка</a>
-      <a class="navlink" data-nav="glossary" href="#/glossary">Словарь</a>
-      <a class="navlink" data-nav="settings" href="#/settings">Настройки</a>
+      <a class="navlink" data-nav="home" href="#/" data-i18n="navCourse">Курс</a>
+      <a class="navlink" data-nav="review" href="#/review" data-i18n="navReview">Повторение</a>
+      <a class="navlink optional" data-nav="cheat" href="#/cheat" data-i18n="navCheat">Шпаргалка</a>
+      <a class="navlink" data-nav="glossary" href="#/glossary" data-i18n="navGlossary">Словарь</a>
+      <a class="navlink" data-nav="settings" href="#/settings" data-i18n="navSettings">Настройки</a>
     </nav>
+    <button class="langbtn" id="lang-btn" type="button">EN</button>
   </header>
   <main id="app" tabindex="-1"><p class="wrap muted">Загружаю курс…</p></main>
   <noscript><p class="wrap">Для курса нужен включённый JavaScript.</p></noscript>
 
   <script src="js/text.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/runner.js"></script>
   <script src="content/course-data.js"></script>
   <script src="js/app.js"></script>

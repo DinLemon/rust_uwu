@@ -1,0 +1,566 @@
+# MODULE m01 | Variables and types | How a program remembers data
+
+## LESSON m01-1 | A variable is a labeled box | 6
+:: goals
+- What a variable is
+- How to create one with `let`
+- How to print its value
+
+:: text A box with a label
+Analogy: a **variable** is a box with a label. The label is the name. The value is inside.
+
+In Rust you create the box with the word `let`:
+
+```rust
+let age = 25;
+```
+Read it like this: "let `age` be 25".
+
+:: code
+To print a variable, put its name in curly braces inside the text.
+```rust
+fn main() {
+    let age = 25;
+    let name = "Anna";
+    println!("{name}, you are {age} years old");
+}
+```
+```out
+Anna, you are 25 years old
+```
+Try changing the name and the age, then run it again.
+
+:: text Another way to print
+You can leave the braces empty `{}` and list the variables after the text, separated by commas. They are inserted in order.
+
+```rust
+let a = 2;
+let b = 3;
+println!("{} plus {} equals {}", a, b, a + b);
+```
+It prints: `2 plus 3 equals 5`.
+
+:: fill
+Fill in the blanks so the program prints `Cat: Tom`.
+```rust
+fn main() {
+    ___ cat = "Tom";
+    println!("Cat: {___}");
+}
+```
+= let
+= cat
+explain: `let` creates a variable, and `{cat}` inserts its value into the text.
+
+:: text How to name variables
+- Only Latin letters, digits and `_`.
+- Separate words with an underscore: `user_name`, `max_speed`.
+- The name should explain what is inside. `price` is better than `p`.
+
+> This style is called snake_case. All Rust programmers write names this way.
+
+:: quiz
+Which variable name follows the Rust style?
+[ ] `UserName` => In Rust this style is used for types, not variables.
+[x] `user_name` => Correct. Lowercase letters and an underscore.
+[ ] `user-name` => A dash means minus. The compiler reads this as "user minus name".
+
+:: recap
+- `let name = value;` creates a variable.
+- `{name}` inside text inserts the value.
+- Names are written in snake_case: `my_value`.
+
+## LESSON m01-2 | Changing variables: mut | 6
+:: goals
+- Why you cannot simply change a variable
+- How to allow changes with `mut`
+
+:: text The box is sealed
+In Rust a variable is **immutable** by default. Once you put a value in, the box is sealed.
+
+Why? So that a value does not change by accident somewhere in the middle of a big program.
+
+:: code
+Run it and read the error.
+```rust
+fn main() {
+    let score = 10;
+    score = 20;
+    println!("{score}");
+}
+```
+fails: yes
+The compiler says `cannot assign twice to immutable variable`. It even suggests a fix in `help`.
+
+:: text The word mut
+To allow changes, add `mut` (short for mutable — changeable):
+
+```rust
+let mut score = 10;
+score = 20;
+```
+Now it works. `mut` is an honest label: "this variable will change".
+
+:: task
+Fix the program. It must print `Points: 15`.
+```rust
+fn main() {
+    let points = 10;
+    points = points + 5;
+    println!("Points: {points}");
+}
+```
+```solution
+fn main() {
+    let mut points = 10;
+    points = points + 5;
+    println!("Points: {points}");
+}
+```
+```expect
+Points: 15
+```
+hint: The compiler complains that the variable cannot be changed.
+hint: Add `mut` after `let`.
+
+:: text Short forms
+Instead of `x = x + 5` you can write `x += 5`. The same works with `-=`, `*=`, `/=`.
+
+```rust
+let mut lives = 3;
+lives -= 1; // now 2
+```
+
+:: quiz
+What will the program print?
+```rust
+fn main() {
+    let mut coins = 5;
+    coins += 10;
+    coins -= 3;
+    println!("{coins}");
+}
+```
+[ ] 5 => The value changed twice. Count: 5 + 10 − 3.
+[x] 12 => Correct: 5 + 10 − 3 = 12.
+[ ] A compile error => There is `mut`, so changing is allowed.
+
+:: recap
+- Variables cannot be changed by default.
+- `let mut` allows changes.
+- `x += 1` is a short form of `x = x + 1`.
+
+## LESSON m01-3 | Numbers | 7
+:: goals
+- Whole numbers and fractional numbers
+- What `i32` and `f64` mean
+- Arithmetic
+
+:: text Every value has a type
+A **type** says what is in the box: a number, text, yes/no.
+
+Usually Rust works out the type by itself. But you can write it explicitly, after a colon:
+
+```rust
+let age: i32 = 30;
+let price: f64 = 99.5;
+```
+
+:: text Whole numbers
+`i32` is a signed whole number: it can be negative. This is the default type.
+
+- The letter `i` means integer, a whole number.
+- `u` means unsigned: only zero and above. For example `u8`, `u32`, `u64`.
+- The digits say how many bits the number uses. More bits means a bigger maximum.
+
+`u8` holds 0 to 255. `i32` holds about ±2 billion. Usually `i32` is enough.
+
+:: text Fractional numbers
+Fractional numbers use a **dot**: `3.14`.
+
+The default type is `f64` (f means float, "floating point").
+
+!> You cannot add a whole number and a fractional number directly. `5 + 2.5` is an error. Write `5.0 + 2.5`.
+
+:: code
+```rust
+fn main() {
+    let a = 7;
+    let b = 2;
+    println!("Sum: {}", a + b);
+    println!("Difference: {}", a - b);
+    println!("Product: {}", a * b);
+    println!("Integer division: {}", a / b);
+    println!("Remainder: {}", a % b);
+    println!("Fractional division: {}", 7.0 / 2.0);
+}
+```
+```out
+Sum: 9
+Difference: 5
+Product: 14
+Integer division: 3
+Remainder: 1
+Fractional division: 3.5
+```
+Notice: `7 / 2` with whole numbers gives `3`. The fractional part is simply dropped.
+
+:: quiz
+What is `10 % 3`?
+[ ] 3 => `%` is not division. It is the remainder of division.
+[x] 1 => Correct. 10 = 3 × 3 + 1. The remainder is 1.
+[ ] 3.33 => Whole numbers have no fractional part.
+
+:: text Turning a whole number into a fractional one
+To mix whole and fractional numbers, convert the type with the word `as`:
+
+```rust
+let apples = 7;
+let half = apples as f64 / 2.0; // 3.5
+```
+
+:: task
+You have a temperature in degrees Celsius. Convert it to Fahrenheit with the formula `F = C × 1.8 + 32` and print `Fahrenheit: 77`.
+```rust
+fn main() {
+    let celsius = 25.0;
+    let fahrenheit = 0.0; // fix this line
+    println!("Fahrenheit: {fahrenheit}");
+}
+```
+```solution
+fn main() {
+    let celsius = 25.0;
+    let fahrenheit = celsius * 1.8 + 32.0;
+    println!("Fahrenheit: {fahrenheit}");
+}
+```
+```expect
+Fahrenheit: 77
+```
+hint: Multiplication is `*`, addition is `+`.
+hint: Remember: the fractional number is written `32.0`, not `32`.
+
+:: text Writing big numbers
+You can put underscores in a number to make it easier to read. The computer ignores them:
+
+```rust
+let million = 1_000_000;
+```
+You can also write the type at the end of the number: `5u8`, `10i64`, `2.5f32`.
+
+:: deep What happens when a number does not fit
+Every whole-number type has a limit. `u8` holds at most 255. What happens if you add 1 to 255?
+
+- In a normal run (debug mode) the program **panics**: `attempt to add with overflow`.
+- If you need different behavior, you choose it explicitly with special methods.
+
+```rust
+fn main() {
+    let x: u8 = 255;
+    println!("{:?}", x.checked_add(1));
+    println!("{}", x.wrapping_add(1));
+    println!("{}", x.saturating_add(1));
+    println!("u8 limit: {}, i32 limit: {}", u8::MAX, i32::MAX);
+}
+```
+```out
+None
+0
+255
+u8 limit: 255, i32 limit: 2147483647
+```
+- `checked_add` returns "nothing" (`None`) if the result does not fit;
+- `wrapping_add` goes around in a circle: after 255 comes 0;
+- `saturating_add` stops at the limit.
+
+:: recap
+- `i32` is a whole number, `f64` is a fractional number. These are the default types.
+- Integer division drops the fraction: `7 / 2 == 3`. `%` is the remainder.
+- Whole to fractional: `x as f64`.
+
+## LESSON m01-4 | Yes, no, and characters | 5
+:: goals
+- The `bool` type: true or false
+- The `char` type: one character
+- Comparisons
+
+:: text bool — true or false
+The `bool` type holds one of two values: `true` or `false`.
+
+```rust
+let is_raining = true;
+let has_umbrella = false;
+```
+Analogy: a light switch is either on or off.
+
+:: text Comparisons give a bool
+- `==` equal (two signs! one `=` is assignment)
+- `!=` not equal
+- `<`, `>` less, greater
+- `<=`, `>=` less or equal, greater or equal
+
+```rust
+let adult = 20 >= 18; // true
+```
+
+:: text And, or, not
+- `&&` means "and": true if both parts are true.
+- `||` means "or": true if at least one part is true.
+- `!` means "not": it flips the value.
+
+```rust
+let go_outside = !is_raining || has_umbrella;
+```
+Read it as: "we go outside if it is not raining or if we have an umbrella".
+
+:: quiz
+What is `5 > 3 && 2 > 4`?
+[ ] true => The first part is true, but the second is not. `&&` needs both.
+[x] false => Correct. `2 > 4` is false, so the whole expression is false.
+
+:: text char — one character
+The `char` type holds **one** character. It is written in **single** quotes:
+
+```rust
+let letter = 'Z';
+let smile = '☺';
+```
+!> `'a'` is a character (char). `"a"` is text (a string). They are different types.
+
+:: quiz
+Which one is a `char`?
+[ ] `"B"` => Double quotes mean a string, even with one letter.
+[x] `'B'` => Correct. Single quotes mean one character.
+[ ] `B` => Without quotes the compiler thinks it is a variable name.
+
+:: deep How much space a char takes
+A `char` in Rust takes **4 bytes**. It can hold any Unicode character: letters of all alphabets, Chinese characters, emoji.
+
+Every character has a number in the Unicode table. You can get it with `as u32`:
+
+```rust
+fn main() {
+    println!("{}", 'A' as u32);
+    println!("{}", 'Я' as u32);
+    println!("{}", char::from_u32(1071).unwrap());
+}
+```
+```out
+65
+1071
+Я
+```
+
+:: recap
+- `bool`: `true` or `false`.
+- `==` compares, `=` assigns.
+- `&&` and, `||` or, `!` not.
+- `char` is one character in single quotes.
+
+## LESSON m01-5 | Constants and shadowing | 6
+:: goals
+- Constants with `const`
+- Shadowing: a new variable with an old name
+
+:: text A constant
+A **constant** is a value that never changes. For example, the number of seconds in a minute.
+
+```rust
+const SECONDS_IN_MINUTE: u32 = 60;
+```
+Rules:
+- It is written in capital letters.
+- The type is **required**.
+- `mut` is not allowed.
+
+:: text Shadowing
+You can write `let` again with the same name. This creates a **new** variable, and the old one becomes hidden. This is called **shadowing**.
+
+```rust
+let x = 5;
+let x = x * 2; // a new x = 10
+```
+> Analogy: a new label stuck over the old label. The old box still exists, but we cannot see it anymore.
+
+:: code
+Shadowing even lets you change the type:
+```rust
+fn main() {
+    let input = "42";
+    let input: i32 = input.parse().unwrap();
+    println!("The number plus one: {}", input + 1);
+}
+```
+```out
+The number plus one: 43
+```
+Here `parse()` turns text into a number. For now `unwrap()` just means "we trust that it worked". Details are in the module about errors.
+
+:: quiz
+What will the program print?
+```rust
+fn main() {
+    let a = 3;
+    let a = a + 1;
+    let a = a * 10;
+    println!("{a}");
+}
+```
+[ ] 3 => Each `let` creates a new `a` from the old one. Count step by step.
+[x] 40 => Correct: 3 → 4 → 40.
+[ ] An error: the variable has no mut => Shadowing is not changing. It is a new variable. `mut` is not needed.
+
+:: task
+Create a constant `MAX_LIVES` of type `u32` with the value 3 and print `Lives: 3`.
+```rust
+// create the constant here
+
+fn main() {
+    println!("Lives: {}", MAX_LIVES);
+}
+```
+```solution
+const MAX_LIVES: u32 = 3;
+
+fn main() {
+    println!("Lives: {}", MAX_LIVES);
+}
+```
+```expect
+Lives: 3
+```
+hint: The format: `const NAME: type = value;`
+hint: `const MAX_LIVES: u32 = 3;`
+
+:: deep Why changing is not allowed by default
+In big programs, a lot of code reads the same data. If data can change at any moment, it is hard to find where a bug comes from.
+
+Rust makes immutability the normal case. Then `mut` works as a marker: "attention, the value changes here". Such code is easier to read.
+
+There is a second reason: immutable data can be safely given to several parts of a program at once, and even to several threads. Threads are in module 17.
+
+:: recap
+- `const NAME: type = value;` is a constant forever.
+- Writing `let` again with the same name is shadowing: a new variable.
+- Shadowing can change the type, `mut` cannot.
+
+## LESSON m01-p | Practice: variables and numbers | 10 | practice
+:: goals
+- Create variables and change them
+- Calculate with whole and fractional numbers
+
+:: fill
+Fill in the types: a signed whole number, a fractional number, a boolean, a character.
+```rust
+let a: ___ = -5;
+let b: ___ = 2.5;
+let c: ___ = true;
+let d: ___ = 'z';
+```
+= i32 | i64 | i8 | i16 | i128 | isize
+= f64 | f32
+= bool
+= char
+
+:: task
+Calculate the area and the perimeter of a 7 by 3 rectangle. Print two lines: `Area: 21` and `Perimeter: 20`.
+```rust
+fn main() {
+    let width = 7;
+    let height = 3;
+}
+```
+```solution
+fn main() {
+    let width = 7;
+    let height = 3;
+    println!("Area: {}", width * height);
+    println!("Perimeter: {}", 2 * (width + height));
+}
+```
+```expect
+Area: 21
+Perimeter: 20
+```
+hint: The area is `width * height`. The perimeter is `2 * (width + height)`.
+hint: `println!("Area: {}", width * height);`
+
+:: task
+Convert 135 seconds into minutes and seconds. Print `2 min 15 sec`.
+```rust
+fn main() {
+    let total = 135;
+}
+```
+```solution
+fn main() {
+    let total = 135;
+    let minutes = total / 60;
+    let seconds = total % 60;
+    println!("{minutes} min {seconds} sec");
+}
+```
+```expect
+2 min 15 sec
+```
+hint: Integer division `/` gives the minutes. The remainder `%` gives the seconds.
+hint: `let minutes = total / 60; let seconds = total % 60;`
+
+:: task
+Fix the program. It must print `Average: 2.5`.
+```rust
+fn main() {
+    let sum = 10;
+    let count = 4;
+    let avg = sum / count;
+    println!("Average: {avg}");
+}
+```
+```solution
+fn main() {
+    let sum = 10;
+    let count = 4;
+    let avg = sum as f64 / count as f64;
+    println!("Average: {avg}");
+}
+```
+```expect
+Average: 2.5
+```
+hint: Right now the division is integer division, and the fractional part is lost.
+hint: Convert both numbers to `f64`: `sum as f64 / count as f64`.
+
+:: task
+A player has a score of 15. Add 50 points, then subtract 20, then double it. Print `Score: 90`. Use `+=`, `-=`, `*=`.
+```rust
+fn main() {
+    let score = 15;
+    println!("Score: {score}");
+}
+```
+```solution
+fn main() {
+    let mut score = 15;
+    score += 50;
+    score -= 20;
+    score *= 2;
+    println!("Score: {score}");
+}
+```
+```expect
+Score: 90
+```
+hint: The variable must be `mut`.
+hint: 15 + 50 = 65, 65 − 20 = 45, 45 × 2 = 90.
+
+:: quiz
+What does `println!("{}", 17 / 5 * 5 + 17 % 5);` print?
+[x] 17 => Correct. 17 / 5 = 3, 3 × 5 = 15, 17 % 5 = 2, 15 + 2 = 17.
+[ ] 17.0 => All numbers are whole, so there is no decimal point.
+[ ] 3 => That is only the first part: 17 / 5.
+
+:: recap
+- Whole numbers divide without a remainder; the remainder comes from `%`.
+- For a fractional result you need `as f64`.
+- If you change a variable, you need `mut`.

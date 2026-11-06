@@ -45,13 +45,13 @@ def parse_card(kind, title, lines, where):
                 raise SystemExit(f"{where}: незакрытый блок ```")
             i += 1
             # в text/quiz код остаётся частью markdown
-            if kind in ("text", "quiz"):
+            if kind in ("text", "quiz") or (kind == "deep" and (tag not in ("rust", "out") or (tag == "rust" and "fn main" not in "\n".join(buf)))):
                 md.append("```" + ("" if tag == "rust" else tag))
                 md.extend(buf)
                 md.append("```")
             else:
                 fences.append((tag, "\n".join(buf)))
-                if tag == "rust":
+                if tag == "rust" and kind != "deep":
                     seen_fence = True
             continue
         if kind == "quiz" and re.match(r"^\[( |x)\] ", line):
@@ -100,6 +100,13 @@ def parse_card(kind, title, lines, where):
         if not items:
             raise SystemExit(f"{where}: пустой список {kind}")
         card["items"] = items
+    elif kind == "deep":
+        if not title:
+            raise SystemExit(f"{where}: у карточки deep нужен заголовок")
+        if "rust" in fd:
+            card["code"] = fd["rust"]
+        if "out" in fd:
+            card["out"] = fd["out"]
     elif kind == "code":
         card["code"] = fd["rust"]
         if "out" in fd:
@@ -164,13 +171,15 @@ def parse_file(path):
             flush()
             parts = [x.strip() for x in line[10:].split("|")]
             lesson = {"id": parts[0], "title": parts[1], "min": int(parts[2]), "cards": []}
+            if len(parts) > 3 and parts[3] == "practice":
+                lesson["practice"] = True
             mod["lessons"].append(lesson)
         elif line.startswith(":: "):
             flush()
             head = line[3:].strip().split(" ", 1)
             kind = head[0]
             title = head[1] if len(head) > 1 else None
-            if kind not in ("goals", "text", "code", "quiz", "fill", "order", "task", "recap"):
+            if kind not in ("goals", "text", "code", "quiz", "fill", "order", "task", "recap", "deep"):
                 raise SystemExit(f"{path}:{lineno}: неизвестный тип карточки {kind}")
         else:
             if kind is None and line.strip() and not line.startswith("//"):
@@ -181,40 +190,89 @@ def parse_file(path):
     return modules
 
 
-def main():
+def load_lang(lang):
     modules = []
-    for f in sorted((ROOT / "course").glob("m*.txt")):
+    for f in sorted((ROOT / "course" / lang).glob("m*.txt")):
         modules.extend(parse_file(f))
-    # goals → поле урока
     ids = set()
     for m in modules:
         for l in m["lessons"]:
             if l["id"] in ids:
-                raise SystemExit(f"повтор id урока {l['id']}")
+                raise SystemExit(f"{lang}: повтор id урока {l['id']}")
             ids.add(l["id"])
             g = [c for c in l["cards"] if c["t"] == "goals"]
             if g:
                 l["goals"] = g[0]["items"]
                 l["cards"] = [c for c in l["cards"] if c["t"] != "goals"]
     gloss = []
-    gpath = ROOT / "course" / "glossary.txt"
+    gpath = ROOT / "course" / lang / "glossary.txt"
     if gpath.exists():
         for line in gpath.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.startswith("//"):
                 term, en, d = [x.strip() for x in line.split("|", 2)]
                 gloss.append({"term": term, "en": en, "def": d})
+    return modules, gloss
+
+
+def shape(modules):
+    """Структура курса без текста: должна совпадать у всех языков."""
+    out = {}
+    for m in modules:
+        for l in m["lessons"]:
+            out[l["id"]] = (m["id"], bool(l.get("practice")), tuple(
+                (c["t"], bool(c.get("tests")), len(c.get("options", [])), c.get("answer"), len(c.get("answers", [])), len(c.get("lines", [])))
+                for c in l["cards"]))
+    return out
+
+
+def main():
+    strict = "--partial" not in sys.argv
+    courses, glossaries = {}, {}
+    for lang in ("ru", "en"):
+        courses[lang], glossaries[lang] = load_lang(lang)
+    ru_shape, en_shape = shape(courses["ru"]), shape(courses["en"])
+    problems = []
+    for lid, sh in ru_shape.items():
+        if lid not in en_shape:
+            problems.append(f"en: нет урока {lid}")
+        elif en_shape[lid] != sh:
+            a, b = sh[2], en_shape[lid][2]
+            diff = next((i for i in range(min(len(a), len(b))) if a[i] != b[i]), min(len(a), len(b)))
+            problems.append(f"{lid}: структура ru/en расходится с карточки #{diff}: ru={a[diff:diff+1]} en={b[diff:diff+1]} (карточек ru {len(a)}, en {len(b)})")
+    for lid in en_shape:
+        if lid not in ru_shape:
+            problems.append(f"ru: нет урока {lid}")
+    missing_en = [p for p in problems if p.startswith("en: нет урока")]
+    other = [p for p in problems if not p.startswith("en: нет урока")]
+    for p in other:
+        print("ОШИБКА", p)
+    if other or (strict and missing_en):
+        if missing_en:
+            print(f"нет перевода для {len(missing_en)} уроков")
+        raise SystemExit(1)
+    if missing_en:
+        # временно: недостающие модули берём из русской версии
+        have = {m["id"] for m in courses["en"]}
+        merged = []
+        for m in courses["ru"]:
+            merged.append(next((x for x in courses["en"] if x["id"] == m["id"]), m))
+        courses["en"] = merged
+        print(f"ВНИМАНИЕ: {len(missing_en)} уроков без перевода, вставлены по-русски")
     out = ROOT / "content" / "course-data.js"
     out.parent.mkdir(exist_ok=True)
-    data = json.dumps({"modules": modules}, ensure_ascii=False, indent=0)
     out.write_text(
-        "// Сгенерировано tools/build.py из course/*.txt. Не редактируй вручную.\n"
-        f"window.COURSE = {data};\nwindow.GLOSSARY = {json.dumps(gloss, ensure_ascii=False, indent=0)};\n",
+        "// Сгенерировано tools/build.py из course/<язык>/*.txt. Не редактируй вручную.\n"
+        f"window.COURSES = {json.dumps({k: {'modules': v} for k, v in courses.items()}, ensure_ascii=False, indent=0)};\n"
+        f"window.GLOSSARIES = {json.dumps(glossaries, ensure_ascii=False, indent=0)};\n",
         encoding="utf-8",
     )
-    n_l = sum(len(m["lessons"]) for m in modules)
-    n_c = sum(len(l["cards"]) for m in modules for l in m["lessons"])
-    mins = sum(l["min"] for m in modules for l in m["lessons"])
-    print(f"модулей {len(modules)}, уроков {n_l}, карточек {n_c}, минут {mins}, терминов {len(gloss)}")
+    for lang, modules in courses.items():
+        n_l = sum(len(m["lessons"]) for m in modules)
+        n_c = sum(len(l["cards"]) for m in modules for l in m["lessons"])
+        n_t = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] in ("task", "fill", "order"))
+        n_d = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] == "deep")
+        mins = sum(l["min"] for m in modules for l in m["lessons"])
+        print(f"{lang}: модулей {len(modules)}, уроков {n_l}, карточек {n_c}, практики {n_t}, углублений {n_d}, минут {mins}, терминов {len(glossaries[lang])}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,469 @@
+# MODULE m02 | Functions | How to split a program into small pieces
+
+## LESSON m02-1 | Your own function | 6
+:: goals
+- Why functions are needed
+- How to write your own function and call it
+
+:: text A function is a small program
+A **function** is a piece of code with a name. You write it once and call it as many times as you want.
+
+> Analogy: a button on a remote control. You press "louder" and do not think about what happens inside.
+
+`main` is also a function. It is special: everything starts with it.
+
+:: code
+```rust
+fn greet() {
+    println!("Hello!");
+    println!("Nice to see you.");
+}
+
+fn main() {
+    greet();
+    greet();
+}
+```
+```out
+Hello!
+Nice to see you.
+Hello!
+Nice to see you.
+```
+`greet();` is a **call**: "run the function greet". The parentheses are required.
+
+:: quiz
+How many times is "Hello!" printed if `main` has `greet();` three times?
+[ ] 1 => Every call runs the function again.
+[x] 3 => Correct. One call means one run.
+[ ] 6 => `greet` has one "Hello!" line. Three calls means three times.
+
+:: order
+Build the program: the function `hello` and its call from `main`.
+```rust
+fn hello() {
+    println!("hello");
+}
+fn main() {
+    hello();
+}
+```
+
+:: text Comments for a function
+Before a function you can write a comment with **three** slashes `///`. This is a **documentation comment**. The editor shows it when you hover the mouse over the function name.
+
+```rust
+/// Prints a greeting.
+fn greet() {
+    println!("Hello!");
+}
+```
+Function names are written like variable names: lowercase letters with `_`. For example `print_report`.
+
+:: recap
+- `fn name() { ... }` declares a function.
+- `name();` calls it.
+- The order of functions in a file does not matter.
+
+## LESSON m02-2 | Parameters | 6
+:: goals
+- Pass data into a function
+- Write the types of parameters
+
+:: text Functions need data
+The function `greet` always says the same thing. Boring. We want to pass it a name.
+
+For that there are **parameters** — variables in the parentheses:
+
+```rust
+fn greet(name: &str) {
+    println!("Hello, {name}!");
+}
+```
+`&str` is the type of text. More about it in the module about borrowing.
+
+:: text The parameter type is required
+Inside a function Rust works out types by itself. For parameters it does **not**. You must always write the type.
+
+```rust
+fn show_age(age: i32) { ... }
+fn area(width: f64, height: f64) { ... }
+```
+Several parameters are separated by commas.
+
+:: code
+```rust
+fn print_sum(a: i32, b: i32) {
+    println!("{a} + {b} = {}", a + b);
+}
+
+fn main() {
+    print_sum(2, 3);
+    print_sum(10, -4);
+}
+```
+```out
+2 + 3 = 5
+10 + -4 = 6
+```
+
+:: fill
+Complete the function so it takes a number `n` of type `i32`.
+```rust
+fn print_double(___: ___) {
+    println!("{}", n * 2);
+}
+```
+= n
+= i32
+explain: A parameter is written as `name: type`.
+
+:: task
+Write a function `say_twice` that prints the given text two times. The call is already in `main`.
+```rust
+// write the function say_twice here
+
+fn main() {
+    say_twice("Rust");
+}
+```
+```solution
+fn say_twice(text: &str) {
+    println!("{text}");
+    println!("{text}");
+}
+
+fn main() {
+    say_twice("Rust");
+}
+```
+```expect
+Rust
+Rust
+```
+hint: Start with `fn say_twice(text: &str) {`
+hint: Inside — two lines `println!("{text}");`
+
+:: recap
+- Parameters are the input data of a function.
+- Always write the parameter type: `fn f(x: i32)`.
+- When calling, pass values: `f(5)`.
+
+## LESSON m02-3 | Returning a value | 7
+:: goals
+- How a function returns a result
+- The difference between an expression and a statement
+- Why the last line without `;` matters
+
+:: text A function can give something back
+A function can not only print, but also **return** a result. Analogy: a calculator. You give it numbers, you get an answer.
+
+The result type is written after an arrow `->`:
+
+```rust
+fn double(x: i32) -> i32 {
+    x * 2
+}
+```
+
+:: text The last line has no semicolon
+Notice: `x * 2` is written **without** `;`. This is not a typo.
+
+In Rust, the last line of a function without `;` is the result. It is called an **expression**: it has a value.
+
+A line with `;` is a **statement**. It does something, but gives no value.
+
+:: code
+```rust
+fn square(n: i32) -> i32 {
+    n * n
+}
+
+fn main() {
+    let result = square(7);
+    println!("7 squared = {result}");
+    println!("3 squared = {}", square(3));
+}
+```
+```out
+7 squared = 49
+3 squared = 9
+```
+
+:: code
+Now with an extra `;`. Run it and look at the error.
+```rust
+fn square(n: i32) -> i32 {
+    n * n;
+}
+
+fn main() {
+    println!("{}", square(3));
+}
+```
+fails: yes
+The compiler writes `mismatched types`: the function promised to return `i32`, but returned "nothing" `()`. It also suggests: `remove this semicolon`.
+
+:: text The word return
+You can also return a value explicitly with `return`. Usually this is used to leave **before** the end of the function:
+
+```rust
+fn safe_div(a: i32, b: i32) -> i32 {
+    if b == 0 {
+        return 0;
+    }
+    a / b
+}
+```
+
+:: quiz
+What does this function return for `add_one(5)`?
+```rust
+fn add_one(x: i32) -> i32 {
+    x + 1
+}
+```
+[x] 6 => Correct. The last line without `;` is the result.
+[ ] 5 => The function adds one.
+[ ] Nothing, because there is no `return` => `return` is not needed: the last expression is returned automatically.
+
+:: task
+Write a function `max` that returns the larger of two numbers. The program must print `9`.
+```rust
+fn max(a: i32, b: i32) -> i32 {
+    // your code
+}
+
+fn main() {
+    println!("{}", max(4, 9));
+}
+```
+```solution
+fn max(a: i32, b: i32) -> i32 {
+    if a > b { a } else { b }
+}
+
+fn main() {
+    println!("{}", max(4, 9));
+}
+```
+```expect
+9
+```
+hint: You need `if a > b { ... } else { ... }`. Details about `if` are in the next module.
+hint: `if` also returns a value: `if a > b { a } else { b }` — without semicolons.
+
+:: deep What () is
+A function without `->` also returns something: the value `()`. It is called **unit**. It is the value "nothing useful".
+
+That is why the error with an extra `;` says `expected i32, found ()`: a line with `;` gives `()`, not a number.
+
+```rust
+fn nothing() {}
+
+fn main() {
+    let x = nothing();
+    println!("{:?}", x);
+}
+```
+```out
+()
+```
+
+:: recap
+- `-> type` says what the function returns.
+- The last expression without `;` is the result.
+- An extra `;` at the end turns the result into "nothing" `()`.
+- `return` leaves the function early.
+
+## LESSON m02-4 | Blocks and scope | 5
+:: goals
+- What a block `{ }` is
+- Where a variable "lives"
+
+:: text A block is also an expression
+Any curly braces `{ }` form a **block**. The last expression of a block is the value of the block.
+
+```rust
+let total = {
+    let a = 2;
+    let b = 3;
+    a + b
+}; // total = 5
+```
+
+:: text A variable lives inside its block
+**Scope** is the part of the code where a variable is visible. Usually it is the block where the variable was created.
+
+```rust
+fn main() {
+    {
+        let secret = 42;
+        println!("{secret}"); // visible here
+    }
+    // println!("{secret}"); // not here anymore — an error
+}
+```
+> Analogy: a room. A thing left inside is not visible from the hallway.
+
+:: quiz
+What happens if you uncomment the last line in the example above?
+[ ] It prints 42 => The variable `secret` disappeared together with its block.
+[x] A compile error: `secret` is not found => Correct. After the closing `}` the variable no longer exists.
+[ ] It prints 0 => Rust does not invent values. It just does not find the variable.
+
+:: deep The call stack
+When `main` calls a function `a`, and `a` calls `b`, the computer remembers the chain: `main → a → b`. This chain is called the **call stack**.
+
+- Each call puts its own "frame" on the stack: parameters and local variables.
+- When a function ends, its frame is removed, and its variables disappear.
+
+That is why a function's variables are not visible outside: their frame is already gone. If a program panics, Rust can show this stack — it is called a **backtrace**.
+
+:: recap
+- `{ ... }` is a block. Its value is the last expression.
+- A variable is visible only inside the block where it was created.
+
+## LESSON m02-p | Practice: functions | 10 | practice
+:: goals
+- Write functions with parameters and results
+- Fix mistakes in functions
+
+:: task
+Write a function `is_even` that returns `true` for an even number.
+```rust
+fn is_even(n: i32) -> bool {
+}
+
+fn main() {
+    println!("{} {}", is_even(4), is_even(7));
+}
+```
+```solution
+fn is_even(n: i32) -> bool {
+    n % 2 == 0
+}
+
+fn main() {
+    println!("{} {}", is_even(4), is_even(7));
+}
+```
+```expect
+true false
+```
+hint: A number is even if the remainder of dividing by 2 is 0.
+hint: The body is one line without `;`: `n % 2 == 0`
+
+:: task
+Write a function `average3` that returns the average of three fractional numbers.
+```rust
+// write the function average3
+
+fn main() {
+    println!("{}", average3(2.0, 4.0, 9.0));
+}
+```
+```solution
+fn average3(a: f64, b: f64, c: f64) -> f64 {
+    (a + b + c) / 3.0
+}
+
+fn main() {
+    println!("{}", average3(2.0, 4.0, 9.0));
+}
+```
+```expect
+5
+```
+hint: The header: `fn average3(a: f64, b: f64, c: f64) -> f64`
+hint: The body: `(a + b + c) / 3.0`
+
+:: task
+Fix the function. It must print `Total: 30`.
+```rust
+fn total(price: i32, count: i32) {
+    price * count;
+}
+
+fn main() {
+    println!("Total: {}", total(10, 3));
+}
+```
+```solution
+fn total(price: i32, count: i32) -> i32 {
+    price * count
+}
+
+fn main() {
+    println!("Total: {}", total(10, 3));
+}
+```
+```expect
+Total: 30
+```
+hint: There are two mistakes: the function does not promise to return a number, and the last line has an extra `;`.
+hint: You need `-> i32` in the header and `price * count` without `;`.
+
+:: task
+Write a function `greet(name: &str, times: i32)` that prints `Hello, name!` the given number of times.
+```rust
+// write the function greet
+
+fn main() {
+    greet("Anna", 2);
+}
+```
+```solution
+fn greet(name: &str, times: i32) {
+    for _ in 0..times {
+        println!("Hello, {name}!");
+    }
+}
+
+fn main() {
+    greet("Anna", 2);
+}
+```
+```expect
+Hello, Anna!
+Hello, Anna!
+```
+hint: The loop `for _ in 0..times { ... }` repeats code. Loops are explained in the next module.
+hint: Inside the loop: `println!("Hello, {name}!");`
+
+:: task
+The function `clamp_score` must return the number, but not less than 0 and not more than 100. Use `return` to leave early.
+```rust
+fn clamp_score(x: i32) -> i32 {
+    x
+}
+
+fn main() {
+    println!("{} {} {}", clamp_score(-5), clamp_score(50), clamp_score(140));
+}
+```
+```solution
+fn clamp_score(x: i32) -> i32 {
+    if x < 0 {
+        return 0;
+    }
+    if x > 100 {
+        return 100;
+    }
+    x
+}
+
+fn main() {
+    println!("{} {} {}", clamp_score(-5), clamp_score(50), clamp_score(140));
+}
+```
+```expect
+0 50 100
+```
+hint: Two checks: `if x < 0 { return 0; }` and `if x > 100 { return 100; }`.
+hint: At the end return `x` without `;`.
+
+:: recap
+- `-> type` is needed if the function returns a value.
+- The last expression without `;` is the result.
+- `return` leaves early.

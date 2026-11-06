@@ -1,0 +1,482 @@
+# MODULE m03 | Conditions and loops | How a program chooses and repeats
+
+## LESSON m03-1 | if and else | 6
+:: goals
+- Run code only when a condition holds
+- Choose between options
+
+:: text If… then…
+`if` runs a block only when the condition is true.
+
+```rust
+if temperature > 30 {
+    println!("It is hot!");
+}
+```
+The condition must be of type `bool`. Parentheses around the condition are not needed.
+
+:: code
+```rust
+fn main() {
+    let hour = 14;
+    if hour < 12 {
+        println!("Good morning");
+    } else if hour < 18 {
+        println!("Good afternoon");
+    } else {
+        println!("Good evening");
+    }
+}
+```
+```out
+Good afternoon
+```
+Rust checks the conditions from top to bottom and runs the **first** matching branch. Change `hour` and run it again.
+
+:: quiz
+What does the program print with `hour = 9`?
+[x] Good morning => Correct. The very first condition `9 < 12` is true.
+[ ] Good afternoon => The second branch is never reached: the first one already matched.
+[ ] Good morning and Good afternoon => Only one branch runs.
+
+:: text if returns a value
+Like a block, `if` also gives a value. You can put it into a variable:
+
+```rust
+let label = if age >= 18 { "adult" } else { "child" };
+```
+!> Both branches must return **the same type**.
+
+:: task
+Write a program: if `number` is even, print `even`, otherwise print `odd`. Right now `number = 7`.
+```rust
+fn main() {
+    let number = 7;
+    // your code
+}
+```
+```solution
+fn main() {
+    let number = 7;
+    if number % 2 == 0 {
+        println!("even");
+    } else {
+        println!("odd");
+    }
+}
+```
+```expect
+odd
+```
+hint: A number is even if the remainder of dividing by 2 is 0.
+hint: The condition: `number % 2 == 0`.
+
+:: deep Why Rust has no "?:" operator
+Many languages have a short form of a condition: `condition ? yes : no`. Rust does not.
+
+It is not needed: in Rust, `if` itself returns a value. So the same thing is written like this:
+
+```rust
+let price = if is_member { 90 } else { 100 };
+```
+This is one of Rust's ideas: almost everything is an **expression** and gives a value. That means fewer special rules.
+
+:: recap
+- `if condition { } else if condition { } else { }`.
+- The first matching branch runs.
+- `if` can return a value; the branch types must match.
+
+## LESSON m03-2 | The loop loop | 5
+:: goals
+- Repeat code forever
+- Leave a loop with `break`
+
+:: text Repeat until I say stop
+A **loop** repeats code. The simplest one is `loop`. It repeats forever until it reaches `break`.
+
+:: code
+```rust
+fn main() {
+    let mut count = 1;
+    loop {
+        println!("Round {count}");
+        if count == 3 {
+            break;
+        }
+        count += 1;
+    }
+    println!("Done!");
+}
+```
+```out
+Round 1
+Round 2
+Round 3
+Done!
+```
+
+:: text continue — skip a step
+`continue` jumps straight to the next repetition and skips the rest of the block.
+
+> Analogy: `break` means leaving the room. `continue` means leaving and immediately coming back in.
+
+:: quiz
+What happens if a `loop` has no `break`?
+[ ] The loop runs once => `loop` repeats the block again and again.
+[x] The loop runs forever => Yes. The program hangs until someone stops it.
+[ ] A compile error => The compiler allows infinite loops: sometimes they are really needed.
+
+:: text break can return a value
+```rust
+let mut n = 1;
+let result = loop {
+    n *= 2;
+    if n > 100 {
+        break n;
+    }
+};
+// result = 128
+```
+
+:: deep Loop labels
+If one loop is inside another, `break` leaves only the **inner** one. To leave the outer loop directly, give the loop a **label** — a name with an apostrophe:
+
+```rust
+fn main() {
+    'outer: for a in 1..=3 {
+        for b in 1..=3 {
+            if a * b == 4 {
+                println!("Found: {a} × {b}");
+                break 'outer;
+            }
+        }
+    }
+}
+```
+```out
+Found: 2 × 2
+```
+`continue 'outer` works the same way: it goes to the next step of the outer loop.
+
+:: recap
+- `loop { }` repeats forever.
+- `break` leaves, `break value` leaves with a result.
+- `continue` goes straight to the next repetition.
+
+## LESSON m03-3 | while and for loops | 7
+:: goals
+- The `while` loop with a condition
+- Going through numbers with `for` and ranges
+
+:: text while — as long as it is true
+`while` repeats a block as long as the condition is true.
+
+```rust
+let mut fuel = 3;
+while fuel > 0 {
+    println!("Flying! Fuel: {fuel}");
+    fuel -= 1;
+}
+```
+
+:: text for and ranges
+`for` goes through values one by one. Most often these are numbers from a **range**:
+
+- `1..5` means 1 to 4. The right end is **not included**.
+- `1..=5` means 1 to 5. The `=` sign includes the right end.
+
+:: code
+```rust
+fn main() {
+    for i in 1..=3 {
+        println!("Push-up number {i}");
+    }
+    for i in (1..=3).rev() {
+        println!("{i}...");
+    }
+    println!("Go!");
+}
+```
+```out
+Push-up number 1
+Push-up number 2
+Push-up number 3
+3...
+2...
+1...
+Go!
+```
+`.rev()` reverses the range: we count backwards.
+
+:: quiz
+How many times does `for i in 0..10` run?
+[ ] 11 => The right end `10` is not included in `0..10`.
+[x] 10 => Correct: the numbers from 0 to 9.
+[ ] 9 => Zero also counts. From 0 to 9 there are ten numbers.
+
+:: task
+Calculate the sum of the numbers from 1 to 100 inclusive and print it.
+```rust
+fn main() {
+    let mut sum = 0;
+    // the loop goes here
+    println!("{sum}");
+}
+```
+```solution
+fn main() {
+    let mut sum = 0;
+    for i in 1..=100 {
+        sum += i;
+    }
+    println!("{sum}");
+}
+```
+```expect
+5050
+```
+hint: You need `for i in 1..=100`.
+hint: Inside the loop: `sum += i;`
+
+:: text A step bigger than one
+The method `.step_by(n)` goes through the numbers in steps of `n`:
+
+```rust
+for i in (0..=10).step_by(5) {
+    println!("{i}"); // 0, 5, 10
+}
+```
+`for` can go through more than numbers. For example, the letters of a string or the items of a list. This comes in the next modules.
+
+:: recap
+- `while condition { }` runs as long as the condition is true.
+- `for x in 1..=n { }` goes through values.
+- `a..b` excludes the right end, `a..=b` includes it.
+
+## LESSON m03-4 | Practice: FizzBuzz | 7
+:: goals
+- Combine `for`, `if` and `%`
+- Solve a classic task
+
+:: text The FizzBuzz task
+This is a famous job interview task. The rules for the numbers from 1 to 15:
+
+- divisible by 3 and by 5 — print `FizzBuzz`;
+- divisible only by 3 — `Fizz`;
+- divisible only by 5 — `Buzz`;
+- otherwise — the number itself.
+
+> Hint: put the check "by 3 and by 5" **first**. Otherwise it is never reached.
+
+:: fill
+Fill in the conditions.
+```rust
+fn main() {
+    for n in 1..=15 {
+        if n % 15 == 0 {
+            println!("FizzBuzz");
+        } else if n % ___ == 0 {
+            println!("Fizz");
+        } else if n % ___ == 0 {
+            println!("Buzz");
+        } else {
+            println!("{n}");
+        }
+    }
+}
+```
+= 3
+= 5
+explain: A number is divisible by both 3 and 5 only if it is divisible by 15.
+
+:: task
+Now on your own. Write FizzBuzz for the numbers from 1 to 15.
+```rust
+fn main() {
+    for n in 1..=15 {
+        // your code
+    }
+}
+```
+```solution
+fn main() {
+    for n in 1..=15 {
+        if n % 15 == 0 {
+            println!("FizzBuzz");
+        } else if n % 3 == 0 {
+            println!("Fizz");
+        } else if n % 5 == 0 {
+            println!("Buzz");
+        } else {
+            println!("{n}");
+        }
+    }
+}
+```
+```expect
+1
+2
+Fizz
+4
+Buzz
+Fizz
+7
+8
+Fizz
+Buzz
+11
+Fizz
+13
+14
+FizzBuzz
+```
+hint: First check `n % 15 == 0`.
+hint: Then `else if n % 3 == 0`, then `else if n % 5 == 0`, and finally `else`.
+
+:: recap
+- The order of conditions matters: the narrowest one goes first.
+- `%` helps check divisibility.
+
+## LESSON m03-p | Practice: conditions and loops | 12 | practice
+:: goals
+- Combine loops and conditions
+- Write nested loops
+
+:: task
+Print a row of the multiplication table for 7: from `7 × 1 = 7` to `7 × 5 = 35`, each on its own line.
+```rust
+fn main() {
+}
+```
+```solution
+fn main() {
+    for i in 1..=5 {
+        println!("7 × {i} = {}", 7 * i);
+    }
+}
+```
+```expect
+7 × 1 = 7
+7 × 2 = 14
+7 × 3 = 21
+7 × 4 = 28
+7 × 5 = 35
+```
+hint: The loop `for i in 1..=5`.
+hint: `println!("7 × {i} = {}", 7 * i);`
+
+:: task
+Calculate the sum of only the even numbers from 1 to 20.
+```rust
+fn main() {
+    let mut sum = 0;
+    println!("{sum}");
+}
+```
+```solution
+fn main() {
+    let mut sum = 0;
+    for i in 1..=20 {
+        if i % 2 == 0 {
+            sum += i;
+        }
+    }
+    println!("{sum}");
+}
+```
+```expect
+110
+```
+hint: Inside the loop add `i` only if `i % 2 == 0`.
+hint: Or like this: `for i in (2..=20).step_by(2) { sum += i; }`
+
+:: task
+With `while`, count down from 5 to 1, and at the end print `Launch!`.
+```rust
+fn main() {
+    let mut n = 5;
+}
+```
+```solution
+fn main() {
+    let mut n = 5;
+    while n > 0 {
+        println!("{n}");
+        n -= 1;
+    }
+    println!("Launch!");
+}
+```
+```expect
+5
+4
+3
+2
+1
+Launch!
+```
+hint: The loop condition: `while n > 0`.
+hint: Do not forget to decrease `n` inside the loop: `n -= 1;`
+
+:: task
+Using `loop` and `break` with a value, find the first number greater than 50 that is divisible by both 7 and 4. Print it.
+```rust
+fn main() {
+    let mut n = 51;
+    let found = 0; // replace with a loop
+    println!("{found}");
+}
+```
+```solution
+fn main() {
+    let mut n = 51;
+    let found = loop {
+        if n % 7 == 0 && n % 4 == 0 {
+            break n;
+        }
+        n += 1;
+    };
+    println!("{found}");
+}
+```
+```expect
+56
+```
+hint: `let found = loop { ... };` — a `;` is needed after `}`.
+hint: Inside: if it fits — `break n;`, otherwise `n += 1;`
+
+:: task
+Print a triangle of stars with a height of 4. You need two loops: the outer one for rows, the inner one for stars.
+```text
+*
+**
+***
+****
+```
+```rust
+fn main() {
+}
+```
+```solution
+fn main() {
+    for row in 1..=4 {
+        for _ in 0..row {
+            print!("*");
+        }
+        println!();
+    }
+}
+```
+```expect
+*
+**
+***
+****
+```
+hint: The outer loop is `for row in 1..=4`. Inside it, print `*` with `print!` `row` times.
+hint: After the inner loop — `println!();` to move to a new line.
+
+:: recap
+- A loop with an `if` inside is a common pattern.
+- `loop` with `break value` is handy for searching.
+- Nested loops: the outer one goes over rows, the inner one over the items of a row.

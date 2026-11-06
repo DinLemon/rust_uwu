@@ -7,6 +7,12 @@
 Запуск: python3 tools/check_rust.py [фильтр-id-урока]
 """
 import json
+
+
+def same(a, b):
+    n = lambda t: "\n".join(l.rstrip() for l in t.strip().split("\n"))
+    return n(a) == n(b)
+
 import subprocess
 import sys
 import tempfile
@@ -14,8 +20,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 src = (ROOT / "content" / "course-data.js").read_text(encoding="utf-8")
-data = json.loads(src.split("window.COURSE = ", 1)[1].split(";\nwindow.GLOSSARY", 1)[0])
-flt = sys.argv[1] if len(sys.argv) > 1 else ""
+courses = json.loads(src.split("window.COURSES = ", 1)[1].split(";\nwindow.GLOSSARIES", 1)[0])
+args = [a for a in sys.argv[1:] if not a.startswith("--lang=")]
+langs = [a[7:] for a in sys.argv[1:] if a.startswith("--lang=")] or ["ru", "en"]
+flt = args[0] if args else ""
 tmp = Path(tempfile.mkdtemp())
 
 
@@ -39,13 +47,19 @@ def run(code, tests=False):
 
 bad = 0
 total = 0
-for m in data["modules"]:
+seen = set()
+for lang in langs:
+  for m in courses[lang]["modules"] if isinstance(courses[lang], dict) else courses[lang]:
     for l in m["lessons"]:
         if flt and not l["id"].startswith(flt):
             continue
         for i, c in enumerate(l["cards"]):
-            where = f"{l['id']}#{i} {c['t']}"
-            if c["t"] == "code":
+            where = f"{lang}:{l['id']}#{i} {c['t']}"
+            sig = (c.get("code"), c.get("solution"), c.get("out"), c.get("expect"))
+            if sig in seen:
+                continue
+            seen.add(sig)
+            if c["t"] in ("code", "deep") and c.get("code"):
                 total += 1
                 ok, out, err = run(c["code"], c.get("tests", False))
                 if c.get("fails"):
@@ -56,7 +70,7 @@ for m in data["modules"]:
                 if not ok:
                     bad += 1
                     print(f"FAIL {where}: не компилируется\n{err[:1500]}")
-                elif "out" in c and out.strip() != c["out"].strip():
+                elif "out" in c and not same(out, c["out"]):
                     bad += 1
                     print(f"FAIL {where}: вывод\n--- ждали\n{c['out']}\n--- получили\n{out}")
             elif c["t"] == "task":
@@ -65,7 +79,7 @@ for m in data["modules"]:
                 if not ok:
                     bad += 1
                     print(f"FAIL {where}: решение не компилируется/тесты упали\n{err[:1500]}{out[-800:]}")
-                elif "expect" in c and out.strip() != c["expect"].strip():
+                elif "expect" in c and not same(out, c["expect"]):
                     bad += 1
                     print(f"FAIL {where}: вывод решения\n--- ждали\n{c['expect']}\n--- получили\n{out}")
                 for s in c.get("mustContain", []):
