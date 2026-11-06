@@ -1,0 +1,473 @@
+# MODULE m05 | Ownership | The main idea of Rust. Slowly, step by step
+
+## LESSON m05-1 | Where data lives: the stack and the heap | 6
+:: goals
+- What the stack and the heap are
+- Why this matters at all
+
+:: text Why this module exists
+This is **the most important** topic in Rust. It is what makes Rust fast and reliable.
+
+It is also the topic that feels the strangest. That is why the lessons here are especially small. Do not rush. If something does not make sense the first time, that is normal.
+
+:: text Program memory
+While a program runs, its data lives in **memory**. Memory has two places:
+
+- the **stack** — a fast shelf for things of known size;
+- the **heap** — a big storage room for things whose size can change.
+
+:: text The stack is a pile of plates
+Numbers, `bool`, `char` always have the same size. They live on the **stack**.
+
+> Analogy: a pile of plates. You put a plate on top and take one from the top. Very fast and simple.
+
+When a function ends, its plates are removed from the pile automatically.
+
+:: text The heap is a storage room
+Text that can grow is stored in the **heap**. For example, the type `String`.
+
+> Analogy: a storage room. The storekeeper finds free space, puts the item there and gives you a **ticket**. The ticket lives on the stack, and the item itself is in the storage room.
+
+The main question: **who frees the space in the storage room, and when?** Ownership answers this question.
+
+:: quiz
+Where is a `String` that can grow stored?
+[ ] Only on the stack => Only the "ticket" is on the stack: the address, the length, the capacity.
+[x] In the heap, with a pointer to it on the stack => Correct. Like an item in storage and a ticket in your pocket.
+[ ] Nowhere, it is computed on the fly => Data is always stored somewhere in memory.
+
+:: text How other languages clean the storage room
+- In C the programmer frees memory **by hand**. Forget it — memory leaks. Free it twice — the program crashes.
+- In Python, Java, C# a **garbage collector** works. It walks around and cleans up by itself. Convenient, but it takes time.
+- In Rust the cleanup is planned **in advance**, while compiling. This is **ownership**.
+
+:: deep What a String is made of
+A variable of type `String` itself is small. It lives on the stack and holds three numbers:
+1. a **pointer** — the address of the text in the heap;
+2. the **length** — how many bytes of text there are now;
+3. the **capacity** — how many bytes are reserved in the heap.
+
+```rust
+fn main() {
+    let s = String::from("hello");
+    println!("Bytes of text: {}", s.len());
+    println!("Size of the variable itself: {} bytes", std::mem::size_of::<String>());
+}
+```
+```out
+Bytes of text: 5
+Size of the variable itself: 24 bytes
+```
+24 bytes are three numbers of 8 bytes each. The text itself lives separately, in the heap.
+
+:: recap
+- The stack is a fast pile for data of known size.
+- The heap is storage for data that can grow.
+- Ownership decides who frees heap space and when.
+
+## LESSON m05-2 | The three rules of ownership | 6
+:: goals
+- Learn the three rules of ownership
+- Understand when a value is deleted
+
+:: text The three rules
+The whole ownership system is just three rules:
+
+1. Every value has an **owner** — a variable.
+2. There is **only one** owner at a time.
+3. When the owner goes out of scope, the value is **deleted**.
+
+> Analogy: a book has one owner. If the owner leaves forever, the book goes to recycling.
+
+:: code
+Rule 3 in action. Let us create a `String` inside a block.
+```rust
+fn main() {
+    {
+        let s = String::from("hello");
+        println!("{s}");
+    } // here s goes out of scope — the memory is freed
+    println!("the block has ended");
+}
+```
+```out
+hello
+the block has ended
+```
+`String::from("...")` creates a string in the heap. At `}` Rust does the cleanup by itself. You do not need to write anything.
+
+:: quiz
+When is the memory of the string `s` in the example above freed?
+[ ] At the end of `main` => Earlier: `s` lives only inside its block.
+[x] At the closing `}` of the block where `s` was created => Correct. The owner is gone — the value is deleted.
+[ ] Never, while the program runs => In Rust memory is freed as soon as the owner is gone.
+
+:: fill
+Remember the rules. Fill in each blank with one word.
+```rust
+// 1. Every value has an ___.
+// 2. There is only ___ owner at a time.
+// 3. When the owner is gone, the value is ___.
+```
+= owner
+= one | 1
+= deleted | dropped | freed | removed
+explain: This is all that ownership is built on.
+
+:: deep How to see the moment of deletion
+In Rust you can ask a type to report when it is deleted. For that there is the trait `Drop`. Traits come in module 12; here just look at the result.
+
+```rust
+struct Noisy(&'static str);
+
+impl Drop for Noisy {
+    fn drop(&mut self) {
+        println!("Deleting {}", self.0);
+    }
+}
+
+fn main() {
+    let _a = Noisy("first");
+    {
+        let _b = Noisy("second");
+        println!("End of the inner block");
+    }
+    println!("End of main");
+}
+```
+```out
+End of the inner block
+Deleting second
+End of main
+Deleting first
+```
+You can see rule 3: a value is deleted exactly when its owner leaves its block.
+
+:: recap
+- A value has one owner.
+- When the owner leaves the block, the value is deleted.
+- The compiler writes the cleanup, not you.
+
+## LESSON m05-3 | Move | 7
+:: goals
+- What happens with `let b = a;` for a string
+- Why the old variable stops working
+
+:: text You gave the book away — you no longer have it
+What happens if you write `let b = a;` where `a` is a `String`?
+
+Rule 2: there is one owner. So the book **moves** to `b`. And `a` no longer has it.
+
+This is called a **move**.
+
+:: code
+Run it. What does the compiler say?
+```rust
+fn main() {
+    let a = String::from("book");
+    let b = a;
+    println!("{a}");
+}
+```
+fails: yes
+The error is `E0382: borrow of moved value: a`. The value moved into `b`. The variable `a` is now empty.
+
+:: text Why it works this way
+If both `a` and `b` owned the string, it would be deleted **twice** at `}`. In C this is a classic crash.
+
+Rust simply forbids it. The error is caught while compiling, not on the user's computer.
+
+:: quiz
+What does the program print?
+```rust
+fn main() {
+    let a = String::from("cat");
+    let b = a;
+    println!("{b}");
+}
+```
+[x] cat => Correct. Now the owner is `b`, and you can print it.
+[ ] A compile error => The error would happen when using `a`. `b` is the rightful owner.
+[ ] An empty string => The data did not go anywhere; only the owner changed.
+
+:: text A function also takes ownership
+Passing a value into a function is also a move. The function becomes the owner.
+
+```rust
+fn eat(food: String) {
+    println!("Ate {food}");
+} // here food is deleted
+
+fn main() {
+    let apple = String::from("apple");
+    eat(apple);
+    // apple can no longer be used
+}
+```
+
+:: quiz
+After `eat(apple);` can you print `apple`?
+[ ] Yes, the function only looked at it => Without `&` a function does not look, it takes.
+[x] No, the value moved into the function => Correct. And it was deleted at the end of `eat`.
+
+:: deep What is really copied in a move
+With `let b = a;` for a `String`, only the three numbers on the stack are copied: the pointer, the length, the capacity. The text in the heap stays where it is.
+
+So `a` and `b` point to the same text. To avoid deleting the text twice, Rust declares `a` invalid. That is why a move is fast: however long the text is, only 24 bytes are copied.
+
+:: recap
+- `let b = a;` with a `String` moves the value.
+- After a move the old variable cannot be used: error E0382.
+- Passing into a function is also a move.
+
+## LESSON m05-4 | clone and Copy | 6
+:: goals
+- How to make a copy with `.clone()`
+- Why numbers are copied automatically
+
+:: text clone — a photocopy
+Do you need the data in both `a` and `b`? Make a **copy**: `.clone()`.
+
+```rust
+let a = String::from("text");
+let b = a.clone();
+println!("{a} and {b}"); // works
+```
+> Analogy: a photocopy of a book. Now everyone has their own. But copying a big book takes time, so do it on purpose.
+
+:: code
+With numbers everything works even without `clone`. Why?
+```rust
+fn main() {
+    let x = 5;
+    let y = x;
+    println!("x = {x}, y = {y}");
+}
+```
+```out
+x = 5, y = 5
+```
+
+:: text The Copy type
+Small simple values live on the stack. Copying them is cheap. So Rust copies them **automatically**.
+
+Such types are called **Copy**: all numbers, `bool`, `char` and tuples made of them.
+
+> Analogy: a number is like a note with a digit. It is easy to copy onto another piece of paper. A `String` is a whole book.
+
+:: quiz
+Which of these types is NOT copied automatically with `let b = a;`?
+[ ] `i32` => Whole numbers are Copy.
+[ ] `bool` => `bool` is Copy.
+[x] `String` => Correct. A `String` lives in the heap, so it moves.
+[ ] `char` => `char` is Copy.
+
+:: task
+Fix the program: add a copy so that both strings are printed.
+```rust
+fn main() {
+    let original = String::from("Rust");
+    let copy = original;
+    println!("{original} and {copy}");
+}
+```
+```solution
+fn main() {
+    let original = String::from("Rust");
+    let copy = original.clone();
+    println!("{original} and {copy}");
+}
+```
+```expect
+Rust and Rust
+```
+hint: Right now the value moves into `copy`. You need a copy.
+hint: `let copy = original.clone();`
+
+:: deep Why String cannot be Copy
+A type can be `Copy` only if it can be copied **byte by byte** and both copies are independent.
+
+For a `String`, a byte copy would give two pointers to the same text in the heap. Two variables would own the same text, and that breaks rule 2. So a `String` needs `.clone()`: it reserves **new** memory and copies the text there.
+
+The rule: if a type owns something in the heap, it is not `Copy`.
+
+:: recap
+- `.clone()` makes a full copy. It works, but it costs time.
+- Numbers, `bool`, `char` are Copy types; they are copied automatically.
+- `String` and `Vec` move.
+
+## LESSON m05-5 | Giving ownership back | 5
+:: goals
+- How a function can give ownership back
+- Why this is inconvenient and what comes next
+
+:: text A function can give it back
+A function took a value. But it can also **return** it:
+
+```rust
+fn add_world(mut s: String) -> String {
+    s.push_str(", world");
+    s
+}
+```
+`push_str` adds text to the end of a string.
+
+:: code
+```rust
+fn add_world(mut s: String) -> String {
+    s.push_str(", world");
+    s
+}
+
+fn main() {
+    let greeting = String::from("Hello");
+    let greeting = add_world(greeting);
+    println!("{greeting}");
+}
+```
+```out
+Hello, world
+```
+
+:: text Inconvenient, right?
+Giving a value away and taking it back every time is tiring. It is like giving a friend a book only so that they can tell you how many pages it has.
+
+We want to let someone **look** without giving the value away. Rust has this. It is called **borrowing** — the topic of the next module.
+
+:: quiz
+Why does `add_world` return `s`?
+[x] To give ownership of the string back to `main` => Correct. Otherwise the string would be deleted at the end of the function.
+[ ] To print it => `main` prints, not the function.
+[ ] Because the syntax of every function requires it => Functions do not have to return anything.
+
+:: recap
+- A function can give ownership back through its result.
+- It works, but it is inconvenient.
+- The convenient way is borrowing (`&`). It comes next.
+
+## LESSON m05-p | Practice: ownership | 12 | practice
+:: goals
+- Fix error E0382 in different ways
+- Predict where a value will move
+
+:: quiz
+Which program compiles?
+[ ] `let a = String::from("x"); let b = a; println!("{a}");` => After `let b = a;` the string moved into `b`. You cannot use `a`.
+[x] `let a = 5; let b = a; println!("{a}");` => Correct. A number is a Copy type; it was copied.
+[ ] `let a = vec![1]; let b = a; println!("{:?}", a);` => A `Vec` also moves, like a `String`.
+
+:: task
+Way 1: a copy. Fix the program with `.clone()`.
+```rust
+fn main() {
+    let name = String::from("Rust");
+    let other = name;
+    println!("{name} {other}");
+}
+```
+```solution
+fn main() {
+    let name = String::from("Rust");
+    let other = name.clone();
+    println!("{name} {other}");
+}
+```
+```expect
+Rust Rust
+```
+hint: `let other = name.clone();`
+
+:: task
+Way 2: the order. Fix the program just by moving lines around. Do not use `clone`.
+```rust
+fn main() {
+    let text = String::from("book");
+    let moved = text;
+    println!("Before: {text}");
+    println!("After: {moved}");
+}
+```
+```solution
+fn main() {
+    let text = String::from("book");
+    println!("Before: {text}");
+    let moved = text;
+    println!("After: {moved}");
+}
+```
+```expect
+Before: book
+After: book
+```
+hint: Use `text` **before** it moves into `moved`.
+hint: Put `println!("Before: {text}");` before `let moved = text;`
+
+:: task
+Way 3: give ownership back. The function `add_exclaim` takes the string. Make it return the string with `!` at the end.
+```rust
+fn add_exclaim(mut s: String) {
+    s.push('!');
+}
+
+fn main() {
+    let word = String::from("Hooray");
+    add_exclaim(word);
+    println!("{word}");
+}
+```
+```solution
+fn add_exclaim(mut s: String) -> String {
+    s.push('!');
+    s
+}
+
+fn main() {
+    let word = String::from("Hooray");
+    let word = add_exclaim(word);
+    println!("{word}");
+}
+```
+```expect
+Hooray!
+```
+hint: The function needs `-> String` and `s` as the last line.
+hint: In `main`: `let word = add_exclaim(word);`
+
+:: task
+Here the string moves inside a loop. Fix it so the program prints `Rust` three times. `clone` works.
+```rust
+fn print_it(s: String) {
+    println!("{s}");
+}
+
+fn main() {
+    let s = String::from("Rust");
+    for _ in 0..3 {
+        print_it(s);
+    }
+}
+```
+```solution
+fn print_it(s: String) {
+    println!("{s}");
+}
+
+fn main() {
+    let s = String::from("Rust");
+    for _ in 0..3 {
+        print_it(s.clone());
+    }
+}
+```
+```expect
+Rust
+Rust
+Rust
+```
+hint: On the first step of the loop `s` moves into the function. On the second step it is gone.
+hint: Pass a copy: `print_it(s.clone());`. The next module shows a better way — a reference.
+
+:: recap
+- E0382 is fixed in three ways: `clone`, a different order of lines, giving ownership back.
+- In a loop a value moves on the very first step.
+- The most convenient way is references. They are in the next module.

@@ -1,0 +1,589 @@
+# MODULE m07 | Structs | Your own data types
+
+## LESSON m07-1 | A struct is a form | 6
+:: goals
+- Create your own type with `struct`
+- Read and change fields
+
+:: text A form with fields
+A **struct** is your own type made of several named fields.
+
+```rust
+struct User {
+    name: String,
+    age: u32,
+    active: bool,
+}
+```
+> Analogy: a blank form with the fields "name", "age", "active". The blank form is the type. A filled-in form is a value.
+
+Struct names start with a capital letter: `User`, `GameCharacter`.
+
+:: code
+```rust
+struct User {
+    name: String,
+    age: u32,
+}
+
+fn main() {
+    let mut user = User {
+        name: String::from("Anna"),
+        age: 25,
+    };
+    println!("{} is {} years old", user.name, user.age);
+    user.age += 1;
+    println!("Happy birthday! Now {}", user.age);
+}
+```
+```out
+Anna is 25 years old
+Happy birthday! Now 26
+```
+A field is read with a dot: `user.age`. You can change it only if the whole variable is `mut`.
+
+:: fill
+Fill in the blanks to create a point with the coordinates 3 and 4.
+```rust
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = ___ { x: 3, ___: 4 };
+    println!("{}, {}", p.x, p.y);
+}
+```
+= Point
+= y
+
+:: text A short form for fields
+If a variable has the same name as a field, you do not need to repeat it:
+
+```rust
+fn new_user(name: String, age: u32) -> User {
+    User { name, age } // instead of name: name, age: age
+}
+```
+
+:: text Tuple structs
+Some structs have no field names. They are called **tuple structs**:
+
+```rust
+struct Meters(f64);
+struct Color(u8, u8, u8);
+
+let height = Meters(1.8);
+let red = Color(255, 0, 0);
+println!("{}", red.0); // 255
+```
+Why? So you do not mix up similar values. `Meters` and `Seconds` both hold an `f64` inside, but the compiler will not let you add meters to seconds.
+
+:: deep Creating a struct from another one
+There is a short form "take the other fields from another struct": `..other`.
+
+```rust
+#[derive(Debug)]
+struct Settings {
+    volume: u8,
+    dark: bool,
+    lang: &'static str,
+}
+
+fn main() {
+    let base = Settings { volume: 50, dark: false, lang: "en" };
+    let mine = Settings { dark: true, ..base };
+    println!("{:?}", mine);
+}
+```
+```out
+Settings { volume: 50, dark: true, lang: "en" }
+```
+`..base` is written **last**. The fields given explicitly come from the new value.
+
+:: recap
+- `struct Name { field: type, ... }` is your own type.
+- A value: `Name { field: value, ... }`.
+- A field: `value.field`.
+
+## LESSON m07-2 | Printing a struct: Debug | 5
+:: goals
+- How to print a whole struct
+- What `#[derive(Debug)]` is
+
+:: code
+Let us try to print a struct with `{}`. Run it.
+```rust
+struct Cat {
+    name: String,
+    lives: u8,
+}
+
+fn main() {
+    let cat = Cat { name: String::from("Tom"), lives: 9 };
+    println!("{}", cat);
+}
+```
+fails: yes
+Error `E0277`: Rust does not know **how** to display your struct nicely. It is not a number and not a string.
+
+:: text derive(Debug) — printing for the developer
+Add the line `#[derive(Debug)]` above the struct and print it with `{:?}`.
+
+- `#[derive(Debug)]` means "teach this type to print itself for debugging".
+- `{:?}` means "print the debug view".
+- `{:#?}` is the same, but pretty, on several lines.
+
+:: code
+```rust
+#[derive(Debug)]
+struct Cat {
+    name: String,
+    lives: u8,
+}
+
+fn main() {
+    let cat = Cat { name: String::from("Tom"), lives: 9 };
+    println!("{:?}", cat);
+    println!("{cat:#?}");
+}
+```
+```out
+Cat { name: "Tom", lives: 9 }
+Cat {
+    name: "Tom",
+    lives: 9,
+}
+```
+
+:: quiz
+What do you need to print a struct with `{:?}`?
+[ ] Nothing, it just works => Without `derive(Debug)` the compiler gives error E0277.
+[x] Add `#[derive(Debug)]` above the struct => Correct.
+[ ] Write a function `print` => You could, but there is a shorter way.
+
+:: deep What derive really does
+`#[derive(Debug)]` asks the compiler to **write code for you**. The compiler creates an implementation of the trait `Debug`: a function that prints the struct name and all its fields.
+
+Written by hand, it would be about 10 lines. Traits, and how to write such implementations yourself, are in module 12.
+
+:: recap
+- `#[derive(Debug)]` + `{:?}` is quick printing for debugging.
+- `{:#?}` is the same, but in a column.
+
+## LESSON m07-3 | Methods: impl | 7
+:: goals
+- Attach functions to a struct
+- The difference between `&self`, `&mut self` and `self`
+
+:: text A method is a function "inside" a type
+A **method** is a function that belongs to a type. Methods are written in an `impl` block (implementation).
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+```
+`self` means "the value the method was called on". The call: `rect.area()`.
+
+:: code
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn grow(&mut self, by: u32) {
+        self.width += by;
+        self.height += by;
+    }
+}
+
+fn main() {
+    let mut r = Rectangle { width: 3, height: 4 };
+    println!("Area: {}", r.area());
+    r.grow(1);
+    println!("After growing: {}", r.area());
+}
+```
+```out
+Area: 12
+After growing: 20
+```
+
+:: text Three kinds of self
+- `&self` — the method only **looks**. The most common.
+- `&mut self` — the method **changes** the struct.
+- `self` — the method **takes** the whole struct. This is rare.
+
+These are the same rules of ownership and borrowing. Just about the struct itself.
+
+:: quiz
+Which `self` does a method `rename`, which changes the field `name`, need?
+[ ] `&self` => With `&self` you can only read.
+[x] `&mut self` => Correct. To change, you need a mutable reference.
+[ ] None, methods do not change fields => They do, if they have `&mut self`.
+
+:: task
+Add a method `can_hold` that returns `true` if the rectangle `self` is bigger than `other` in both width and height.
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    // your method can_hold
+}
+
+fn main() {
+    let big = Rectangle { width: 10, height: 8 };
+    let small = Rectangle { width: 3, height: 2 };
+    println!("{}", big.can_hold(&small));
+    println!("{}", small.can_hold(&big));
+}
+```
+```solution
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+fn main() {
+    let big = Rectangle { width: 10, height: 8 };
+    let small = Rectangle { width: 3, height: 2 };
+    println!("{}", big.can_hold(&small));
+    println!("{}", small.can_hold(&big));
+}
+```
+```expect
+true
+false
+```
+hint: The header: `fn can_hold(&self, other: &Rectangle) -> bool`
+hint: The body: `self.width > other.width && self.height > other.height`
+
+:: deep What the dot means in a method call
+The form `r.area()` is a shortcut. In full it looks like this:
+
+```rust
+Rectangle::area(&r)
+```
+Rust inserts `&`, `&mut` or nothing by itself — depending on what `self` says. So you do not need to write `(&r).area()`.
+
+This is called **automatic referencing**.
+
+:: recap
+- Methods are written in `impl Type { ... }`.
+- `&self` reads, `&mut self` changes, `self` takes.
+- The call: `value.method()`.
+
+## LESSON m07-4 | The new constructor | 5
+:: goals
+- Functions without `self` in `impl`
+- The custom of calling the constructor `new`
+
+:: text Associated functions
+In `impl` you can write functions **without** `self`. They are called with `::`, not with a dot.
+
+Usually this is used for a **constructor** — a function that creates a new value. By tradition it is called `new`.
+
+```rust
+impl Counter {
+    fn new() -> Counter {
+        Counter { count: 0 }
+    }
+}
+let c = Counter::new();
+```
+You have already seen this: `String::new()`, `Vec::new()`.
+
+:: text Self — the short name of your type
+Inside `impl` you can write `Self` with a capital letter instead of the type name:
+
+```rust
+fn new() -> Self {
+    Self { count: 0 }
+}
+```
+
+:: task
+Complete the constructor `Player::new(name)` that creates a player with 100 health points.
+```rust
+#[derive(Debug)]
+struct Player {
+    name: String,
+    hp: u32,
+}
+
+impl Player {
+    fn new(name: &str) -> Self {
+        // your code
+    }
+}
+
+fn main() {
+    let p = Player::new("Hero");
+    println!("{} {}", p.name, p.hp);
+}
+```
+```solution
+#[derive(Debug)]
+struct Player {
+    name: String,
+    hp: u32,
+}
+
+impl Player {
+    fn new(name: &str) -> Self {
+        Self { name: name.to_string(), hp: 100 }
+    }
+}
+
+fn main() {
+    let p = Player::new("Hero");
+    println!("{} {}", p.name, p.hp);
+}
+```
+```expect
+Hero 100
+```
+hint: Return `Self { name: ..., hp: 100 }`.
+hint: Make a `String` from the `&str` with `name.to_string()`.
+
+:: text Several impl blocks
+One type can have **several** `impl` blocks. For example, constructors in one and calculations in another. The compiler puts them together.
+
+This is a convenient way to split a big type into meaningful parts.
+
+:: recap
+- A function in `impl` without `self` is called as `Type::function()`.
+- The constructor is traditionally called `new`.
+- `Self` is the short name of the current type.
+
+## LESSON m07-p | Practice: structs | 12 | practice
+:: goals
+- Describe your own types
+- Write methods and constructors
+
+:: task
+Describe a struct `Book` with the fields `title: String` and `pages: u32`. Create a book and print `"Dune": 704 pages`.
+```rust
+// describe the struct Book
+
+fn main() {
+    let b = Book { title: String::from("Dune"), pages: 704 };
+    println!("\"{}\": {} pages", b.title, b.pages);
+}
+```
+```solution
+struct Book {
+    title: String,
+    pages: u32,
+}
+
+fn main() {
+    let b = Book { title: String::from("Dune"), pages: 704 };
+    println!("\"{}\": {} pages", b.title, b.pages);
+}
+```
+```expect
+"Dune": 704 pages
+```
+hint: `struct Book { title: String, pages: u32 }`
+
+:: task
+Add a method `is_square` that returns `true` if the width equals the height.
+```rust
+struct Rect {
+    w: u32,
+    h: u32,
+}
+
+impl Rect {
+}
+
+fn main() {
+    println!("{}", Rect { w: 3, h: 3 }.is_square());
+    println!("{}", Rect { w: 3, h: 5 }.is_square());
+}
+```
+```solution
+struct Rect {
+    w: u32,
+    h: u32,
+}
+
+impl Rect {
+    fn is_square(&self) -> bool {
+        self.w == self.h
+    }
+}
+
+fn main() {
+    println!("{}", Rect { w: 3, h: 3 }.is_square());
+    println!("{}", Rect { w: 3, h: 5 }.is_square());
+}
+```
+```expect
+true
+false
+```
+hint: The method only reads the fields, so it needs `&self`.
+hint: `fn is_square(&self) -> bool { self.w == self.h }`
+
+:: task
+A bank account. Complete the methods `deposit` (put money in) and `withdraw` (take money out). If there is not enough money, `withdraw` returns `false` and changes nothing.
+```rust
+struct Account {
+    balance: u32,
+}
+
+impl Account {
+    fn deposit(&mut self, amount: u32) {
+    }
+
+    fn withdraw(&mut self, amount: u32) -> bool {
+        false
+    }
+}
+
+fn main() {
+    let mut acc = Account { balance: 100 };
+    acc.deposit(50);
+    println!("{}", acc.withdraw(120));
+    println!("{}", acc.withdraw(100));
+    println!("Left: {}", acc.balance);
+}
+```
+```solution
+struct Account {
+    balance: u32,
+}
+
+impl Account {
+    fn deposit(&mut self, amount: u32) {
+        self.balance += amount;
+    }
+
+    fn withdraw(&mut self, amount: u32) -> bool {
+        if amount > self.balance {
+            return false;
+        }
+        self.balance -= amount;
+        true
+    }
+}
+
+fn main() {
+    let mut acc = Account { balance: 100 };
+    acc.deposit(50);
+    println!("{}", acc.withdraw(120));
+    println!("{}", acc.withdraw(100));
+    println!("Left: {}", acc.balance);
+}
+```
+```expect
+true
+false
+Left: 30
+```
+hint: In `deposit`: `self.balance += amount;`
+hint: In `withdraw`: if `amount > self.balance` — `return false;`, otherwise decrease the balance and return `true`.
+
+:: task
+Add a constructor `Point::origin()` (the point 0, 0) and a method `dist` that returns the distance to another point. The formula: the square root of `(x1−x2)² + (y1−y2)²`. The square root is the method `.sqrt()`.
+```rust
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Point {
+}
+
+fn main() {
+    let a = Point::origin();
+    let b = Point { x: 3.0, y: 4.0 };
+    println!("{}", a.dist(&b));
+}
+```
+```solution
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Point {
+    fn origin() -> Self {
+        Point { x: 0.0, y: 0.0 }
+    }
+
+    fn dist(&self, other: &Point) -> f64 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+fn main() {
+    let a = Point::origin();
+    let b = Point { x: 3.0, y: 4.0 };
+    println!("{}", a.dist(&b));
+}
+```
+```expect
+5
+```
+hint: `fn origin() -> Self { Point { x: 0.0, y: 0.0 } }`
+hint: `fn dist(&self, other: &Point) -> f64` — calculate `dx`, `dy` and return `(dx * dx + dy * dy).sqrt()`.
+
+:: task
+A tuple struct `Celsius(f64)`. Add a method `to_fahrenheit` that returns degrees Fahrenheit: `C × 1.8 + 32`.
+```rust
+struct Celsius(f64);
+
+impl Celsius {
+}
+
+fn main() {
+    println!("{}", Celsius(100.0).to_fahrenheit());
+}
+```
+```solution
+struct Celsius(f64);
+
+impl Celsius {
+    fn to_fahrenheit(&self) -> f64 {
+        self.0 * 1.8 + 32.0
+    }
+}
+
+fn main() {
+    println!("{}", Celsius(100.0).to_fahrenheit());
+}
+```
+```expect
+212
+```
+hint: The value inside a tuple struct is `self.0`.
+hint: `fn to_fahrenheit(&self) -> f64 { self.0 * 1.8 + 32.0 }`
+
+:: recap
+- Reads — `&self`, changes — `&mut self`.
+- A constructor without `self` is called as `Type::name()`.
+- The value of a tuple struct is `self.0`.

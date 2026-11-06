@@ -1819,6 +1819,13 @@ window.COURSES = {
 "md": "- В C программист убирает **вручную**. Забыл — память течёт. Убрал дважды — программа падает.\n- В Python, Java, C# работает **сборщик мусора**. Он сам ходит и убирает. Удобно, но тратит время.\n- В Rust уборка расписана **заранее**, ещё при компиляции. Это и есть **владение**."
 },
 {
+"t": "deep",
+"title": "Из чего состоит String",
+"md": "Сама переменная типа `String` маленькая. Она лежит на стеке и хранит три числа:\n1. **указатель** — адрес текста в куче;\n2. **длину** — сколько байт текста сейчас;\n3. **вместимость** — сколько байт выделено в куче.\n\n24 байта — это три числа по 8 байт. Сам текст лежит отдельно, в куче.",
+"code": "fn main() {\n    let s = String::from(\"привет\");\n    println!(\"Байт текста: {}\", s.len());\n    println!(\"Размер самой переменной: {} байта\", std::mem::size_of::<String>());\n}",
+"out": "Байт текста: 12\nРазмер самой переменной: 24 байта"
+},
+{
 "t": "recap",
 "items": [
 "Стек — быстрая стопка для данных известного размера.",
@@ -1884,6 +1891,13 @@ window.COURSES = {
 "удалено"
 ]
 ]
+},
+{
+"t": "deep",
+"title": "Как увидеть момент удаления",
+"md": "В Rust можно попросить тип сообщить, когда его удаляют. Для этого есть трейт `Drop`. Трейты будут в модуле 12, здесь просто посмотри на результат.\n\nВидно правило 3: значение удаляется ровно тогда, когда владелец выходит из своего блока.",
+"code": "struct Noisy(&'static str);\n\nimpl Drop for Noisy {\n    fn drop(&mut self) {\n        println!(\"Удаляю {}\", self.0);\n    }\n}\n\nfn main() {\n    let _a = Noisy(\"первый\");\n    {\n        let _b = Noisy(\"второй\");\n        println!(\"Конец внутреннего блока\");\n    }\n    println!(\"Конец main\");\n}",
+"out": "Конец внутреннего блока\nУдаляю второй\nКонец main\nУдаляю первый"
 },
 {
 "t": "recap",
@@ -1955,6 +1969,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Что на самом деле копируется при move",
+"md": "При `let b = a;` для `String` копируются только три числа со стека: указатель, длина, вместимость. Сам текст в куче остаётся на месте.\n\nПолучается, что `a` и `b` указывают на один и тот же текст. Чтобы текст не удалили дважды, Rust объявляет `a` недействительной. Поэтому move — это быстро: сколько бы ни был длинный текст, копируется 24 байта."
+},
+{
 "t": "recap",
 "items": [
 "`let b = a;` со `String` перемещает значение.",
@@ -2018,6 +2037,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Почему String не может быть Copy",
+"md": "Тип может быть `Copy`, только если его можно скопировать **побайтно** и обе копии будут независимы.\n\nУ `String` побайтная копия даст два указателя на один текст в куче. Две переменные стали бы владельцами одного текста, а это нарушает правило 2. Поэтому для `String` нужен `.clone()`: он выделяет **новую** память и копирует туда текст.\n\nПравило: если тип владеет чем-то в куче, он не `Copy`."
+},
+{
 "t": "recap",
 "items": [
 "`.clone()` делает полную копию. Работает, но стоит времени.",
@@ -2079,6 +2103,84 @@ window.COURSES = {
 "Как функция может вернуть владение",
 "Почему это неудобно и что будет дальше"
 ]
+},
+{
+"id": "m05-p",
+"title": "Практика: владение",
+"min": 12,
+"cards": [
+{
+"t": "quiz",
+"md": "Какая программа скомпилируется?",
+"options": [
+"`let a = String::from(\"x\"); let b = a; println!(\"{a}\");`",
+"`let a = 5; let b = a; println!(\"{a}\");`",
+"`let a = vec![1]; let b = a; println!(\"{:?}\", a);`"
+],
+"answer": 1,
+"why": [
+"После `let b = a;` строка переехала в `b`. Пользоваться `a` нельзя.",
+"Верно. Число — тип Copy, оно скопировалось.",
+"`Vec` тоже перемещается, как `String`."
+]
+},
+{
+"t": "task",
+"md": "Способ 1: копия. Почини программу через `.clone()`.",
+"code": "fn main() {\n    let name = String::from(\"Rust\");\n    let other = name;\n    println!(\"{name} {other}\");\n}",
+"solution": "fn main() {\n    let name = String::from(\"Rust\");\n    let other = name.clone();\n    println!(\"{name} {other}\");\n}",
+"expect": "Rust Rust",
+"hints": [
+"`let other = name.clone();`"
+]
+},
+{
+"t": "task",
+"md": "Способ 2: порядок. Почини программу, просто переставив строки. Не используй `clone`.",
+"code": "fn main() {\n    let text = String::from(\"книга\");\n    let moved = text;\n    println!(\"Было: {text}\");\n    println!(\"Стало: {moved}\");\n}",
+"solution": "fn main() {\n    let text = String::from(\"книга\");\n    println!(\"Было: {text}\");\n    let moved = text;\n    println!(\"Стало: {moved}\");\n}",
+"expect": "Было: книга\nСтало: книга",
+"hints": [
+"Используй `text` **до** того, как оно переедет в `moved`.",
+"Поставь `println!(\"Было: {text}\");` перед `let moved = text;`"
+]
+},
+{
+"t": "task",
+"md": "Способ 3: вернуть владение. Функция `add_exclaim` забирает строку. Пусть она вернёт её обратно с `!` в конце.",
+"code": "fn add_exclaim(mut s: String) {\n    s.push('!');\n}\n\nfn main() {\n    let word = String::from(\"Ура\");\n    add_exclaim(word);\n    println!(\"{word}\");\n}",
+"solution": "fn add_exclaim(mut s: String) -> String {\n    s.push('!');\n    s\n}\n\nfn main() {\n    let word = String::from(\"Ура\");\n    let word = add_exclaim(word);\n    println!(\"{word}\");\n}",
+"expect": "Ура!",
+"hints": [
+"Функции нужно `-> String` и последняя строка `s`.",
+"В `main`: `let word = add_exclaim(word);`"
+]
+},
+{
+"t": "task",
+"md": "Здесь строка переезжает в цикле. Почини, чтобы программа напечатала `Rust` три раза. Подойдёт `clone`.",
+"code": "fn print_it(s: String) {\n    println!(\"{s}\");\n}\n\nfn main() {\n    let s = String::from(\"Rust\");\n    for _ in 0..3 {\n        print_it(s);\n    }\n}",
+"solution": "fn print_it(s: String) {\n    println!(\"{s}\");\n}\n\nfn main() {\n    let s = String::from(\"Rust\");\n    for _ in 0..3 {\n        print_it(s.clone());\n    }\n}",
+"expect": "Rust\nRust\nRust",
+"hints": [
+"На первом шаге цикла `s` переезжает в функцию. На втором её уже нет.",
+"Передавай копию: `print_it(s.clone());`. В следующем модуле будет способ лучше — ссылка."
+]
+},
+{
+"t": "recap",
+"items": [
+"E0382 чинят тремя способами: `clone`, другой порядок строк, возврат владения.",
+"В цикле значение переезжает на первом же шаге.",
+"Самый удобный способ — ссылки. Они в следующем модуле."
+]
+}
+],
+"practice": true,
+"goals": [
+"Чинить ошибку E0382 разными способами",
+"Предсказывать, где значение переедет"
+]
 }
 ]
 },
@@ -2128,6 +2230,12 @@ window.COURSES = {
 "Изменить надо два места: тип параметра и вызов.",
 "`fn shout(s: &String)` и `shout(&msg);`"
 ]
+},
+{
+"t": "deep",
+"title": "Что внутри ссылки",
+"md": "Ссылка — это просто **адрес** значения в памяти. Она занимает 8 байт (на 64-битном компьютере), как бы ни было велико само значение.\n\nАдрес можно напечатать через `{:p}` (p — pointer, указатель):\n\nАдрес будет разным при каждом запуске. Размер ссылки всегда `8 байт`.",
+"code": "fn main() {\n    let big = String::from(\"очень длинный текст\");\n    let r = &big;\n    println!(\"Адрес: {:p}\", r);\n    println!(\"Размер ссылки: {} байт\", std::mem::size_of::<&String>());\n}"
 },
 {
 "t": "recap",
@@ -2189,6 +2297,11 @@ window.COURSES = {
 "Писатель может быть только один.",
 "Пока кто-то читает, писать нельзя."
 ]
+},
+{
+"t": "deep",
+"title": "От какой ошибки спасает правило",
+"md": "Представь: ты держишь ссылку на первый элемент вектора и в это время добавляешь в вектор новый элемент.\n\n```\nlet mut v = vec![1, 2, 3];\nlet first = &v[0];\nv.push(4);            // ошибка E0502\nprintln!(\"{first}\");\n```\nПри `push` вектору может не хватить места. Тогда он переезжает в новую память, а старая освобождается. Ссылка `first` указывала бы на освобождённую память.\n\nВ C++ такая ошибка компилируется и потом ломает программу в случайный момент. Rust её не пропускает: пока есть читатель `first`, менять `v` нельзя."
 },
 {
 "t": "recap",
@@ -2312,6 +2425,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Почему &String подходит туда, где ждут &str",
+"md": "Функция `greet(name: &str)` принимает и `&String`. Как так, ведь типы разные?\n\nRust сам превращает `&String` в `&str`. Это называется **автоматическое разыменование** (deref coercion). `String` умеет выдавать срез на весь свой текст.\n\nТо же работает с векторами: `&Vec<i32>` превращается в срез `&[i32]`. Поэтому в параметрах пишут `&[i32]` — так функция примет и массив, и вектор."
+},
+{
 "t": "recap",
 "items": [
 "Срез `&a[1..3]` — окошко в часть данных.",
@@ -2325,6 +2443,85 @@ window.COURSES = {
 "Что такое срез",
 "Разница между `String` и `&str`",
 "Ловушка с русскими буквами"
+]
+},
+{
+"id": "m06-p",
+"title": "Практика: ссылки и срезы",
+"min": 12,
+"cards": [
+{
+"t": "fill",
+"md": "Заполни пропуски: первая функция только читает, вторая меняет.",
+"code": "fn show(v: ___Vec<i32>) {\n    println!(\"{:?}\", v);\n}\n\nfn add_one(v: ___Vec<i32>) {\n    v.push(1);\n}",
+"answers": [
+[
+"&"
+],
+[
+"&mut",
+"& mut"
+]
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `count_vowels`, которая считает гласные русские буквы в строке. Гласные: `аеёиоуыэюя`.",
+"code": "fn count_vowels(s: &str) -> usize {\n    0\n}\n\nfn main() {\n    println!(\"{}\", count_vowels(\"программирование\"));\n}",
+"solution": "fn count_vowels(s: &str) -> usize {\n    let mut n = 0;\n    for c in s.chars() {\n        if \"аеёиоуыэюя\".contains(c) {\n            n += 1;\n        }\n    }\n    n\n}\n\nfn main() {\n    println!(\"{}\", count_vowels(\"программирование\"));\n}",
+"expect": "7",
+"hints": [
+"Перебирай буквы: `for c in s.chars()`.",
+"Проверка гласной: `\"аеёиоуыэюя\".contains(c)`."
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `double_all`, которая удваивает каждый элемент вектора через `&mut`.",
+"code": "fn double_all(v: &mut Vec<i32>) {\n}\n\nfn main() {\n    let mut nums = vec![1, 2, 3];\n    double_all(&mut nums);\n    println!(\"{:?}\", nums);\n}",
+"solution": "fn double_all(v: &mut Vec<i32>) {\n    for x in v.iter_mut() {\n        *x *= 2;\n    }\n}\n\nfn main() {\n    let mut nums = vec![1, 2, 3];\n    double_all(&mut nums);\n    println!(\"{:?}\", nums);\n}",
+"expect": "[2, 4, 6]",
+"hints": [
+"`for x in v.iter_mut()` даёт изменяемую ссылку на каждый элемент.",
+"Значение по ссылке меняют через `*`: `*x *= 2;`"
+]
+},
+{
+"t": "task",
+"md": "Почини ошибку E0502: печать ссылки мешает изменению. Поменяй порядок строк так, чтобы программа напечатала `1` и `[1, 2, 3, 4]`.",
+"code": "fn main() {\n    let mut v = vec![1, 2, 3];\n    let first = &v[0];\n    v.push(4);\n    println!(\"{first}\");\n    println!(\"{:?}\", v);\n}",
+"solution": "fn main() {\n    let mut v = vec![1, 2, 3];\n    let first = &v[0];\n    println!(\"{first}\");\n    v.push(4);\n    println!(\"{:?}\", v);\n}",
+"expect": "1\n[1, 2, 3, 4]",
+"hints": [
+"Ссылка `first` должна закончить работу **до** `push`.",
+"Перенеси `println!(\"{first}\");` выше `v.push(4);`"
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `sum`, которая принимает срез `&[i32]` и возвращает сумму. Она должна работать и с массивом, и с вектором.",
+"code": "// напиши функцию sum\n\nfn main() {\n    let arr = [1, 2, 3];\n    let v = vec![10, 20];\n    println!(\"{} {}\", sum(&arr), sum(&v));\n    println!(\"{}\", sum(&arr[1..]));\n}",
+"solution": "fn sum(items: &[i32]) -> i32 {\n    let mut total = 0;\n    for x in items {\n        total += x;\n    }\n    total\n}\n\nfn main() {\n    let arr = [1, 2, 3];\n    let v = vec![10, 20];\n    println!(\"{} {}\", sum(&arr), sum(&v));\n    println!(\"{}\", sum(&arr[1..]));\n}",
+"expect": "6 30\n5",
+"hints": [
+"Заголовок: `fn sum(items: &[i32]) -> i32`",
+"`&arr[1..]` — срез от второго элемента до конца."
+]
+},
+{
+"t": "recap",
+"items": [
+"`&` — читать, `&mut` — менять.",
+"Пока есть читатель, писать нельзя: заканчивай работу со ссылкой раньше.",
+"Параметр `&[i32]` принимает и массив, и вектор, и их части."
+]
+}
+],
+"practice": true,
+"goals": [
+"Передавать данные по ссылке",
+"Менять данные через `&mut`",
+"Работать со срезами"
 ]
 }
 ]
@@ -2367,6 +2564,18 @@ window.COURSES = {
 "t": "text",
 "title": "Короткая запись полей",
 "md": "Если переменная называется так же, как поле, можно не повторять:\n\n```\nfn new_user(name: String, age: u32) -> User {\n    User { name, age } // вместо name: name, age: age\n}\n```"
+},
+{
+"t": "text",
+"title": "Кортежные структуры",
+"md": "Бывают структуры без имён полей. Их называют **кортежными структурами**:\n\n```\nstruct Meters(f64);\nstruct Color(u8, u8, u8);\n\nlet height = Meters(1.8);\nlet red = Color(255, 0, 0);\nprintln!(\"{}\", red.0); // 255\n```\nЗачем? Чтобы не перепутать похожие значения. `Meters` и `Seconds` — оба `f64` внутри, но компилятор не даст сложить метры с секундами."
+},
+{
+"t": "deep",
+"title": "Создать структуру из другой",
+"md": "Есть короткая запись «возьми остальные поля из другой структуры»: `..другая`.\n\n`..base` пишут **последним**. Поля, которые указаны явно, берутся из новой записи.",
+"code": "#[derive(Debug)]\nstruct Settings {\n    volume: u8,\n    dark: bool,\n    lang: &'static str,\n}\n\nfn main() {\n    let base = Settings { volume: 50, dark: false, lang: \"ru\" };\n    let mine = Settings { dark: true, ..base };\n    println!(\"{:?}\", mine);\n}",
+"out": "Settings { volume: 50, dark: true, lang: \"ru\" }"
 },
 {
 "t": "recap",
@@ -2418,6 +2627,11 @@ window.COURSES = {
 "Верно.",
 "Можно, но есть способ короче."
 ]
+},
+{
+"t": "deep",
+"title": "Что на самом деле делает derive",
+"md": "`#[derive(Debug)]` — это просьба к компилятору **написать код за тебя**. Компилятор сам создаёт реализацию трейта `Debug`: функцию, которая печатает имя структуры и все её поля.\n\nВручную это выглядело бы примерно на 10 строк. Подробно о трейтах и о том, как писать такие реализации сами, — в модуле 12."
 },
 {
 "t": "recap",
@@ -2479,6 +2693,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Что значит точка при вызове метода",
+"md": "Запись `r.area()` — это сокращение. Полностью она выглядит так:\n\n```\nRectangle::area(&r)\n```\nRust сам подставляет `&`, `&mut` или ничего — смотря что указано в `self`. Поэтому не нужно писать `(&r).area()`.\n\nЭтот приём называют **автоматическим взятием ссылки**."
+},
+{
 "t": "recap",
 "items": [
 "Методы пишут в `impl Тип { ... }`.",
@@ -2519,6 +2738,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Несколько блоков impl",
+"md": "У одного типа может быть **несколько** блоков `impl`. Например, конструкторы в одном, расчёты в другом. Компилятор соберёт их вместе.\n\nТак удобно делить большой тип на смысловые части."
+},
+{
 "t": "recap",
 "items": [
 "Функция в `impl` без `self` вызывается через `Тип::функция()`.",
@@ -2530,6 +2754,80 @@ window.COURSES = {
 "goals": [
 "Функции без `self` в `impl`",
 "Обычай называть конструктор `new`"
+]
+},
+{
+"id": "m07-p",
+"title": "Практика: структуры",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Опиши структуру `Book` с полями `title: String` и `pages: u32`. Создай книгу и напечатай `«Дюна»: 704 стр.`",
+"code": "// опиши структуру Book\n\nfn main() {\n    let b = Book { title: String::from(\"Дюна\"), pages: 704 };\n    println!(\"«{}»: {} стр.\", b.title, b.pages);\n}",
+"solution": "struct Book {\n    title: String,\n    pages: u32,\n}\n\nfn main() {\n    let b = Book { title: String::from(\"Дюна\"), pages: 704 };\n    println!(\"«{}»: {} стр.\", b.title, b.pages);\n}",
+"expect": "«Дюна»: 704 стр.",
+"hints": [
+"`struct Book { title: String, pages: u32 }`"
+]
+},
+{
+"t": "task",
+"md": "Добавь метод `is_square`, который возвращает `true`, если ширина равна высоте.",
+"code": "struct Rect {\n    w: u32,\n    h: u32,\n}\n\nimpl Rect {\n}\n\nfn main() {\n    println!(\"{}\", Rect { w: 3, h: 3 }.is_square());\n    println!(\"{}\", Rect { w: 3, h: 5 }.is_square());\n}",
+"solution": "struct Rect {\n    w: u32,\n    h: u32,\n}\n\nimpl Rect {\n    fn is_square(&self) -> bool {\n        self.w == self.h\n    }\n}\n\nfn main() {\n    println!(\"{}\", Rect { w: 3, h: 3 }.is_square());\n    println!(\"{}\", Rect { w: 3, h: 5 }.is_square());\n}",
+"expect": "true\nfalse",
+"hints": [
+"Метод только читает поля, значит `&self`.",
+"`fn is_square(&self) -> bool { self.w == self.h }`"
+]
+},
+{
+"t": "task",
+"md": "Счёт в банке. Допиши методы `deposit` (положить деньги) и `withdraw` (снять). Если денег не хватает, `withdraw` возвращает `false` и ничего не меняет.",
+"code": "struct Account {\n    balance: u32,\n}\n\nimpl Account {\n    fn deposit(&mut self, amount: u32) {\n    }\n\n    fn withdraw(&mut self, amount: u32) -> bool {\n        false\n    }\n}\n\nfn main() {\n    let mut acc = Account { balance: 100 };\n    acc.deposit(50);\n    println!(\"{}\", acc.withdraw(120));\n    println!(\"{}\", acc.withdraw(100));\n    println!(\"Остаток: {}\", acc.balance);\n}",
+"solution": "struct Account {\n    balance: u32,\n}\n\nimpl Account {\n    fn deposit(&mut self, amount: u32) {\n        self.balance += amount;\n    }\n\n    fn withdraw(&mut self, amount: u32) -> bool {\n        if amount > self.balance {\n            return false;\n        }\n        self.balance -= amount;\n        true\n    }\n}\n\nfn main() {\n    let mut acc = Account { balance: 100 };\n    acc.deposit(50);\n    println!(\"{}\", acc.withdraw(120));\n    println!(\"{}\", acc.withdraw(100));\n    println!(\"Остаток: {}\", acc.balance);\n}",
+"expect": "true\nfalse\nОстаток: 30",
+"hints": [
+"В `deposit`: `self.balance += amount;`",
+"В `withdraw`: если `amount > self.balance` — `return false;`, иначе уменьши баланс и верни `true`."
+]
+},
+{
+"t": "task",
+"md": "Добавь конструктор `Point::origin()` (точка 0, 0) и метод `dist`, который возвращает расстояние до другой точки. Формула: корень из `(x1−x2)² + (y1−y2)²`. Корень — метод `.sqrt()`.",
+"code": "struct Point {\n    x: f64,\n    y: f64,\n}\n\nimpl Point {\n}\n\nfn main() {\n    let a = Point::origin();\n    let b = Point { x: 3.0, y: 4.0 };\n    println!(\"{}\", a.dist(&b));\n}",
+"solution": "struct Point {\n    x: f64,\n    y: f64,\n}\n\nimpl Point {\n    fn origin() -> Self {\n        Point { x: 0.0, y: 0.0 }\n    }\n\n    fn dist(&self, other: &Point) -> f64 {\n        let dx = self.x - other.x;\n        let dy = self.y - other.y;\n        (dx * dx + dy * dy).sqrt()\n    }\n}\n\nfn main() {\n    let a = Point::origin();\n    let b = Point { x: 3.0, y: 4.0 };\n    println!(\"{}\", a.dist(&b));\n}",
+"expect": "5",
+"hints": [
+"`fn origin() -> Self { Point { x: 0.0, y: 0.0 } }`",
+"`fn dist(&self, other: &Point) -> f64` — посчитай `dx`, `dy` и верни `(dx * dx + dy * dy).sqrt()`."
+]
+},
+{
+"t": "task",
+"md": "Кортежная структура `Celsius(f64)`. Добавь метод `to_fahrenheit`, который возвращает градусы Фаренгейта: `C × 1.8 + 32`.",
+"code": "struct Celsius(f64);\n\nimpl Celsius {\n}\n\nfn main() {\n    println!(\"{}\", Celsius(100.0).to_fahrenheit());\n}",
+"solution": "struct Celsius(f64);\n\nimpl Celsius {\n    fn to_fahrenheit(&self) -> f64 {\n        self.0 * 1.8 + 32.0\n    }\n}\n\nfn main() {\n    println!(\"{}\", Celsius(100.0).to_fahrenheit());\n}",
+"expect": "212",
+"hints": [
+"Значение внутри кортежной структуры — `self.0`.",
+"`fn to_fahrenheit(&self) -> f64 { self.0 * 1.8 + 32.0 }`"
+]
+},
+{
+"t": "recap",
+"items": [
+"Читает — `&self`, меняет — `&mut self`.",
+"Конструктор без `self` вызывают через `Тип::имя()`.",
+"Значение кортежной структуры — `self.0`."
+]
+}
+],
+"practice": true,
+"goals": [
+"Описывать свои типы",
+"Писать методы и конструкторы"
 ]
 }
 ]
@@ -6355,228 +6653,247 @@ window.COURSES = {
 },
 {
 "id": "m05",
-"title": "Владение",
-"sub": "Главная идея Rust. Медленно и по шагам",
+"title": "Ownership",
+"sub": "The main idea of Rust. Slowly, step by step",
 "lessons": [
 {
 "id": "m05-1",
-"title": "Где живут данные: стек и куча",
+"title": "Where data lives: the stack and the heap",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Зачем этот модуль",
-"md": "Это **самая важная** тема Rust. Именно она делает Rust быстрым и надёжным.\n\nОна же кажется самой странной. Поэтому здесь уроки особенно маленькие. Не торопись. Если что-то не щёлкнуло с первого раза — это нормально."
+"title": "Why this module exists",
+"md": "This is **the most important** topic in Rust. It is what makes Rust fast and reliable.\n\nIt is also the topic that feels the strangest. That is why the lessons here are especially small. Do not rush. If something does not make sense the first time, that is normal."
 },
 {
 "t": "text",
-"title": "Память программы",
-"md": "Пока программа работает, данные лежат в **памяти**. У памяти есть два места:\n\n- **стек** (stack) — быстрая полка для вещей известного размера;\n- **куча** (heap) — большой склад для вещей, размер которых может меняться."
+"title": "Program memory",
+"md": "While a program runs, its data lives in **memory**. Memory has two places:\n\n- the **stack** — a fast shelf for things of known size;\n- the **heap** — a big storage room for things whose size can change."
 },
 {
 "t": "text",
-"title": "Стек — стопка тарелок",
-"md": "Числа, `bool`, `char` всегда одного размера. Они лежат на **стеке**.\n\n> Стек — как стопка тарелок. Кладут сверху, берут сверху. Очень быстро и просто.\n\nКогда функция заканчивается, её тарелки снимаются со стопки сами."
+"title": "The stack is a pile of plates",
+"md": "Numbers, `bool`, `char` always have the same size. They live on the **stack**.\n\n> Analogy: a pile of plates. You put a plate on top and take one from the top. Very fast and simple.\n\nWhen a function ends, its plates are removed from the pile automatically."
 },
 {
 "t": "text",
-"title": "Куча — склад",
-"md": "Текст, который может расти, хранится в **куче**. Например, тип `String`.\n\n> Куча — как склад. Кладовщик находит свободное место, кладёт вещь и выдаёт тебе **номерок**. Номерок лежит на стеке, а сама вещь — на складе.\n\nГлавный вопрос: **кто и когда освободит место на складе?** Вот на него и отвечает владение."
+"title": "The heap is a storage room",
+"md": "Text that can grow is stored in the **heap**. For example, the type `String`.\n\n> Analogy: a storage room. The storekeeper finds free space, puts the item there and gives you a **ticket**. The ticket lives on the stack, and the item itself is in the storage room.\n\nThe main question: **who frees the space in the storage room, and when?** Ownership answers this question."
 },
 {
 "t": "quiz",
-"md": "Где хранится текст `String`, который может расти?",
+"md": "Where is a `String` that can grow stored?",
 "options": [
-"Только на стеке",
-"В куче, а на стеке — указатель на него",
-"Нигде, он вычисляется на лету"
+"Only on the stack",
+"In the heap, with a pointer to it on the stack",
+"Nowhere, it is computed on the fly"
 ],
 "answer": 1,
 "why": [
-"На стеке лежит лишь «номерок»: адрес, длина, вместимость.",
-"Верно. Как вещь на складе и номерок в кармане.",
-"Данные всегда где-то лежат в памяти."
+"Only the \"ticket\" is on the stack: the address, the length, the capacity.",
+"Correct. Like an item in storage and a ticket in your pocket.",
+"Data is always stored somewhere in memory."
 ]
 },
 {
 "t": "text",
-"title": "Как другие языки убирают склад",
-"md": "- В C программист убирает **вручную**. Забыл — память течёт. Убрал дважды — программа падает.\n- В Python, Java, C# работает **сборщик мусора**. Он сам ходит и убирает. Удобно, но тратит время.\n- В Rust уборка расписана **заранее**, ещё при компиляции. Это и есть **владение**."
+"title": "How other languages clean the storage room",
+"md": "- In C the programmer frees memory **by hand**. Forget it — memory leaks. Free it twice — the program crashes.\n- In Python, Java, C# a **garbage collector** works. It walks around and cleans up by itself. Convenient, but it takes time.\n- In Rust the cleanup is planned **in advance**, while compiling. This is **ownership**."
+},
+{
+"t": "deep",
+"title": "What a String is made of",
+"md": "A variable of type `String` itself is small. It lives on the stack and holds three numbers:\n1. a **pointer** — the address of the text in the heap;\n2. the **length** — how many bytes of text there are now;\n3. the **capacity** — how many bytes are reserved in the heap.\n\n24 bytes are three numbers of 8 bytes each. The text itself lives separately, in the heap.",
+"code": "fn main() {\n    let s = String::from(\"hello\");\n    println!(\"Bytes of text: {}\", s.len());\n    println!(\"Size of the variable itself: {} bytes\", std::mem::size_of::<String>());\n}",
+"out": "Bytes of text: 5\nSize of the variable itself: 24 bytes"
 },
 {
 "t": "recap",
 "items": [
-"Стек — быстрая стопка для данных известного размера.",
-"Куча — склад для данных, которые могут расти.",
-"Владение решает, кто и когда освобождает место в куче."
+"The stack is a fast pile for data of known size.",
+"The heap is storage for data that can grow.",
+"Ownership decides who frees heap space and when."
 ]
 }
 ],
 "goals": [
-"Что такое стек и куча",
-"Почему это вообще важно"
+"What the stack and the heap are",
+"Why this matters at all"
 ]
 },
 {
 "id": "m05-2",
-"title": "Три правила владения",
+"title": "The three rules of ownership",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Три правила",
-"md": "Вся система владения — это всего три правила:\n\n1. У каждого значения есть **владелец** — переменная.\n2. Владелец в каждый момент **только один**.\n3. Когда владелец выходит из области видимости, значение **удаляется**.\n\n> Как с книгой. У книги один хозяин. Хозяин уехал навсегда — книгу сдали в макулатуру."
+"title": "The three rules",
+"md": "The whole ownership system is just three rules:\n\n1. Every value has an **owner** — a variable.\n2. There is **only one** owner at a time.\n3. When the owner goes out of scope, the value is **deleted**.\n\n> Analogy: a book has one owner. If the owner leaves forever, the book goes to recycling."
 },
 {
 "t": "code",
-"md": "Правило 3 в деле. Создадим `String` внутри блока.",
-"code": "fn main() {\n    {\n        let s = String::from(\"привет\");\n        println!(\"{s}\");\n    } // здесь s выходит из области видимости — память освобождается\n    println!(\"блок закончился\");\n}",
-"out": "привет\nблок закончился",
-"after": "`String::from(\"...\")` создаёт строку в куче. На `}` Rust сам вызывает уборку. Писать ничего не нужно."
+"md": "Rule 3 in action. Let us create a `String` inside a block.",
+"code": "fn main() {\n    {\n        let s = String::from(\"hello\");\n        println!(\"{s}\");\n    } // here s goes out of scope — the memory is freed\n    println!(\"the block has ended\");\n}",
+"out": "hello\nthe block has ended",
+"after": "`String::from(\"...\")` creates a string in the heap. At `}` Rust does the cleanup by itself. You do not need to write anything."
 },
 {
 "t": "quiz",
-"md": "Когда освобождается память строки `s` в примере выше?",
+"md": "When is the memory of the string `s` in the example above freed?",
 "options": [
-"В конце `main`",
-"На закрывающей `}` блока, где создана `s`",
-"Никогда, пока программа работает"
+"At the end of `main`",
+"At the closing `}` of the block where `s` was created",
+"Never, while the program runs"
 ],
 "answer": 1,
 "why": [
-"Раньше: `s` живёт только внутри своего блока.",
-"Верно. Владелец ушёл — значение удалено.",
-"В Rust память освобождается сразу, как только владелец исчез."
+"Earlier: `s` lives only inside its block.",
+"Correct. The owner is gone — the value is deleted.",
+"In Rust memory is freed as soon as the owner is gone."
 ]
 },
 {
 "t": "fill",
-"explain": "Это всё, на чём держится владение.",
-"md": "Вспомни правила. Заполни пропуски одним словом.",
-"code": "// 1. У каждого значения есть ___.\n// 2. Владелец в каждый момент только ___.\n// 3. Владелец ушёл — значение ___.",
+"explain": "This is all that ownership is built on.",
+"md": "Remember the rules. Fill in each blank with one word.",
+"code": "// 1. Every value has an ___.\n// 2. There is only ___ owner at a time.\n// 3. When the owner is gone, the value is ___.",
 "answers": [
 [
-"владелец"
+"owner"
 ],
 [
-"один",
-"одна",
+"one",
 "1"
 ],
 [
-"удаляется",
-"удалится",
-"удалено"
+"deleted",
+"dropped",
+"freed",
+"removed"
 ]
 ]
 },
 {
+"t": "deep",
+"title": "How to see the moment of deletion",
+"md": "In Rust you can ask a type to report when it is deleted. For that there is the trait `Drop`. Traits come in module 12; here just look at the result.\n\nYou can see rule 3: a value is deleted exactly when its owner leaves its block.",
+"code": "struct Noisy(&'static str);\n\nimpl Drop for Noisy {\n    fn drop(&mut self) {\n        println!(\"Deleting {}\", self.0);\n    }\n}\n\nfn main() {\n    let _a = Noisy(\"first\");\n    {\n        let _b = Noisy(\"second\");\n        println!(\"End of the inner block\");\n    }\n    println!(\"End of main\");\n}",
+"out": "End of the inner block\nDeleting second\nEnd of main\nDeleting first"
+},
+{
 "t": "recap",
 "items": [
-"У значения один владелец.",
-"Владелец вышел из блока — значение удалено.",
-"Уборку пишет компилятор, а не ты."
+"A value has one owner.",
+"When the owner leaves the block, the value is deleted.",
+"The compiler writes the cleanup, not you."
 ]
 }
 ],
 "goals": [
-"Выучить три правила владения",
-"Понять, когда значение удаляется"
+"Learn the three rules of ownership",
+"Understand when a value is deleted"
 ]
 },
 {
 "id": "m05-3",
-"title": "Перемещение (move)",
+"title": "Move",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Отдал книгу — её у тебя нет",
-"md": "Что будет, если написать `let b = a;`, где `a` — `String`?\n\nПравило 2: владелец один. Значит, книга **переходит** к `b`. А у `a` её больше нет.\n\nЭто называется **перемещение** (move)."
+"title": "You gave the book away — you no longer have it",
+"md": "What happens if you write `let b = a;` where `a` is a `String`?\n\nRule 2: there is one owner. So the book **moves** to `b`. And `a` no longer has it.\n\nThis is called a **move**."
 },
 {
 "t": "code",
 "fails": true,
-"md": "Запусти. Что скажет компилятор?",
-"code": "fn main() {\n    let a = String::from(\"книга\");\n    let b = a;\n    println!(\"{a}\");\n}",
-"after": "Ошибка `E0382: borrow of moved value: a` — «использование перемещённого значения». Значение уехало в `b`. Переменная `a` теперь пустая."
+"md": "Run it. What does the compiler say?",
+"code": "fn main() {\n    let a = String::from(\"book\");\n    let b = a;\n    println!(\"{a}\");\n}",
+"after": "The error is `E0382: borrow of moved value: a`. The value moved into `b`. The variable `a` is now empty."
 },
 {
 "t": "text",
-"title": "Почему так сделано",
-"md": "Если бы `a` и `b` обе владели строкой, на `}` её удалили бы **дважды**. В C это классическая авария.\n\nRust просто запрещает так делать. Ошибка ловится на компиляции, а не у пользователя."
+"title": "Why it works this way",
+"md": "If both `a` and `b` owned the string, it would be deleted **twice** at `}`. In C this is a classic crash.\n\nRust simply forbids it. The error is caught while compiling, not on the user's computer."
 },
 {
 "t": "quiz",
-"md": "Что напечатает программа?\n```\nfn main() {\n    let a = String::from(\"кот\");\n    let b = a;\n    println!(\"{b}\");\n}\n```",
+"md": "What does the program print?\n```\nfn main() {\n    let a = String::from(\"cat\");\n    let b = a;\n    println!(\"{b}\");\n}\n```",
 "options": [
-"кот",
-"Ошибка компиляции",
-"Пустую строку"
+"cat",
+"A compile error",
+"An empty string"
 ],
 "answer": 0,
 "why": [
-"Верно. Теперь владелец — `b`, и печатать его можно.",
-"Ошибка была бы при обращении к `a`. А `b` — законный владелец.",
-"Данные никуда не делись, просто сменился хозяин."
+"Correct. Now the owner is `b`, and you can print it.",
+"The error would happen when using `a`. `b` is the rightful owner.",
+"The data did not go anywhere; only the owner changed."
 ]
 },
 {
 "t": "text",
-"title": "Функция тоже забирает",
-"md": "Передать значение в функцию — это тоже перемещение. Функция становится владельцем.\n\n```\nfn eat(food: String) {\n    println!(\"Съел {food}\");\n} // тут food удаляется\n\nfn main() {\n    let apple = String::from(\"яблоко\");\n    eat(apple);\n    // apple больше нельзя использовать\n}\n```"
+"title": "A function also takes ownership",
+"md": "Passing a value into a function is also a move. The function becomes the owner.\n\n```\nfn eat(food: String) {\n    println!(\"Ate {food}\");\n} // here food is deleted\n\nfn main() {\n    let apple = String::from(\"apple\");\n    eat(apple);\n    // apple can no longer be used\n}\n```"
 },
 {
 "t": "quiz",
-"md": "После `eat(apple);` можно ли напечатать `apple`?",
+"md": "After `eat(apple);` can you print `apple`?",
 "options": [
-"Да, функция только посмотрела",
-"Нет, значение переехало в функцию"
+"Yes, the function only looked at it",
+"No, the value moved into the function"
 ],
 "answer": 1,
 "why": [
-"Без `&` функция не смотрит, а забирает.",
-"Верно. И удалилось в конце `eat`."
+"Without `&` a function does not look, it takes.",
+"Correct. And it was deleted at the end of `eat`."
 ]
+},
+{
+"t": "deep",
+"title": "What is really copied in a move",
+"md": "With `let b = a;` for a `String`, only the three numbers on the stack are copied: the pointer, the length, the capacity. The text in the heap stays where it is.\n\nSo `a` and `b` point to the same text. To avoid deleting the text twice, Rust declares `a` invalid. That is why a move is fast: however long the text is, only 24 bytes are copied."
 },
 {
 "t": "recap",
 "items": [
-"`let b = a;` со `String` перемещает значение.",
-"После перемещения старой переменной пользоваться нельзя: ошибка E0382.",
-"Передача в функцию — тоже перемещение."
+"`let b = a;` with a `String` moves the value.",
+"After a move the old variable cannot be used: error E0382.",
+"Passing into a function is also a move."
 ]
 }
 ],
 "goals": [
-"Что происходит при `let b = a;` со строкой",
-"Почему старая переменная перестаёт работать"
+"What happens with `let b = a;` for a string",
+"Why the old variable stops working"
 ]
 },
 {
 "id": "m05-4",
-"title": "clone и Copy",
+"title": "clone and Copy",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "clone — ксерокопия",
-"md": "Нужно, чтобы данные были и у `a`, и у `b`? Сделай **копию**: `.clone()`.\n\n```\nlet a = String::from(\"текст\");\nlet b = a.clone();\nprintln!(\"{a} и {b}\"); // работает\n```\n> Это ксерокопия книги. Теперь у каждого своя. Но копировать большую книгу — долго, поэтому делай это осознанно."
+"title": "clone — a photocopy",
+"md": "Do you need the data in both `a` and `b`? Make a **copy**: `.clone()`.\n\n```\nlet a = String::from(\"text\");\nlet b = a.clone();\nprintln!(\"{a} and {b}\"); // works\n```\n> Analogy: a photocopy of a book. Now everyone has their own. But copying a big book takes time, so do it on purpose."
 },
 {
 "t": "code",
-"md": "А с числами всё работает и без `clone`. Почему?",
+"md": "With numbers everything works even without `clone`. Why?",
 "code": "fn main() {\n    let x = 5;\n    let y = x;\n    println!(\"x = {x}, y = {y}\");\n}",
 "out": "x = 5, y = 5"
 },
 {
 "t": "text",
-"title": "Тип Copy",
-"md": "Маленькие простые значения лежат на стеке. Копировать их дёшево. Поэтому Rust копирует их **сам**.\n\nТакие типы называются **Copy**: все числа, `bool`, `char` и кортежи из них.\n\n> Число — как записка с цифрой. Её легко переписать на другую бумажку. А `String` — целая книга."
+"title": "The Copy type",
+"md": "Small simple values live on the stack. Copying them is cheap. So Rust copies them **automatically**.\n\nSuch types are called **Copy**: all numbers, `bool`, `char` and tuples made of them.\n\n> Analogy: a number is like a note with a digit. It is easy to copy onto another piece of paper. A `String` is a whole book."
 },
 {
 "t": "quiz",
-"md": "Какой из этих типов НЕ копируется сам при `let b = a;`?",
+"md": "Which of these types is NOT copied automatically with `let b = a;`?",
 "options": [
 "`i32`",
 "`bool`",
@@ -6585,294 +6902,389 @@ window.COURSES = {
 ],
 "answer": 2,
 "why": [
-"Целые числа — Copy.",
-"`bool` — Copy.",
-"Верно. `String` лежит в куче, он перемещается.",
-"`char` — Copy."
+"Whole numbers are Copy.",
+"`bool` is Copy.",
+"Correct. A `String` lives in the heap, so it moves.",
+"`char` is Copy."
 ]
 },
 {
 "t": "task",
-"md": "Почини программу: добавь копию, чтобы обе строки напечатались.",
-"code": "fn main() {\n    let original = String::from(\"Rust\");\n    let copy = original;\n    println!(\"{original} и {copy}\");\n}",
-"solution": "fn main() {\n    let original = String::from(\"Rust\");\n    let copy = original.clone();\n    println!(\"{original} и {copy}\");\n}",
-"expect": "Rust и Rust",
+"md": "Fix the program: add a copy so that both strings are printed.",
+"code": "fn main() {\n    let original = String::from(\"Rust\");\n    let copy = original;\n    println!(\"{original} and {copy}\");\n}",
+"solution": "fn main() {\n    let original = String::from(\"Rust\");\n    let copy = original.clone();\n    println!(\"{original} and {copy}\");\n}",
+"expect": "Rust and Rust",
 "hints": [
-"Сейчас значение переезжает в `copy`. Нужна копия.",
+"Right now the value moves into `copy`. You need a copy.",
 "`let copy = original.clone();`"
 ]
 },
 {
+"t": "deep",
+"title": "Why String cannot be Copy",
+"md": "A type can be `Copy` only if it can be copied **byte by byte** and both copies are independent.\n\nFor a `String`, a byte copy would give two pointers to the same text in the heap. Two variables would own the same text, and that breaks rule 2. So a `String` needs `.clone()`: it reserves **new** memory and copies the text there.\n\nThe rule: if a type owns something in the heap, it is not `Copy`."
+},
+{
 "t": "recap",
 "items": [
-"`.clone()` делает полную копию. Работает, но стоит времени.",
-"Числа, `bool`, `char` — тип Copy, копируются сами.",
-"`String`, `Vec` — перемещаются."
+"`.clone()` makes a full copy. It works, but it costs time.",
+"Numbers, `bool`, `char` are Copy types; they are copied automatically.",
+"`String` and `Vec` move."
 ]
 }
 ],
 "goals": [
-"Как сделать копию через `.clone()`",
-"Почему числа копируются сами"
+"How to make a copy with `.clone()`",
+"Why numbers are copied automatically"
 ]
 },
 {
 "id": "m05-5",
-"title": "Возврат владения",
+"title": "Giving ownership back",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Функция может отдать обратно",
-"md": "Функция забрала значение. Но может его и **вернуть**:\n\n```\nfn add_world(mut s: String) -> String {\n    s.push_str(\", мир\");\n    s\n}\n```\n`push_str` дописывает текст в конец строки."
+"title": "A function can give it back",
+"md": "A function took a value. But it can also **return** it:\n\n```\nfn add_world(mut s: String) -> String {\n    s.push_str(\", world\");\n    s\n}\n```\n`push_str` adds text to the end of a string."
 },
 {
 "t": "code",
-"code": "fn add_world(mut s: String) -> String {\n    s.push_str(\", мир\");\n    s\n}\n\nfn main() {\n    let greeting = String::from(\"Привет\");\n    let greeting = add_world(greeting);\n    println!(\"{greeting}\");\n}",
-"out": "Привет, мир"
+"code": "fn add_world(mut s: String) -> String {\n    s.push_str(\", world\");\n    s\n}\n\nfn main() {\n    let greeting = String::from(\"Hello\");\n    let greeting = add_world(greeting);\n    println!(\"{greeting}\");\n}",
+"out": "Hello, world"
 },
 {
 "t": "text",
-"title": "Неудобно, правда?",
-"md": "Каждый раз отдавать и забирать обратно — утомительно. Как давать другу книгу, только чтобы он сказал, сколько в ней страниц.\n\nХочется дать **посмотреть**, не отдавая. В Rust это есть. Называется **заимствование** — тема следующего модуля."
+"title": "Inconvenient, right?",
+"md": "Giving a value away and taking it back every time is tiring. It is like giving a friend a book only so that they can tell you how many pages it has.\n\nWe want to let someone **look** without giving the value away. Rust has this. It is called **borrowing** — the topic of the next module."
 },
 {
 "t": "quiz",
-"md": "Зачем `add_world` возвращает `s`?",
+"md": "Why does `add_world` return `s`?",
 "options": [
-"Чтобы вернуть владение строкой обратно в `main`",
-"Чтобы напечатать её",
-"Так требует синтаксис любой функции"
+"To give ownership of the string back to `main`",
+"To print it",
+"Because the syntax of every function requires it"
 ],
 "answer": 0,
 "why": [
-"Верно. Иначе строка удалилась бы в конце функции.",
-"Печатает `main`, а не функция.",
-"Функции не обязаны ничего возвращать."
+"Correct. Otherwise the string would be deleted at the end of the function.",
+"`main` prints, not the function.",
+"Functions do not have to return anything."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Функция может вернуть владение через результат.",
-"Это работает, но неудобно.",
-"Удобный способ — заимствование (`&`). Дальше о нём."
+"A function can give ownership back through its result.",
+"It works, but it is inconvenient.",
+"The convenient way is borrowing (`&`). It comes next."
 ]
 }
 ],
 "goals": [
-"Как функция может вернуть владение",
-"Почему это неудобно и что будет дальше"
+"How a function can give ownership back",
+"Why this is inconvenient and what comes next"
+]
+},
+{
+"id": "m05-p",
+"title": "Practice: ownership",
+"min": 12,
+"cards": [
+{
+"t": "quiz",
+"md": "Which program compiles?",
+"options": [
+"`let a = String::from(\"x\"); let b = a; println!(\"{a}\");`",
+"`let a = 5; let b = a; println!(\"{a}\");`",
+"`let a = vec![1]; let b = a; println!(\"{:?}\", a);`"
+],
+"answer": 1,
+"why": [
+"After `let b = a;` the string moved into `b`. You cannot use `a`.",
+"Correct. A number is a Copy type; it was copied.",
+"A `Vec` also moves, like a `String`."
+]
+},
+{
+"t": "task",
+"md": "Way 1: a copy. Fix the program with `.clone()`.",
+"code": "fn main() {\n    let name = String::from(\"Rust\");\n    let other = name;\n    println!(\"{name} {other}\");\n}",
+"solution": "fn main() {\n    let name = String::from(\"Rust\");\n    let other = name.clone();\n    println!(\"{name} {other}\");\n}",
+"expect": "Rust Rust",
+"hints": [
+"`let other = name.clone();`"
+]
+},
+{
+"t": "task",
+"md": "Way 2: the order. Fix the program just by moving lines around. Do not use `clone`.",
+"code": "fn main() {\n    let text = String::from(\"book\");\n    let moved = text;\n    println!(\"Before: {text}\");\n    println!(\"After: {moved}\");\n}",
+"solution": "fn main() {\n    let text = String::from(\"book\");\n    println!(\"Before: {text}\");\n    let moved = text;\n    println!(\"After: {moved}\");\n}",
+"expect": "Before: book\nAfter: book",
+"hints": [
+"Use `text` **before** it moves into `moved`.",
+"Put `println!(\"Before: {text}\");` before `let moved = text;`"
+]
+},
+{
+"t": "task",
+"md": "Way 3: give ownership back. The function `add_exclaim` takes the string. Make it return the string with `!` at the end.",
+"code": "fn add_exclaim(mut s: String) {\n    s.push('!');\n}\n\nfn main() {\n    let word = String::from(\"Hooray\");\n    add_exclaim(word);\n    println!(\"{word}\");\n}",
+"solution": "fn add_exclaim(mut s: String) -> String {\n    s.push('!');\n    s\n}\n\nfn main() {\n    let word = String::from(\"Hooray\");\n    let word = add_exclaim(word);\n    println!(\"{word}\");\n}",
+"expect": "Hooray!",
+"hints": [
+"The function needs `-> String` and `s` as the last line.",
+"In `main`: `let word = add_exclaim(word);`"
+]
+},
+{
+"t": "task",
+"md": "Here the string moves inside a loop. Fix it so the program prints `Rust` three times. `clone` works.",
+"code": "fn print_it(s: String) {\n    println!(\"{s}\");\n}\n\nfn main() {\n    let s = String::from(\"Rust\");\n    for _ in 0..3 {\n        print_it(s);\n    }\n}",
+"solution": "fn print_it(s: String) {\n    println!(\"{s}\");\n}\n\nfn main() {\n    let s = String::from(\"Rust\");\n    for _ in 0..3 {\n        print_it(s.clone());\n    }\n}",
+"expect": "Rust\nRust\nRust",
+"hints": [
+"On the first step of the loop `s` moves into the function. On the second step it is gone.",
+"Pass a copy: `print_it(s.clone());`. The next module shows a better way — a reference."
+]
+},
+{
+"t": "recap",
+"items": [
+"E0382 is fixed in three ways: `clone`, a different order of lines, giving ownership back.",
+"In a loop a value moves on the very first step.",
+"The most convenient way is references. They are in the next module."
+]
+}
+],
+"practice": true,
+"goals": [
+"Fix error E0382 in different ways",
+"Predict where a value will move"
 ]
 }
 ]
 },
 {
 "id": "m06",
-"title": "Заимствование и срезы",
-"sub": "Дать посмотреть, не отдавая",
+"title": "Borrowing and slices",
+"sub": "Let someone look without giving it away",
 "lessons": [
 {
 "id": "m06-1",
-"title": "Ссылки: дать посмотреть",
+"title": "References: let someone look",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Ссылка — это «посмотри, но не забирай»",
-"md": "**Ссылка** — это доступ к значению без владения. Пишется через `&`.\n\n```\nlet book = String::from(\"Война и мир\");\nlet r = &book; // r смотрит на book\n```\nСоздание ссылки называется **заимствованием** (borrowing).\n\n> Ты даёшь другу книгу почитать. Книга по-прежнему твоя. Друг вернёт её, когда дочитает."
+"title": "A reference means \"look, but do not take\"",
+"md": "A **reference** gives access to a value without ownership. It is written with `&`.\n\n```\nlet book = String::from(\"War and Peace\");\nlet r = &book; // r looks at book\n```\nCreating a reference is called **borrowing**.\n\n> Analogy: you lend a friend a book to read. The book is still yours. The friend gives it back after reading."
 },
 {
 "t": "code",
-"code": "fn count_letters(s: &String) -> usize {\n    s.chars().count()\n}\n\nfn main() {\n    let word = String::from(\"привет\");\n    let n = count_letters(&word);\n    println!(\"В слове «{word}» {n} букв\");\n}",
-"out": "В слове «привет» 6 букв",
-"after": "`word` всё ещё наша: функция только посмотрела. `usize` — тип для размеров и количеств."
+"code": "fn count_letters(s: &String) -> usize {\n    s.chars().count()\n}\n\nfn main() {\n    let word = String::from(\"hello\");\n    let n = count_letters(&word);\n    println!(\"The word \\\"{word}\\\" has {n} letters\");\n}",
+"out": "The word \"hello\" has 5 letters",
+"after": "`word` is still ours: the function only looked. `usize` is the type for sizes and counts."
 },
 {
 "t": "quiz",
-"md": "Что значит `&word` при вызове функции?",
+"md": "What does `&word` mean in a function call?",
 "options": [
-"Отдать `word` функции навсегда",
-"Дать функции посмотреть на `word`",
-"Сделать копию `word`"
+"Give `word` to the function forever",
+"Let the function look at `word`",
+"Make a copy of `word`"
 ],
 "answer": 1,
 "why": [
-"Это было бы без `&`. Со знаком `&` владение остаётся.",
-"Верно. Функция получает ссылку, владелец не меняется.",
-"Копию делает `.clone()`. Ссылка ничего не копирует."
+"That would be without `&`. With `&` ownership stays.",
+"Correct. The function gets a reference; the owner does not change.",
+"`.clone()` makes a copy. A reference copies nothing."
 ]
 },
 {
 "t": "task",
-"md": "Функция забирает строку, и потом её нельзя напечатать. Почини, используя ссылку.",
-"code": "fn shout(s: String) {\n    println!(\"{}!!!\", s);\n}\n\nfn main() {\n    let msg = String::from(\"Ура\");\n    shout(msg);\n    println!(\"{msg}\");\n}",
-"solution": "fn shout(s: &String) {\n    println!(\"{}!!!\", s);\n}\n\nfn main() {\n    let msg = String::from(\"Ура\");\n    shout(&msg);\n    println!(\"{msg}\");\n}",
-"expect": "Ура!!!\nУра",
+"md": "The function takes the string, so it cannot be printed afterwards. Fix it with a reference.",
+"code": "fn shout(s: String) {\n    println!(\"{}!!!\", s);\n}\n\nfn main() {\n    let msg = String::from(\"Hooray\");\n    shout(msg);\n    println!(\"{msg}\");\n}",
+"solution": "fn shout(s: &String) {\n    println!(\"{}!!!\", s);\n}\n\nfn main() {\n    let msg = String::from(\"Hooray\");\n    shout(&msg);\n    println!(\"{msg}\");\n}",
+"expect": "Hooray!!!\nHooray",
 "hints": [
-"Изменить надо два места: тип параметра и вызов.",
-"`fn shout(s: &String)` и `shout(&msg);`"
+"You need to change two places: the parameter type and the call.",
+"`fn shout(s: &String)` and `shout(&msg);`"
 ]
+},
+{
+"t": "deep",
+"title": "What is inside a reference",
+"md": "A reference is just the **address** of a value in memory. It takes 8 bytes (on a 64-bit computer), however big the value itself is.\n\nYou can print the address with `{:p}` (p means pointer):\n\nThe address is different on every run. The size of the reference is always `8 bytes`.",
+"code": "fn main() {\n    let big = String::from(\"a very long text\");\n    let r = &big;\n    println!(\"Address: {:p}\", r);\n    println!(\"Size of the reference: {} bytes\", std::mem::size_of::<&String>());\n}"
 },
 {
 "t": "recap",
 "items": [
-"`&x` — ссылка, доступ без владения.",
-"Функция с параметром `&T` только смотрит.",
-"После такого вызова переменная остаётся твоей."
+"`&x` is a reference: access without ownership.",
+"A function with a parameter `&T` only looks.",
+"After such a call the variable is still yours."
 ]
 }
 ],
 "goals": [
-"Что такое ссылка `&`",
-"Как передать значение в функцию, не отдавая его"
+"What a reference `&` is",
+"How to pass a value into a function without giving it away"
 ]
 },
 {
 "id": "m06-2",
-"title": "Изменяемые ссылки",
+"title": "Mutable references",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "&mut — дать подписать на полях",
-"md": "Обычная ссылка `&` только читает. Чтобы функция могла **изменить** значение, нужна изменяемая ссылка `&mut`.\n\n```\nfn add_smile(s: &mut String) {\n    s.push_str(\" :)\");\n}\n```\nСама переменная тоже должна быть `mut`."
+"title": "&mut — permission to write notes in the margins",
+"md": "A normal reference `&` can only read. For a function to **change** a value, you need a mutable reference `&mut`.\n\n```\nfn add_smile(s: &mut String) {\n    s.push_str(\" :)\");\n}\n```\nThe variable itself must also be `mut`."
 },
 {
 "t": "code",
-"code": "fn add_smile(s: &mut String) {\n    s.push_str(\" :)\");\n}\n\nfn main() {\n    let mut text = String::from(\"Привет\");\n    add_smile(&mut text);\n    add_smile(&mut text);\n    println!(\"{text}\");\n}",
-"out": "Привет :) :)"
+"code": "fn add_smile(s: &mut String) {\n    s.push_str(\" :)\");\n}\n\nfn main() {\n    let mut text = String::from(\"Hello\");\n    add_smile(&mut text);\n    add_smile(&mut text);\n    println!(\"{text}\");\n}",
+"out": "Hello :) :)"
 },
 {
 "t": "text",
-"title": "Главное правило",
-"md": "В каждый момент можно **одно** из двух:\n\n- сколько угодно **читателей** `&`;\n- или ровно **один писатель** `&mut`.\n\n> Как документ в общей папке. Читать могут все сразу. Но если кто-то правит — остальные ждут, чтобы не увидеть кашу.\n\nЭто правило спасает от целого класса ошибок, когда данные меняются под ногами."
+"title": "The main rule",
+"md": "At any moment you can have **one** of these two:\n\n- any number of **readers** `&`;\n- or exactly **one writer** `&mut`.\n\n> Analogy: a document in a shared folder. Everyone can read it at the same time. But while someone edits it, the others wait, so they do not see a mess.\n\nThis rule prevents a whole class of bugs where data changes under your feet."
 },
 {
 "t": "code",
 "fails": true,
-"md": "Две изменяемые ссылки одновременно. Запусти.",
-"code": "fn main() {\n    let mut s = String::from(\"текст\");\n    let a = &mut s;\n    let b = &mut s;\n    a.push_str(\"1\");\n    b.push_str(\"2\");\n}",
-"after": "Ошибка `E0499`: нельзя взять `&mut` дважды, пока первая ссылка ещё используется."
+"md": "Two mutable references at the same time. Run it.",
+"code": "fn main() {\n    let mut s = String::from(\"text\");\n    let a = &mut s;\n    let b = &mut s;\n    a.push_str(\"1\");\n    b.push_str(\"2\");\n}",
+"after": "Error `E0499`: you cannot take `&mut` twice while the first reference is still in use."
 },
 {
 "t": "text",
-"title": "Ссылка «живёт» до последнего использования",
-"md": "Хорошая новость: ссылка заканчивается после **последнего** места, где её использовали. Не на `}`.\n\n```\nlet mut s = String::from(\"a\");\nlet r1 = &s;\nprintln!(\"{r1}\"); // r1 больше не нужна\nlet r2 = &mut s;  // теперь можно\nr2.push_str(\"b\");\n```"
+"title": "A reference \"lives\" until its last use",
+"md": "Good news: a reference ends after the **last** place where it is used. Not at `}`.\n\n```\nlet mut s = String::from(\"a\");\nlet r1 = &s;\nprintln!(\"{r1}\"); // r1 is not needed anymore\nlet r2 = &mut s;  // now this is allowed\nr2.push_str(\"b\");\n```"
 },
 {
 "t": "quiz",
-"md": "Какой набор ссылок разрешён одновременно?",
+"md": "Which set of references is allowed at the same time?",
 "options": [
-"Три ссылки `&`",
-"Две ссылки `&mut`",
-"Одна `&` и одна `&mut`"
+"Three `&` references",
+"Two `&mut` references",
+"One `&` and one `&mut`"
 ],
 "answer": 0,
 "why": [
-"Верно. Читателей может быть сколько угодно.",
-"Писатель может быть только один.",
-"Пока кто-то читает, писать нельзя."
+"Correct. There can be any number of readers.",
+"There can be only one writer.",
+"While someone reads, nobody may write."
 ]
+},
+{
+"t": "deep",
+"title": "Which bug the rule prevents",
+"md": "Imagine: you hold a reference to the first element of a vector, and at the same time you add a new element to the vector.\n\n```\nlet mut v = vec![1, 2, 3];\nlet first = &v[0];\nv.push(4);            // error E0502\nprintln!(\"{first}\");\n```\nOn `push` the vector may run out of space. Then it moves to new memory, and the old memory is freed. The reference `first` would point to freed memory.\n\nIn C++ such a bug compiles and then breaks the program at a random moment. Rust does not allow it: while the reader `first` exists, `v` cannot be changed."
 },
 {
 "t": "recap",
 "items": [
-"`&mut x` — ссылка, через которую можно менять.",
-"Или много `&`, или один `&mut`.",
-"Ссылка живёт до последнего использования."
+"`&mut x` is a reference through which you can change the value.",
+"Either many `&`, or one `&mut`.",
+"A reference lives until its last use."
 ]
 }
 ],
 "goals": [
-"Как дать изменить значение: `&mut`",
-"Главное правило ссылок"
+"How to let something change a value: `&mut`",
+"The main rule of references"
 ]
 },
 {
 "id": "m06-3",
-"title": "Висячих ссылок не бывает",
+"title": "There are no dangling references",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Ссылка в никуда",
-"md": "**Висячая ссылка** указывает на значение, которого уже нет. Как адрес снесённого дома.\n\nВ C такие ссылки — частая причина взломов и падений. В Rust их **не бывает**: компилятор следит."
+"title": "A reference to nowhere",
+"md": "A **dangling reference** points to a value that no longer exists. Analogy: the address of a house that was demolished.\n\nIn C such references are a common cause of crashes and security holes. In Rust they **do not exist**: the compiler watches."
 },
 {
 "t": "code",
 "fails": true,
-"md": "Функция пытается вернуть ссылку на свою локальную строку. Запусти.",
-"code": "fn make() -> &String {\n    let s = String::from(\"привет\");\n    &s\n}\n\nfn main() {\n    let r = make();\n}",
-"after": "Компилятор не пропускает. Строка `s` умрёт на `}` функции, и ссылка указывала бы в пустоту. Ошибка говорит про **lifetime** — время жизни. О нём будет отдельный модуль."
+"md": "The function tries to return a reference to its local string. Run it.",
+"code": "fn make() -> &String {\n    let s = String::from(\"hello\");\n    &s\n}\n\nfn main() {\n    let r = make();\n}",
+"after": "The compiler does not allow it. The string `s` is deleted at the `}` of the function, and the reference would point to nothing. The error talks about a **lifetime**. There is a separate module about lifetimes."
 },
 {
 "t": "text",
-"title": "Как исправить",
-"md": "Верни саму строку, а не ссылку. Тогда владение просто переедет наружу:\n\n```\nfn make() -> String {\n    String::from(\"привет\")\n}\n```"
+"title": "How to fix it",
+"md": "Return the string itself, not a reference. Then ownership simply moves out:\n\n```\nfn make() -> String {\n    String::from(\"hello\")\n}\n```"
 },
 {
 "t": "quiz",
-"md": "Почему нельзя вернуть `&s`, где `s` создана внутри функции?",
+"md": "Why can you not return `&s` when `s` was created inside the function?",
 "options": [
-"Ссылки вообще нельзя возвращать",
-"`s` удалится в конце функции, и ссылка повиснет",
-"Строки нельзя создавать в функциях"
+"References can never be returned",
+"`s` is deleted at the end of the function, and the reference would dangle",
+"Strings cannot be created in functions"
 ],
 "answer": 1,
 "why": [
-"Можно, если значение живёт дольше функции.",
-"Верно. Ссылка не может пережить своё значение.",
-"Можно, просто вернуть надо её саму."
+"They can, if the value lives longer than the function.",
+"Correct. A reference cannot outlive its value.",
+"They can; you just need to return the string itself."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Ссылка не может пережить значение.",
-"Создал внутри функции — возвращай значение, а не ссылку."
+"A reference cannot outlive its value.",
+"If you created something inside a function, return the value, not a reference."
 ]
 }
 ],
 "goals": [
-"Что такое висячая ссылка",
-"Как Rust её не допускает"
+"What a dangling reference is",
+"How Rust prevents it"
 ]
 },
 {
 "id": "m06-4",
-"title": "Срезы и &str",
+"title": "Slices and &str",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Срез — окошко в часть данных",
-"md": "**Срез** — ссылка на кусок последовательности. Не копия, а окошко.\n\n```\nlet nums = [10, 20, 30, 40, 50];\nlet middle = &nums[1..4]; // [20, 30, 40]\n```\n> Как рамка, которую положили на фото: видно только часть, но фото то же самое."
+"title": "A slice is a window into part of the data",
+"md": "A **slice** is a reference to a piece of a sequence. Not a copy, but a window.\n\n```\nlet nums = [10, 20, 30, 40, 50];\nlet middle = &nums[1..4]; // [20, 30, 40]\n```\n> Analogy: a frame laid on top of a photo. You see only part of it, but it is the same photo."
 },
 {
 "t": "text",
-"title": "String и &str",
-"md": "- `String` — **владеющая** строка в куче. Может расти.\n- `&str` — **срез строки**: окошко в чужой текст.\n\nТекст в кавычках `\"привет\"` — это `&str`. Он вшит прямо в программу.\n\n> Правило: в параметрах функций пиши `&str`. Туда подойдут и `&String`, и `\"текст\"`."
+"title": "String and &str",
+"md": "- `String` is an **owning** string in the heap. It can grow.\n- `&str` is a **string slice**: a window into someone else's text.\n\nText in quotes, like `\"hello\"`, is a `&str`. It is stored right inside the program.\n\n> The rule: write `&str` in function parameters. Both `&String` and `\"text\"` fit there."
 },
 {
 "t": "code",
-"code": "fn greet(name: &str) {\n    println!(\"Привет, {name}!\");\n}\n\nfn main() {\n    let owned = String::from(\"Аня\");\n    greet(&owned);\n    greet(\"Боря\");\n    let part = &owned[0..2];\n    println!(\"Первые байты: {part}\");\n}",
-"out": "Привет, Аня!\nПривет, Боря!\nПервые байты: А",
-"after": "Стоп. `0..2` дало **одну** букву «А», а не две. Почему?"
+"code": "fn greet(name: &str) {\n    println!(\"Hello, {name}!\");\n}\n\nfn main() {\n    let owned = String::from(\"Anna\");\n    greet(&owned);\n    greet(\"Bob\");\n    let name = String::from(\"Яна\");\n    let part = &name[0..2];\n    println!(\"First bytes: {part}\");\n}",
+"out": "Hello, Anna!\nHello, Bob!\nFirst bytes: Я",
+"after": "Wait. The Russian name \"Яна\" and `0..2` gave **one** letter \"Я\", not two. Why?"
 },
 {
 "t": "text",
-"title": "Русские буквы занимают 2 байта",
-"md": "Строки в Rust хранятся в **UTF-8**. Латинская буква — 1 байт. Русская — 2 байта.\n\nСрез `[0..2]` берёт **байты**, а не буквы. Если разрезать букву пополам, программа запаникует.\n\n!> Для русского текста не режь строку по номерам. Используй `.chars()` — перебор по буквам."
+"title": "Some letters take 2 or more bytes",
+"md": "Strings in Rust are stored in **UTF-8**. An English letter takes 1 byte. A Russian letter takes 2 bytes. Some other characters take 3 or 4.\n\nThe slice `[0..2]` takes **bytes**, not letters. If you cut a letter in half, the program panics.\n\n!> For text that is not pure English, do not cut a string by numbers. Use `.chars()` — going through the string letter by letter."
 },
 {
 "t": "code",
-"code": "fn main() {\n    let word = \"привет\";\n    println!(\"Байт: {}\", word.len());\n    println!(\"Букв: {}\", word.chars().count());\n    let first: String = word.chars().take(3).collect();\n    println!(\"Первые три буквы: {first}\");\n}",
-"out": "Байт: 12\nБукв: 6\nПервые три буквы: при"
+"code": "fn main() {\n    let word = \"привет\";\n    println!(\"Bytes: {}\", word.len());\n    println!(\"Letters: {}\", word.chars().count());\n    let first: String = word.chars().take(3).collect();\n    println!(\"The first three letters: {first}\");\n}",
+"out": "Bytes: 12\nLetters: 6\nThe first three letters: при",
+"after": "\"привет\" means \"hello\" in Russian."
 },
 {
 "t": "quiz",
-"md": "Что вернёт `\"мир\".len()`?",
+"md": "What does `\"мир\".len()` return? (\"мир\" is a Russian word with 3 letters.)",
 "options": [
 "3",
 "6",
@@ -6880,64 +7292,148 @@ window.COURSES = {
 ],
 "answer": 1,
 "why": [
-"`len()` считает байты. В русской букве их два.",
-"Верно. Три русские буквы × 2 байта.",
-"Это количество слов, а `len()` о другом."
+"`len()` counts bytes. A Russian letter has two.",
+"Correct. Three Russian letters × 2 bytes.",
+"That is the number of words, and `len()` is about something else."
 ]
 },
 {
 "t": "task",
-"md": "Напиши функцию `first_word`, которая возвращает первое слово строки (до пробела). Если пробела нет — всю строку.",
-"code": "fn first_word(s: &str) -> &str {\n    // подсказка: s.split(' ').next()\n    s\n}\n\nfn main() {\n    println!(\"{}\", first_word(\"hello world\"));\n    println!(\"{}\", first_word(\"rust\"));\n}",
+"md": "Write a function `first_word` that returns the first word of a string (up to the space). If there is no space, return the whole string.",
+"code": "fn first_word(s: &str) -> &str {\n    // hint: s.split(' ').next()\n    s\n}\n\nfn main() {\n    println!(\"{}\", first_word(\"hello world\"));\n    println!(\"{}\", first_word(\"rust\"));\n}",
 "solution": "fn first_word(s: &str) -> &str {\n    match s.find(' ') {\n        Some(i) => &s[..i],\n        None => s,\n    }\n}\n\nfn main() {\n    println!(\"{}\", first_word(\"hello world\"));\n    println!(\"{}\", first_word(\"rust\"));\n}",
 "expect": "hello\nrust",
 "hints": [
-"`s.split(' ')` режет строку по пробелам. `.next()` даёт первый кусок.",
-"Короткое решение: `s.split(' ').next().unwrap()`. `unwrap` подробно разберём позже."
+"`s.split(' ')` cuts the string at spaces. `.next()` gives the first piece.",
+"A short solution: `s.split(' ').next().unwrap()`. `unwrap` is explained later."
+]
+},
+{
+"t": "deep",
+"title": "Why &String fits where &str is expected",
+"md": "The function `greet(name: &str)` also accepts `&String`. How, if the types are different?\n\nRust turns `&String` into `&str` by itself. This is called **deref coercion**. A `String` can give out a slice of all its text.\n\nThe same works with vectors: `&Vec<i32>` turns into the slice `&[i32]`. That is why parameters are written as `&[i32]` — then the function accepts both an array and a vector."
+},
+{
+"t": "recap",
+"items": [
+"A slice `&a[1..3]` is a window into part of the data.",
+"`String` owns text, `&str` looks at text.",
+"Write `&str` in function parameters.",
+"`len()` counts bytes. For letters use `.chars()`."
+]
+}
+],
+"goals": [
+"What a slice is",
+"The difference between `String` and `&str`",
+"A trap with non-English letters"
+]
+},
+{
+"id": "m06-p",
+"title": "Practice: references and slices",
+"min": 12,
+"cards": [
+{
+"t": "fill",
+"md": "Fill in the blanks: the first function only reads, the second one changes.",
+"code": "fn show(v: ___Vec<i32>) {\n    println!(\"{:?}\", v);\n}\n\nfn add_one(v: ___Vec<i32>) {\n    v.push(1);\n}",
+"answers": [
+[
+"&"
+],
+[
+"&mut",
+"& mut"
+]
+]
+},
+{
+"t": "task",
+"md": "Write a function `count_vowels` that counts the vowels `a e i o u` in a string.",
+"code": "fn count_vowels(s: &str) -> usize {\n    0\n}\n\nfn main() {\n    println!(\"{}\", count_vowels(\"programming is fun\"));\n}",
+"solution": "fn count_vowels(s: &str) -> usize {\n    let mut n = 0;\n    for c in s.chars() {\n        if \"aeiou\".contains(c) {\n            n += 1;\n        }\n    }\n    n\n}\n\nfn main() {\n    println!(\"{}\", count_vowels(\"programming is fun\"));\n}",
+"expect": "5",
+"hints": [
+"Go through the letters: `for c in s.chars()`.",
+"The vowel check: `\"aeiou\".contains(c)`."
+]
+},
+{
+"t": "task",
+"md": "Write a function `double_all` that doubles every element of a vector through `&mut`.",
+"code": "fn double_all(v: &mut Vec<i32>) {\n}\n\nfn main() {\n    let mut nums = vec![1, 2, 3];\n    double_all(&mut nums);\n    println!(\"{:?}\", nums);\n}",
+"solution": "fn double_all(v: &mut Vec<i32>) {\n    for x in v.iter_mut() {\n        *x *= 2;\n    }\n}\n\nfn main() {\n    let mut nums = vec![1, 2, 3];\n    double_all(&mut nums);\n    println!(\"{:?}\", nums);\n}",
+"expect": "[2, 4, 6]",
+"hints": [
+"`for x in v.iter_mut()` gives a mutable reference to each element.",
+"The value behind a reference is changed with `*`: `*x *= 2;`"
+]
+},
+{
+"t": "task",
+"md": "Fix error E0502: printing the reference gets in the way of the change. Reorder the lines so the program prints `1` and `[1, 2, 3, 4]`.",
+"code": "fn main() {\n    let mut v = vec![1, 2, 3];\n    let first = &v[0];\n    v.push(4);\n    println!(\"{first}\");\n    println!(\"{:?}\", v);\n}",
+"solution": "fn main() {\n    let mut v = vec![1, 2, 3];\n    let first = &v[0];\n    println!(\"{first}\");\n    v.push(4);\n    println!(\"{:?}\", v);\n}",
+"expect": "1\n[1, 2, 3, 4]",
+"hints": [
+"The reference `first` must finish its work **before** `push`.",
+"Move `println!(\"{first}\");` above `v.push(4);`"
+]
+},
+{
+"t": "task",
+"md": "Write a function `sum` that takes a slice `&[i32]` and returns the sum. It must work with both an array and a vector.",
+"code": "// write the function sum\n\nfn main() {\n    let arr = [1, 2, 3];\n    let v = vec![10, 20];\n    println!(\"{} {}\", sum(&arr), sum(&v));\n    println!(\"{}\", sum(&arr[1..]));\n}",
+"solution": "fn sum(items: &[i32]) -> i32 {\n    let mut total = 0;\n    for x in items {\n        total += x;\n    }\n    total\n}\n\nfn main() {\n    let arr = [1, 2, 3];\n    let v = vec![10, 20];\n    println!(\"{} {}\", sum(&arr), sum(&v));\n    println!(\"{}\", sum(&arr[1..]));\n}",
+"expect": "6 30\n5",
+"hints": [
+"The header: `fn sum(items: &[i32]) -> i32`",
+"`&arr[1..]` is a slice from the second element to the end."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Срез `&a[1..3]` — окошко в часть данных.",
-"`String` владеет текстом, `&str` — смотрит на текст.",
-"В параметрах функций пиши `&str`.",
-"`len()` — байты. Для букв — `.chars()`."
+"`&` reads, `&mut` changes.",
+"While there is a reader, nobody can write: finish with the reference earlier.",
+"A `&[i32]` parameter accepts an array, a vector, and parts of them."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Что такое срез",
-"Разница между `String` и `&str`",
-"Ловушка с русскими буквами"
+"Pass data by reference",
+"Change data through `&mut`",
+"Work with slices"
 ]
 }
 ]
 },
 {
 "id": "m07",
-"title": "Структуры",
-"sub": "Свои типы данных",
+"title": "Structs",
+"sub": "Your own data types",
 "lessons": [
 {
 "id": "m07-1",
-"title": "Структура — анкета",
+"title": "A struct is a form",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Анкета с полями",
-"md": "**Структура** (struct) — свой тип из нескольких именованных полей.\n\n```\nstruct User {\n    name: String,\n    age: u32,\n    active: bool,\n}\n```\n> Как бланк анкеты: графы «имя», «возраст», «активен». Сам бланк — это тип. Заполненная анкета — значение.\n\nИмена структур пишут с большой буквы: `User`, `GameCharacter`."
+"title": "A form with fields",
+"md": "A **struct** is your own type made of several named fields.\n\n```\nstruct User {\n    name: String,\n    age: u32,\n    active: bool,\n}\n```\n> Analogy: a blank form with the fields \"name\", \"age\", \"active\". The blank form is the type. A filled-in form is a value.\n\nStruct names start with a capital letter: `User`, `GameCharacter`."
 },
 {
 "t": "code",
-"code": "struct User {\n    name: String,\n    age: u32,\n}\n\nfn main() {\n    let mut user = User {\n        name: String::from(\"Аня\"),\n        age: 25,\n    };\n    println!(\"{} — {} лет\", user.name, user.age);\n    user.age += 1;\n    println!(\"С днём рождения! Теперь {}\", user.age);\n}",
-"out": "Аня — 25 лет\nС днём рождения! Теперь 26",
-"after": "Поле читают через точку: `user.age`. Менять можно, только если вся переменная `mut`."
+"code": "struct User {\n    name: String,\n    age: u32,\n}\n\nfn main() {\n    let mut user = User {\n        name: String::from(\"Anna\"),\n        age: 25,\n    };\n    println!(\"{} is {} years old\", user.name, user.age);\n    user.age += 1;\n    println!(\"Happy birthday! Now {}\", user.age);\n}",
+"out": "Anna is 25 years old\nHappy birthday! Now 26",
+"after": "A field is read with a dot: `user.age`. You can change it only if the whole variable is `mut`."
 },
 {
 "t": "fill",
-"md": "Заполни, чтобы создать точку с координатами 3 и 4.",
+"md": "Fill in the blanks to create a point with the coordinates 3 and 4.",
 "code": "struct Point {\n    x: i32,\n    y: i32,\n}\n\nfn main() {\n    let p = ___ { x: 3, ___: 4 };\n    println!(\"{}, {}\", p.x, p.y);\n}",
 "answers": [
 [
@@ -6950,171 +7446,272 @@ window.COURSES = {
 },
 {
 "t": "text",
-"title": "Короткая запись полей",
-"md": "Если переменная называется так же, как поле, можно не повторять:\n\n```\nfn new_user(name: String, age: u32) -> User {\n    User { name, age } // вместо name: name, age: age\n}\n```"
+"title": "A short form for fields",
+"md": "If a variable has the same name as a field, you do not need to repeat it:\n\n```\nfn new_user(name: String, age: u32) -> User {\n    User { name, age } // instead of name: name, age: age\n}\n```"
+},
+{
+"t": "text",
+"title": "Tuple structs",
+"md": "Some structs have no field names. They are called **tuple structs**:\n\n```\nstruct Meters(f64);\nstruct Color(u8, u8, u8);\n\nlet height = Meters(1.8);\nlet red = Color(255, 0, 0);\nprintln!(\"{}\", red.0); // 255\n```\nWhy? So you do not mix up similar values. `Meters` and `Seconds` both hold an `f64` inside, but the compiler will not let you add meters to seconds."
+},
+{
+"t": "deep",
+"title": "Creating a struct from another one",
+"md": "There is a short form \"take the other fields from another struct\": `..other`.\n\n`..base` is written **last**. The fields given explicitly come from the new value.",
+"code": "#[derive(Debug)]\nstruct Settings {\n    volume: u8,\n    dark: bool,\n    lang: &'static str,\n}\n\nfn main() {\n    let base = Settings { volume: 50, dark: false, lang: \"en\" };\n    let mine = Settings { dark: true, ..base };\n    println!(\"{:?}\", mine);\n}",
+"out": "Settings { volume: 50, dark: true, lang: \"en\" }"
 },
 {
 "t": "recap",
 "items": [
-"`struct Имя { поле: тип, ... }` — свой тип.",
-"Значение: `Имя { поле: значение, ... }`.",
-"Поле: `значение.поле`."
+"`struct Name { field: type, ... }` is your own type.",
+"A value: `Name { field: value, ... }`.",
+"A field: `value.field`."
 ]
 }
 ],
 "goals": [
-"Создать свой тип через `struct`",
-"Читать и менять поля"
+"Create your own type with `struct`",
+"Read and change fields"
 ]
 },
 {
 "id": "m07-2",
-"title": "Печать структуры: Debug",
+"title": "Printing a struct: Debug",
 "min": 5,
 "cards": [
 {
 "t": "code",
 "fails": true,
-"md": "Попробуем напечатать структуру через `{}`. Запусти.",
-"code": "struct Cat {\n    name: String,\n    lives: u8,\n}\n\nfn main() {\n    let cat = Cat { name: String::from(\"Мурка\"), lives: 9 };\n    println!(\"{}\", cat);\n}",
-"after": "Ошибка `E0277`: Rust не знает, **как** красиво показать твою структуру. Это не число и не строка."
+"md": "Let us try to print a struct with `{}`. Run it.",
+"code": "struct Cat {\n    name: String,\n    lives: u8,\n}\n\nfn main() {\n    let cat = Cat { name: String::from(\"Tom\"), lives: 9 };\n    println!(\"{}\", cat);\n}",
+"after": "Error `E0277`: Rust does not know **how** to display your struct nicely. It is not a number and not a string."
 },
 {
 "t": "text",
-"title": "derive(Debug) — печать для разработчика",
-"md": "Добавь над структурой строчку `#[derive(Debug)]` и печатай через `{:?}`.\n\n- `#[derive(Debug)]` — «научи этот тип печататься для отладки».\n- `{:?}` — «напечатай отладочный вид».\n- `{:#?}` — то же, но красиво, в несколько строк."
+"title": "derive(Debug) — printing for the developer",
+"md": "Add the line `#[derive(Debug)]` above the struct and print it with `{:?}`.\n\n- `#[derive(Debug)]` means \"teach this type to print itself for debugging\".\n- `{:?}` means \"print the debug view\".\n- `{:#?}` is the same, but pretty, on several lines."
 },
 {
 "t": "code",
-"code": "#[derive(Debug)]\nstruct Cat {\n    name: String,\n    lives: u8,\n}\n\nfn main() {\n    let cat = Cat { name: String::from(\"Мурка\"), lives: 9 };\n    println!(\"{:?}\", cat);\n    println!(\"{cat:#?}\");\n}",
-"out": "Cat { name: \"Мурка\", lives: 9 }\nCat {\n    name: \"Мурка\",\n    lives: 9,\n}"
+"code": "#[derive(Debug)]\nstruct Cat {\n    name: String,\n    lives: u8,\n}\n\nfn main() {\n    let cat = Cat { name: String::from(\"Tom\"), lives: 9 };\n    println!(\"{:?}\", cat);\n    println!(\"{cat:#?}\");\n}",
+"out": "Cat { name: \"Tom\", lives: 9 }\nCat {\n    name: \"Tom\",\n    lives: 9,\n}"
 },
 {
 "t": "quiz",
-"md": "Что нужно, чтобы напечатать структуру через `{:?}`?",
+"md": "What do you need to print a struct with `{:?}`?",
 "options": [
-"Ничего, работает само",
-"Добавить `#[derive(Debug)]` над структурой",
-"Написать функцию `print`"
+"Nothing, it just works",
+"Add `#[derive(Debug)]` above the struct",
+"Write a function `print`"
 ],
 "answer": 1,
 "why": [
-"Без `derive(Debug)` компилятор выдаст ошибку E0277.",
-"Верно.",
-"Можно, но есть способ короче."
+"Without `derive(Debug)` the compiler gives error E0277.",
+"Correct.",
+"You could, but there is a shorter way."
 ]
+},
+{
+"t": "deep",
+"title": "What derive really does",
+"md": "`#[derive(Debug)]` asks the compiler to **write code for you**. The compiler creates an implementation of the trait `Debug`: a function that prints the struct name and all its fields.\n\nWritten by hand, it would be about 10 lines. Traits, and how to write such implementations yourself, are in module 12."
 },
 {
 "t": "recap",
 "items": [
-"`#[derive(Debug)]` + `{:?}` — быстрая печать для отладки.",
-"`{:#?}` — то же самое, но в столбик."
+"`#[derive(Debug)]` + `{:?}` is quick printing for debugging.",
+"`{:#?}` is the same, but in a column."
 ]
 }
 ],
 "goals": [
-"Как напечатать структуру целиком",
-"Что такое `#[derive(Debug)]`"
+"How to print a whole struct",
+"What `#[derive(Debug)]` is"
 ]
 },
 {
 "id": "m07-3",
-"title": "Методы: impl",
+"title": "Methods: impl",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Метод — функция «внутри» типа",
-"md": "**Метод** — функция, которая принадлежит типу. Их пишут в блоке `impl` (implementation — реализация).\n\n```\nimpl Rectangle {\n    fn area(&self) -> u32 {\n        self.width * self.height\n    }\n}\n```\n`self` — «тот, у кого вызвали метод». Вызов: `rect.area()`."
+"title": "A method is a function \"inside\" a type",
+"md": "A **method** is a function that belongs to a type. Methods are written in an `impl` block (implementation).\n\n```\nimpl Rectangle {\n    fn area(&self) -> u32 {\n        self.width * self.height\n    }\n}\n```\n`self` means \"the value the method was called on\". The call: `rect.area()`."
 },
 {
 "t": "code",
-"code": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    fn area(&self) -> u32 {\n        self.width * self.height\n    }\n\n    fn grow(&mut self, by: u32) {\n        self.width += by;\n        self.height += by;\n    }\n}\n\nfn main() {\n    let mut r = Rectangle { width: 3, height: 4 };\n    println!(\"Площадь: {}\", r.area());\n    r.grow(1);\n    println!(\"После роста: {}\", r.area());\n}",
-"out": "Площадь: 12\nПосле роста: 20"
+"code": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    fn area(&self) -> u32 {\n        self.width * self.height\n    }\n\n    fn grow(&mut self, by: u32) {\n        self.width += by;\n        self.height += by;\n    }\n}\n\nfn main() {\n    let mut r = Rectangle { width: 3, height: 4 };\n    println!(\"Area: {}\", r.area());\n    r.grow(1);\n    println!(\"After growing: {}\", r.area());\n}",
+"out": "Area: 12\nAfter growing: 20"
 },
 {
 "t": "text",
-"title": "Три вида self",
-"md": "- `&self` — метод только **смотрит**. Самый частый.\n- `&mut self` — метод **меняет** структуру.\n- `self` — метод **забирает** структуру целиком. Бывает редко.\n\nЭто те же правила владения и заимствования. Просто про саму структуру."
+"title": "Three kinds of self",
+"md": "- `&self` — the method only **looks**. The most common.\n- `&mut self` — the method **changes** the struct.\n- `self` — the method **takes** the whole struct. This is rare.\n\nThese are the same rules of ownership and borrowing. Just about the struct itself."
 },
 {
 "t": "quiz",
-"md": "Какой `self` нужен методу `rename`, который меняет поле `name`?",
+"md": "Which `self` does a method `rename`, which changes the field `name`, need?",
 "options": [
 "`&self`",
 "`&mut self`",
-"Никакой, методы не меняют поля"
+"None, methods do not change fields"
 ],
 "answer": 1,
 "why": [
-"Через `&self` можно только читать.",
-"Верно. Менять — значит нужна изменяемая ссылка.",
-"Ещё как меняют, если есть `&mut self`."
+"With `&self` you can only read.",
+"Correct. To change, you need a mutable reference.",
+"They do, if they have `&mut self`."
 ]
 },
 {
 "t": "task",
-"md": "Добавь метод `can_hold`, который возвращает `true`, если прямоугольник `self` больше `other` и по ширине, и по высоте.",
-"code": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    // твой метод can_hold\n}\n\nfn main() {\n    let big = Rectangle { width: 10, height: 8 };\n    let small = Rectangle { width: 3, height: 2 };\n    println!(\"{}\", big.can_hold(&small));\n    println!(\"{}\", small.can_hold(&big));\n}",
+"md": "Add a method `can_hold` that returns `true` if the rectangle `self` is bigger than `other` in both width and height.",
+"code": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    // your method can_hold\n}\n\nfn main() {\n    let big = Rectangle { width: 10, height: 8 };\n    let small = Rectangle { width: 3, height: 2 };\n    println!(\"{}\", big.can_hold(&small));\n    println!(\"{}\", small.can_hold(&big));\n}",
 "solution": "struct Rectangle {\n    width: u32,\n    height: u32,\n}\n\nimpl Rectangle {\n    fn can_hold(&self, other: &Rectangle) -> bool {\n        self.width > other.width && self.height > other.height\n    }\n}\n\nfn main() {\n    let big = Rectangle { width: 10, height: 8 };\n    let small = Rectangle { width: 3, height: 2 };\n    println!(\"{}\", big.can_hold(&small));\n    println!(\"{}\", small.can_hold(&big));\n}",
 "expect": "true\nfalse",
 "hints": [
-"Заголовок: `fn can_hold(&self, other: &Rectangle) -> bool`",
-"Тело: `self.width > other.width && self.height > other.height`"
+"The header: `fn can_hold(&self, other: &Rectangle) -> bool`",
+"The body: `self.width > other.width && self.height > other.height`"
 ]
+},
+{
+"t": "deep",
+"title": "What the dot means in a method call",
+"md": "The form `r.area()` is a shortcut. In full it looks like this:\n\n```\nRectangle::area(&r)\n```\nRust inserts `&`, `&mut` or nothing by itself — depending on what `self` says. So you do not need to write `(&r).area()`.\n\nThis is called **automatic referencing**."
 },
 {
 "t": "recap",
 "items": [
-"Методы пишут в `impl Тип { ... }`.",
-"`&self` читает, `&mut self` меняет, `self` забирает.",
-"Вызов: `значение.метод()`."
+"Methods are written in `impl Type { ... }`.",
+"`&self` reads, `&mut self` changes, `self` takes.",
+"The call: `value.method()`."
 ]
 }
 ],
 "goals": [
-"Прикрепить функции к структуре",
-"Разница между `&self`, `&mut self` и `self`"
+"Attach functions to a struct",
+"The difference between `&self`, `&mut self` and `self`"
 ]
 },
 {
 "id": "m07-4",
-"title": "Конструктор new",
+"title": "The new constructor",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Ассоциированные функции",
-"md": "В `impl` можно писать функции **без** `self`. Их вызывают через `::`, а не через точку.\n\nОбычно так делают **конструктор** — функцию, которая создаёт новое значение. По традиции её называют `new`.\n\n```\nimpl Counter {\n    fn new() -> Counter {\n        Counter { count: 0 }\n    }\n}\nlet c = Counter::new();\n```\nТы уже видел такое: `String::new()`, `Vec::new()`."
+"title": "Associated functions",
+"md": "In `impl` you can write functions **without** `self`. They are called with `::`, not with a dot.\n\nUsually this is used for a **constructor** — a function that creates a new value. By tradition it is called `new`.\n\n```\nimpl Counter {\n    fn new() -> Counter {\n        Counter { count: 0 }\n    }\n}\nlet c = Counter::new();\n```\nYou have already seen this: `String::new()`, `Vec::new()`."
 },
 {
 "t": "text",
-"title": "Self — короткое имя своего типа",
-"md": "Внутри `impl` вместо имени типа можно писать `Self` с большой буквы:\n\n```\nfn new() -> Self {\n    Self { count: 0 }\n}\n```"
+"title": "Self — the short name of your type",
+"md": "Inside `impl` you can write `Self` with a capital letter instead of the type name:\n\n```\nfn new() -> Self {\n    Self { count: 0 }\n}\n```"
 },
 {
 "t": "task",
-"md": "Допиши конструктор `Player::new(name)`, который создаёт игрока с 100 очками здоровья.",
-"code": "#[derive(Debug)]\nstruct Player {\n    name: String,\n    hp: u32,\n}\n\nimpl Player {\n    fn new(name: &str) -> Self {\n        // твой код\n    }\n}\n\nfn main() {\n    let p = Player::new(\"Герой\");\n    println!(\"{} {}\", p.name, p.hp);\n}",
-"solution": "#[derive(Debug)]\nstruct Player {\n    name: String,\n    hp: u32,\n}\n\nimpl Player {\n    fn new(name: &str) -> Self {\n        Self { name: name.to_string(), hp: 100 }\n    }\n}\n\nfn main() {\n    let p = Player::new(\"Герой\");\n    println!(\"{} {}\", p.name, p.hp);\n}",
-"expect": "Герой 100",
+"md": "Complete the constructor `Player::new(name)` that creates a player with 100 health points.",
+"code": "#[derive(Debug)]\nstruct Player {\n    name: String,\n    hp: u32,\n}\n\nimpl Player {\n    fn new(name: &str) -> Self {\n        // your code\n    }\n}\n\nfn main() {\n    let p = Player::new(\"Hero\");\n    println!(\"{} {}\", p.name, p.hp);\n}",
+"solution": "#[derive(Debug)]\nstruct Player {\n    name: String,\n    hp: u32,\n}\n\nimpl Player {\n    fn new(name: &str) -> Self {\n        Self { name: name.to_string(), hp: 100 }\n    }\n}\n\nfn main() {\n    let p = Player::new(\"Hero\");\n    println!(\"{} {}\", p.name, p.hp);\n}",
+"expect": "Hero 100",
 "hints": [
-"Нужно вернуть `Self { name: ..., hp: 100 }`.",
-"Из `&str` сделай `String` через `name.to_string()`."
+"Return `Self { name: ..., hp: 100 }`.",
+"Make a `String` from the `&str` with `name.to_string()`."
+]
+},
+{
+"t": "text",
+"title": "Several impl blocks",
+"md": "One type can have **several** `impl` blocks. For example, constructors in one and calculations in another. The compiler puts them together.\n\nThis is a convenient way to split a big type into meaningful parts."
+},
+{
+"t": "recap",
+"items": [
+"A function in `impl` without `self` is called as `Type::function()`.",
+"The constructor is traditionally called `new`.",
+"`Self` is the short name of the current type."
+]
+}
+],
+"goals": [
+"Functions without `self` in `impl`",
+"The custom of calling the constructor `new`"
+]
+},
+{
+"id": "m07-p",
+"title": "Practice: structs",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Describe a struct `Book` with the fields `title: String` and `pages: u32`. Create a book and print `\"Dune\": 704 pages`.",
+"code": "// describe the struct Book\n\nfn main() {\n    let b = Book { title: String::from(\"Dune\"), pages: 704 };\n    println!(\"\\\"{}\\\": {} pages\", b.title, b.pages);\n}",
+"solution": "struct Book {\n    title: String,\n    pages: u32,\n}\n\nfn main() {\n    let b = Book { title: String::from(\"Dune\"), pages: 704 };\n    println!(\"\\\"{}\\\": {} pages\", b.title, b.pages);\n}",
+"expect": "\"Dune\": 704 pages",
+"hints": [
+"`struct Book { title: String, pages: u32 }`"
+]
+},
+{
+"t": "task",
+"md": "Add a method `is_square` that returns `true` if the width equals the height.",
+"code": "struct Rect {\n    w: u32,\n    h: u32,\n}\n\nimpl Rect {\n}\n\nfn main() {\n    println!(\"{}\", Rect { w: 3, h: 3 }.is_square());\n    println!(\"{}\", Rect { w: 3, h: 5 }.is_square());\n}",
+"solution": "struct Rect {\n    w: u32,\n    h: u32,\n}\n\nimpl Rect {\n    fn is_square(&self) -> bool {\n        self.w == self.h\n    }\n}\n\nfn main() {\n    println!(\"{}\", Rect { w: 3, h: 3 }.is_square());\n    println!(\"{}\", Rect { w: 3, h: 5 }.is_square());\n}",
+"expect": "true\nfalse",
+"hints": [
+"The method only reads the fields, so it needs `&self`.",
+"`fn is_square(&self) -> bool { self.w == self.h }`"
+]
+},
+{
+"t": "task",
+"md": "A bank account. Complete the methods `deposit` (put money in) and `withdraw` (take money out). If there is not enough money, `withdraw` returns `false` and changes nothing.",
+"code": "struct Account {\n    balance: u32,\n}\n\nimpl Account {\n    fn deposit(&mut self, amount: u32) {\n    }\n\n    fn withdraw(&mut self, amount: u32) -> bool {\n        false\n    }\n}\n\nfn main() {\n    let mut acc = Account { balance: 100 };\n    acc.deposit(50);\n    println!(\"{}\", acc.withdraw(120));\n    println!(\"{}\", acc.withdraw(100));\n    println!(\"Left: {}\", acc.balance);\n}",
+"solution": "struct Account {\n    balance: u32,\n}\n\nimpl Account {\n    fn deposit(&mut self, amount: u32) {\n        self.balance += amount;\n    }\n\n    fn withdraw(&mut self, amount: u32) -> bool {\n        if amount > self.balance {\n            return false;\n        }\n        self.balance -= amount;\n        true\n    }\n}\n\nfn main() {\n    let mut acc = Account { balance: 100 };\n    acc.deposit(50);\n    println!(\"{}\", acc.withdraw(120));\n    println!(\"{}\", acc.withdraw(100));\n    println!(\"Left: {}\", acc.balance);\n}",
+"expect": "true\nfalse\nLeft: 30",
+"hints": [
+"In `deposit`: `self.balance += amount;`",
+"In `withdraw`: if `amount > self.balance` — `return false;`, otherwise decrease the balance and return `true`."
+]
+},
+{
+"t": "task",
+"md": "Add a constructor `Point::origin()` (the point 0, 0) and a method `dist` that returns the distance to another point. The formula: the square root of `(x1−x2)² + (y1−y2)²`. The square root is the method `.sqrt()`.",
+"code": "struct Point {\n    x: f64,\n    y: f64,\n}\n\nimpl Point {\n}\n\nfn main() {\n    let a = Point::origin();\n    let b = Point { x: 3.0, y: 4.0 };\n    println!(\"{}\", a.dist(&b));\n}",
+"solution": "struct Point {\n    x: f64,\n    y: f64,\n}\n\nimpl Point {\n    fn origin() -> Self {\n        Point { x: 0.0, y: 0.0 }\n    }\n\n    fn dist(&self, other: &Point) -> f64 {\n        let dx = self.x - other.x;\n        let dy = self.y - other.y;\n        (dx * dx + dy * dy).sqrt()\n    }\n}\n\nfn main() {\n    let a = Point::origin();\n    let b = Point { x: 3.0, y: 4.0 };\n    println!(\"{}\", a.dist(&b));\n}",
+"expect": "5",
+"hints": [
+"`fn origin() -> Self { Point { x: 0.0, y: 0.0 } }`",
+"`fn dist(&self, other: &Point) -> f64` — calculate `dx`, `dy` and return `(dx * dx + dy * dy).sqrt()`."
+]
+},
+{
+"t": "task",
+"md": "A tuple struct `Celsius(f64)`. Add a method `to_fahrenheit` that returns degrees Fahrenheit: `C × 1.8 + 32`.",
+"code": "struct Celsius(f64);\n\nimpl Celsius {\n}\n\nfn main() {\n    println!(\"{}\", Celsius(100.0).to_fahrenheit());\n}",
+"solution": "struct Celsius(f64);\n\nimpl Celsius {\n    fn to_fahrenheit(&self) -> f64 {\n        self.0 * 1.8 + 32.0\n    }\n}\n\nfn main() {\n    println!(\"{}\", Celsius(100.0).to_fahrenheit());\n}",
+"expect": "212",
+"hints": [
+"The value inside a tuple struct is `self.0`.",
+"`fn to_fahrenheit(&self) -> f64 { self.0 * 1.8 + 32.0 }`"
 ]
 },
 {
 "t": "recap",
 "items": [
-"Функция в `impl` без `self` вызывается через `Тип::функция()`.",
-"Конструктор по традиции — `new`.",
-"`Self` — короткое имя текущего типа."
+"Reads — `&self`, changes — `&mut self`.",
+"A constructor without `self` is called as `Type::name()`.",
+"The value of a tuple struct is `self.0`."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Функции без `self` в `impl`",
-"Обычай называть конструктор `new`"
+"Describe your own types",
+"Write methods and constructors"
 ]
 }
 ]

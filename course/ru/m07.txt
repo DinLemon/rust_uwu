@@ -67,6 +67,41 @@ fn new_user(name: String, age: u32) -> User {
 }
 ```
 
+:: text Кортежные структуры
+Бывают структуры без имён полей. Их называют **кортежными структурами**:
+
+```rust
+struct Meters(f64);
+struct Color(u8, u8, u8);
+
+let height = Meters(1.8);
+let red = Color(255, 0, 0);
+println!("{}", red.0); // 255
+```
+Зачем? Чтобы не перепутать похожие значения. `Meters` и `Seconds` — оба `f64` внутри, но компилятор не даст сложить метры с секундами.
+
+:: deep Создать структуру из другой
+Есть короткая запись «возьми остальные поля из другой структуры»: `..другая`.
+
+```rust
+#[derive(Debug)]
+struct Settings {
+    volume: u8,
+    dark: bool,
+    lang: &'static str,
+}
+
+fn main() {
+    let base = Settings { volume: 50, dark: false, lang: "ru" };
+    let mine = Settings { dark: true, ..base };
+    println!("{:?}", mine);
+}
+```
+```out
+Settings { volume: 50, dark: true, lang: "ru" }
+```
+`..base` пишут **последним**. Поля, которые указаны явно, берутся из новой записи.
+
 :: recap
 - `struct Имя { поле: тип, ... }` — свой тип.
 - Значение: `Имя { поле: значение, ... }`.
@@ -127,6 +162,11 @@ Cat {
 [ ] Ничего, работает само => Без `derive(Debug)` компилятор выдаст ошибку E0277.
 [x] Добавить `#[derive(Debug)]` над структурой => Верно.
 [ ] Написать функцию `print` => Можно, но есть способ короче.
+
+:: deep Что на самом деле делает derive
+`#[derive(Debug)]` — это просьба к компилятору **написать код за тебя**. Компилятор сам создаёт реализацию трейта `Debug`: функцию, которая печатает имя структуры и все её поля.
+
+Вручную это выглядело бы примерно на 10 строк. Подробно о трейтах и о том, как писать такие реализации сами, — в модуле 12.
 
 :: recap
 - `#[derive(Debug)]` + `{:?}` — быстрая печать для отладки.
@@ -237,6 +277,16 @@ false
 hint: Заголовок: `fn can_hold(&self, other: &Rectangle) -> bool`
 hint: Тело: `self.width > other.width && self.height > other.height`
 
+:: deep Что значит точка при вызове метода
+Запись `r.area()` — это сокращение. Полностью она выглядит так:
+
+```rust
+Rectangle::area(&r)
+```
+Rust сам подставляет `&`, `&mut` или ничего — смотря что указано в `self`. Поэтому не нужно писать `(&r).area()`.
+
+Этот приём называют **автоматическим взятием ссылки**.
+
 :: recap
 - Методы пишут в `impl Тип { ... }`.
 - `&self` читает, `&mut self` меняет, `self` забирает.
@@ -315,7 +365,225 @@ fn main() {
 hint: Нужно вернуть `Self { name: ..., hp: 100 }`.
 hint: Из `&str` сделай `String` через `name.to_string()`.
 
+:: text Несколько блоков impl
+У одного типа может быть **несколько** блоков `impl`. Например, конструкторы в одном, расчёты в другом. Компилятор соберёт их вместе.
+
+Так удобно делить большой тип на смысловые части.
+
 :: recap
 - Функция в `impl` без `self` вызывается через `Тип::функция()`.
 - Конструктор по традиции — `new`.
 - `Self` — короткое имя текущего типа.
+
+## LESSON m07-p | Практика: структуры | 12 | practice
+:: goals
+- Описывать свои типы
+- Писать методы и конструкторы
+
+:: task
+Опиши структуру `Book` с полями `title: String` и `pages: u32`. Создай книгу и напечатай `«Дюна»: 704 стр.`
+```rust
+// опиши структуру Book
+
+fn main() {
+    let b = Book { title: String::from("Дюна"), pages: 704 };
+    println!("«{}»: {} стр.", b.title, b.pages);
+}
+```
+```solution
+struct Book {
+    title: String,
+    pages: u32,
+}
+
+fn main() {
+    let b = Book { title: String::from("Дюна"), pages: 704 };
+    println!("«{}»: {} стр.", b.title, b.pages);
+}
+```
+```expect
+«Дюна»: 704 стр.
+```
+hint: `struct Book { title: String, pages: u32 }`
+
+:: task
+Добавь метод `is_square`, который возвращает `true`, если ширина равна высоте.
+```rust
+struct Rect {
+    w: u32,
+    h: u32,
+}
+
+impl Rect {
+}
+
+fn main() {
+    println!("{}", Rect { w: 3, h: 3 }.is_square());
+    println!("{}", Rect { w: 3, h: 5 }.is_square());
+}
+```
+```solution
+struct Rect {
+    w: u32,
+    h: u32,
+}
+
+impl Rect {
+    fn is_square(&self) -> bool {
+        self.w == self.h
+    }
+}
+
+fn main() {
+    println!("{}", Rect { w: 3, h: 3 }.is_square());
+    println!("{}", Rect { w: 3, h: 5 }.is_square());
+}
+```
+```expect
+true
+false
+```
+hint: Метод только читает поля, значит `&self`.
+hint: `fn is_square(&self) -> bool { self.w == self.h }`
+
+:: task
+Счёт в банке. Допиши методы `deposit` (положить деньги) и `withdraw` (снять). Если денег не хватает, `withdraw` возвращает `false` и ничего не меняет.
+```rust
+struct Account {
+    balance: u32,
+}
+
+impl Account {
+    fn deposit(&mut self, amount: u32) {
+    }
+
+    fn withdraw(&mut self, amount: u32) -> bool {
+        false
+    }
+}
+
+fn main() {
+    let mut acc = Account { balance: 100 };
+    acc.deposit(50);
+    println!("{}", acc.withdraw(120));
+    println!("{}", acc.withdraw(100));
+    println!("Остаток: {}", acc.balance);
+}
+```
+```solution
+struct Account {
+    balance: u32,
+}
+
+impl Account {
+    fn deposit(&mut self, amount: u32) {
+        self.balance += amount;
+    }
+
+    fn withdraw(&mut self, amount: u32) -> bool {
+        if amount > self.balance {
+            return false;
+        }
+        self.balance -= amount;
+        true
+    }
+}
+
+fn main() {
+    let mut acc = Account { balance: 100 };
+    acc.deposit(50);
+    println!("{}", acc.withdraw(120));
+    println!("{}", acc.withdraw(100));
+    println!("Остаток: {}", acc.balance);
+}
+```
+```expect
+true
+false
+Остаток: 30
+```
+hint: В `deposit`: `self.balance += amount;`
+hint: В `withdraw`: если `amount > self.balance` — `return false;`, иначе уменьши баланс и верни `true`.
+
+:: task
+Добавь конструктор `Point::origin()` (точка 0, 0) и метод `dist`, который возвращает расстояние до другой точки. Формула: корень из `(x1−x2)² + (y1−y2)²`. Корень — метод `.sqrt()`.
+```rust
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Point {
+}
+
+fn main() {
+    let a = Point::origin();
+    let b = Point { x: 3.0, y: 4.0 };
+    println!("{}", a.dist(&b));
+}
+```
+```solution
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Point {
+    fn origin() -> Self {
+        Point { x: 0.0, y: 0.0 }
+    }
+
+    fn dist(&self, other: &Point) -> f64 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+fn main() {
+    let a = Point::origin();
+    let b = Point { x: 3.0, y: 4.0 };
+    println!("{}", a.dist(&b));
+}
+```
+```expect
+5
+```
+hint: `fn origin() -> Self { Point { x: 0.0, y: 0.0 } }`
+hint: `fn dist(&self, other: &Point) -> f64` — посчитай `dx`, `dy` и верни `(dx * dx + dy * dy).sqrt()`.
+
+:: task
+Кортежная структура `Celsius(f64)`. Добавь метод `to_fahrenheit`, который возвращает градусы Фаренгейта: `C × 1.8 + 32`.
+```rust
+struct Celsius(f64);
+
+impl Celsius {
+}
+
+fn main() {
+    println!("{}", Celsius(100.0).to_fahrenheit());
+}
+```
+```solution
+struct Celsius(f64);
+
+impl Celsius {
+    fn to_fahrenheit(&self) -> f64 {
+        self.0 * 1.8 + 32.0
+    }
+}
+
+fn main() {
+    println!("{}", Celsius(100.0).to_fahrenheit());
+}
+```
+```expect
+212
+```
+hint: Значение внутри кортежной структуры — `self.0`.
+hint: `fn to_fahrenheit(&self) -> f64 { self.0 * 1.8 + 32.0 }`
+
+:: recap
+- Читает — `&self`, меняет — `&mut self`.
+- Конструктор без `self` вызывают через `Тип::имя()`.
+- Значение кортежной структуры — `self.0`.

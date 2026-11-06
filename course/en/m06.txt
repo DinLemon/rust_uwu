@@ -1,0 +1,497 @@
+# MODULE m06 | Borrowing and slices | Let someone look without giving it away
+
+## LESSON m06-1 | References: let someone look | 6
+:: goals
+- What a reference `&` is
+- How to pass a value into a function without giving it away
+
+:: text A reference means "look, but do not take"
+A **reference** gives access to a value without ownership. It is written with `&`.
+
+```rust
+let book = String::from("War and Peace");
+let r = &book; // r looks at book
+```
+Creating a reference is called **borrowing**.
+
+> Analogy: you lend a friend a book to read. The book is still yours. The friend gives it back after reading.
+
+:: code
+```rust
+fn count_letters(s: &String) -> usize {
+    s.chars().count()
+}
+
+fn main() {
+    let word = String::from("hello");
+    let n = count_letters(&word);
+    println!("The word \"{word}\" has {n} letters");
+}
+```
+```out
+The word "hello" has 5 letters
+```
+`word` is still ours: the function only looked. `usize` is the type for sizes and counts.
+
+:: quiz
+What does `&word` mean in a function call?
+[ ] Give `word` to the function forever => That would be without `&`. With `&` ownership stays.
+[x] Let the function look at `word` => Correct. The function gets a reference; the owner does not change.
+[ ] Make a copy of `word` => `.clone()` makes a copy. A reference copies nothing.
+
+:: task
+The function takes the string, so it cannot be printed afterwards. Fix it with a reference.
+```rust
+fn shout(s: String) {
+    println!("{}!!!", s);
+}
+
+fn main() {
+    let msg = String::from("Hooray");
+    shout(msg);
+    println!("{msg}");
+}
+```
+```solution
+fn shout(s: &String) {
+    println!("{}!!!", s);
+}
+
+fn main() {
+    let msg = String::from("Hooray");
+    shout(&msg);
+    println!("{msg}");
+}
+```
+```expect
+Hooray!!!
+Hooray
+```
+hint: You need to change two places: the parameter type and the call.
+hint: `fn shout(s: &String)` and `shout(&msg);`
+
+:: deep What is inside a reference
+A reference is just the **address** of a value in memory. It takes 8 bytes (on a 64-bit computer), however big the value itself is.
+
+You can print the address with `{:p}` (p means pointer):
+
+```rust
+fn main() {
+    let big = String::from("a very long text");
+    let r = &big;
+    println!("Address: {:p}", r);
+    println!("Size of the reference: {} bytes", std::mem::size_of::<&String>());
+}
+```
+The address is different on every run. The size of the reference is always `8 bytes`.
+
+:: recap
+- `&x` is a reference: access without ownership.
+- A function with a parameter `&T` only looks.
+- After such a call the variable is still yours.
+
+## LESSON m06-2 | Mutable references | 6
+:: goals
+- How to let something change a value: `&mut`
+- The main rule of references
+
+:: text &mut — permission to write notes in the margins
+A normal reference `&` can only read. For a function to **change** a value, you need a mutable reference `&mut`.
+
+```rust
+fn add_smile(s: &mut String) {
+    s.push_str(" :)");
+}
+```
+The variable itself must also be `mut`.
+
+:: code
+```rust
+fn add_smile(s: &mut String) {
+    s.push_str(" :)");
+}
+
+fn main() {
+    let mut text = String::from("Hello");
+    add_smile(&mut text);
+    add_smile(&mut text);
+    println!("{text}");
+}
+```
+```out
+Hello :) :)
+```
+
+:: text The main rule
+At any moment you can have **one** of these two:
+
+- any number of **readers** `&`;
+- or exactly **one writer** `&mut`.
+
+> Analogy: a document in a shared folder. Everyone can read it at the same time. But while someone edits it, the others wait, so they do not see a mess.
+
+This rule prevents a whole class of bugs where data changes under your feet.
+
+:: code
+Two mutable references at the same time. Run it.
+```rust
+fn main() {
+    let mut s = String::from("text");
+    let a = &mut s;
+    let b = &mut s;
+    a.push_str("1");
+    b.push_str("2");
+}
+```
+fails: yes
+Error `E0499`: you cannot take `&mut` twice while the first reference is still in use.
+
+:: text A reference "lives" until its last use
+Good news: a reference ends after the **last** place where it is used. Not at `}`.
+
+```rust
+let mut s = String::from("a");
+let r1 = &s;
+println!("{r1}"); // r1 is not needed anymore
+let r2 = &mut s;  // now this is allowed
+r2.push_str("b");
+```
+
+:: quiz
+Which set of references is allowed at the same time?
+[x] Three `&` references => Correct. There can be any number of readers.
+[ ] Two `&mut` references => There can be only one writer.
+[ ] One `&` and one `&mut` => While someone reads, nobody may write.
+
+:: deep Which bug the rule prevents
+Imagine: you hold a reference to the first element of a vector, and at the same time you add a new element to the vector.
+
+```rust
+let mut v = vec![1, 2, 3];
+let first = &v[0];
+v.push(4);            // error E0502
+println!("{first}");
+```
+On `push` the vector may run out of space. Then it moves to new memory, and the old memory is freed. The reference `first` would point to freed memory.
+
+In C++ such a bug compiles and then breaks the program at a random moment. Rust does not allow it: while the reader `first` exists, `v` cannot be changed.
+
+:: recap
+- `&mut x` is a reference through which you can change the value.
+- Either many `&`, or one `&mut`.
+- A reference lives until its last use.
+
+## LESSON m06-3 | There are no dangling references | 5
+:: goals
+- What a dangling reference is
+- How Rust prevents it
+
+:: text A reference to nowhere
+A **dangling reference** points to a value that no longer exists. Analogy: the address of a house that was demolished.
+
+In C such references are a common cause of crashes and security holes. In Rust they **do not exist**: the compiler watches.
+
+:: code
+The function tries to return a reference to its local string. Run it.
+```rust
+fn make() -> &String {
+    let s = String::from("hello");
+    &s
+}
+
+fn main() {
+    let r = make();
+}
+```
+fails: yes
+The compiler does not allow it. The string `s` is deleted at the `}` of the function, and the reference would point to nothing. The error talks about a **lifetime**. There is a separate module about lifetimes.
+
+:: text How to fix it
+Return the string itself, not a reference. Then ownership simply moves out:
+
+```rust
+fn make() -> String {
+    String::from("hello")
+}
+```
+
+:: quiz
+Why can you not return `&s` when `s` was created inside the function?
+[ ] References can never be returned => They can, if the value lives longer than the function.
+[x] `s` is deleted at the end of the function, and the reference would dangle => Correct. A reference cannot outlive its value.
+[ ] Strings cannot be created in functions => They can; you just need to return the string itself.
+
+:: recap
+- A reference cannot outlive its value.
+- If you created something inside a function, return the value, not a reference.
+
+## LESSON m06-4 | Slices and &str | 7
+:: goals
+- What a slice is
+- The difference between `String` and `&str`
+- A trap with non-English letters
+
+:: text A slice is a window into part of the data
+A **slice** is a reference to a piece of a sequence. Not a copy, but a window.
+
+```rust
+let nums = [10, 20, 30, 40, 50];
+let middle = &nums[1..4]; // [20, 30, 40]
+```
+> Analogy: a frame laid on top of a photo. You see only part of it, but it is the same photo.
+
+:: text String and &str
+- `String` is an **owning** string in the heap. It can grow.
+- `&str` is a **string slice**: a window into someone else's text.
+
+Text in quotes, like `"hello"`, is a `&str`. It is stored right inside the program.
+
+> The rule: write `&str` in function parameters. Both `&String` and `"text"` fit there.
+
+:: code
+```rust
+fn greet(name: &str) {
+    println!("Hello, {name}!");
+}
+
+fn main() {
+    let owned = String::from("Anna");
+    greet(&owned);
+    greet("Bob");
+    let name = String::from("Яна");
+    let part = &name[0..2];
+    println!("First bytes: {part}");
+}
+```
+```out
+Hello, Anna!
+Hello, Bob!
+First bytes: Я
+```
+Wait. The Russian name "Яна" and `0..2` gave **one** letter "Я", not two. Why?
+
+:: text Some letters take 2 or more bytes
+Strings in Rust are stored in **UTF-8**. An English letter takes 1 byte. A Russian letter takes 2 bytes. Some other characters take 3 or 4.
+
+The slice `[0..2]` takes **bytes**, not letters. If you cut a letter in half, the program panics.
+
+!> For text that is not pure English, do not cut a string by numbers. Use `.chars()` — going through the string letter by letter.
+
+:: code
+```rust
+fn main() {
+    let word = "привет";
+    println!("Bytes: {}", word.len());
+    println!("Letters: {}", word.chars().count());
+    let first: String = word.chars().take(3).collect();
+    println!("The first three letters: {first}");
+}
+```
+```out
+Bytes: 12
+Letters: 6
+The first three letters: при
+```
+"привет" means "hello" in Russian.
+
+:: quiz
+What does `"мир".len()` return? ("мир" is a Russian word with 3 letters.)
+[ ] 3 => `len()` counts bytes. A Russian letter has two.
+[x] 6 => Correct. Three Russian letters × 2 bytes.
+[ ] 1 => That is the number of words, and `len()` is about something else.
+
+:: task
+Write a function `first_word` that returns the first word of a string (up to the space). If there is no space, return the whole string.
+```rust
+fn first_word(s: &str) -> &str {
+    // hint: s.split(' ').next()
+    s
+}
+
+fn main() {
+    println!("{}", first_word("hello world"));
+    println!("{}", first_word("rust"));
+}
+```
+```solution
+fn first_word(s: &str) -> &str {
+    match s.find(' ') {
+        Some(i) => &s[..i],
+        None => s,
+    }
+}
+
+fn main() {
+    println!("{}", first_word("hello world"));
+    println!("{}", first_word("rust"));
+}
+```
+```expect
+hello
+rust
+```
+hint: `s.split(' ')` cuts the string at spaces. `.next()` gives the first piece.
+hint: A short solution: `s.split(' ').next().unwrap()`. `unwrap` is explained later.
+
+:: deep Why &String fits where &str is expected
+The function `greet(name: &str)` also accepts `&String`. How, if the types are different?
+
+Rust turns `&String` into `&str` by itself. This is called **deref coercion**. A `String` can give out a slice of all its text.
+
+The same works with vectors: `&Vec<i32>` turns into the slice `&[i32]`. That is why parameters are written as `&[i32]` — then the function accepts both an array and a vector.
+
+:: recap
+- A slice `&a[1..3]` is a window into part of the data.
+- `String` owns text, `&str` looks at text.
+- Write `&str` in function parameters.
+- `len()` counts bytes. For letters use `.chars()`.
+
+## LESSON m06-p | Practice: references and slices | 12 | practice
+:: goals
+- Pass data by reference
+- Change data through `&mut`
+- Work with slices
+
+:: fill
+Fill in the blanks: the first function only reads, the second one changes.
+```rust
+fn show(v: ___Vec<i32>) {
+    println!("{:?}", v);
+}
+
+fn add_one(v: ___Vec<i32>) {
+    v.push(1);
+}
+```
+= &
+= &mut | & mut
+
+:: task
+Write a function `count_vowels` that counts the vowels `a e i o u` in a string.
+```rust
+fn count_vowels(s: &str) -> usize {
+    0
+}
+
+fn main() {
+    println!("{}", count_vowels("programming is fun"));
+}
+```
+```solution
+fn count_vowels(s: &str) -> usize {
+    let mut n = 0;
+    for c in s.chars() {
+        if "aeiou".contains(c) {
+            n += 1;
+        }
+    }
+    n
+}
+
+fn main() {
+    println!("{}", count_vowels("programming is fun"));
+}
+```
+```expect
+5
+```
+hint: Go through the letters: `for c in s.chars()`.
+hint: The vowel check: `"aeiou".contains(c)`.
+
+:: task
+Write a function `double_all` that doubles every element of a vector through `&mut`.
+```rust
+fn double_all(v: &mut Vec<i32>) {
+}
+
+fn main() {
+    let mut nums = vec![1, 2, 3];
+    double_all(&mut nums);
+    println!("{:?}", nums);
+}
+```
+```solution
+fn double_all(v: &mut Vec<i32>) {
+    for x in v.iter_mut() {
+        *x *= 2;
+    }
+}
+
+fn main() {
+    let mut nums = vec![1, 2, 3];
+    double_all(&mut nums);
+    println!("{:?}", nums);
+}
+```
+```expect
+[2, 4, 6]
+```
+hint: `for x in v.iter_mut()` gives a mutable reference to each element.
+hint: The value behind a reference is changed with `*`: `*x *= 2;`
+
+:: task
+Fix error E0502: printing the reference gets in the way of the change. Reorder the lines so the program prints `1` and `[1, 2, 3, 4]`.
+```rust
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &v[0];
+    v.push(4);
+    println!("{first}");
+    println!("{:?}", v);
+}
+```
+```solution
+fn main() {
+    let mut v = vec![1, 2, 3];
+    let first = &v[0];
+    println!("{first}");
+    v.push(4);
+    println!("{:?}", v);
+}
+```
+```expect
+1
+[1, 2, 3, 4]
+```
+hint: The reference `first` must finish its work **before** `push`.
+hint: Move `println!("{first}");` above `v.push(4);`
+
+:: task
+Write a function `sum` that takes a slice `&[i32]` and returns the sum. It must work with both an array and a vector.
+```rust
+// write the function sum
+
+fn main() {
+    let arr = [1, 2, 3];
+    let v = vec![10, 20];
+    println!("{} {}", sum(&arr), sum(&v));
+    println!("{}", sum(&arr[1..]));
+}
+```
+```solution
+fn sum(items: &[i32]) -> i32 {
+    let mut total = 0;
+    for x in items {
+        total += x;
+    }
+    total
+}
+
+fn main() {
+    let arr = [1, 2, 3];
+    let v = vec![10, 20];
+    println!("{} {}", sum(&arr), sum(&v));
+    println!("{}", sum(&arr[1..]));
+}
+```
+```expect
+6 30
+5
+```
+hint: The header: `fn sum(items: &[i32]) -> i32`
+hint: `&arr[1..]` is a slice from the second element to the end.
+
+:: recap
+- `&` reads, `&mut` changes.
+- While there is a reader, nobody can write: finish with the reference earlier.
+- A `&[i32]` parameter accepts an array, a vector, and parts of them.
