@@ -320,7 +320,7 @@ pre.code code { background: none; padding: 0; font-size: inherit; }
 .gloss dt small { font-weight: 400; color: var(--muted); font-family: var(--mono); }
 .gloss dd { margin: .15rem 0 0; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 1rem; }
-.seg { display: inline-flex; border: 2px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 2px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .seg button { border: 0; background: transparent; color: var(--text); padding: .4rem .9rem; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin: .4rem 0; }
