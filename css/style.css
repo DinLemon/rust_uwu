@@ -539,3 +539,53 @@ body.focus .topbar nav { display: none; }
 @keyframes mascot-stamp { from { opacity: 0; transform: scale(1.5) rotate(-14deg); } }
 @keyframes mascot-bookmark { from { opacity: 0; transform: translateY(10px); } }
 @keyframes mascot-open { from { transform: scaleX(1); } }
+
+/* Диплом */
+.diploma-award { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.25rem; margin: 1.1rem 0; }
+.diploma-award img { display: block; width: min(100%, 12rem); }
+.diploma-award p { margin: 0 0 .65rem; }
+.diploma-tools { margin-bottom: 1.2rem; }
+.diploma-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem 1rem; margin-top: 1rem; }
+.diploma-actions label { display: grid; gap: .25rem; width: min(100%, 21rem); }
+.diploma-actions input {
+  width: 100%; min-height: 2.7rem; padding: .45rem .7rem; font: inherit;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: .6rem;
+}
+.course-diploma {
+  position: relative; margin: 0 auto; padding: 2.3rem clamp(.85rem, 5vw, 3.8rem);
+  border: 7px double #a96b52; background: #fffaf2; color: #4a302b;
+  text-align: center; font-family: Georgia, "Times New Roman", serif; line-height: 1.25;
+}
+.course-diploma::before { content: ""; position: absolute; inset: .38rem; border: 1px solid #c3a7cb; pointer-events: none; }
+.course-diploma p { margin: 0; }
+.diploma-brand {
+  display: flex; align-items: center; justify-content: center; gap: .65em;
+  color: #75478c; font-weight: 700; letter-spacing: .19em; text-transform: uppercase; font-size: .8em;
+}
+.diploma-brand::before, .diploma-brand::after { content: ""; width: 2.25em; border-top: 1px solid #b187b6; }
+.course-diploma h1 { margin: .22em 0 .18em; color: #773f35; font-size: clamp(2.1rem, 8vw, 4.15rem); line-height: 1.02; }
+.diploma-subtitle { font-size: 1.12em; }
+.course-diploma .diploma-recipient {
+  margin: .6em auto .37em; padding-bottom: .14em; max-width: 100%; width: fit-content;
+  border-bottom: 1px solid #b187b6; color: #673b7a; font-size: clamp(1.25rem, 5vw, 2.5rem);
+  font-weight: 700; overflow-wrap: anywhere;
+}
+.diploma-scope { color: #78574f; font-size: .86em; letter-spacing: .04em; }
+.diploma-art { display: block; width: min(100%, 20rem); height: 12rem; object-fit: contain; margin: .65rem auto .18rem; }
+.diploma-signature { color: #75478c; font-style: italic; font-size: .9em; }
+
+@media print {
+  @page diploma { size: A4 landscape; margin: 10mm; }
+  body:has(.course-diploma) { background: white; color: #4a302b; }
+  body:has(.course-diploma) > :not(#app), .diploma-tools { display: none !important; }
+  body:has(.course-diploma) #app { padding: 0; }
+  .diploma-page { max-width: none; }
+  .course-diploma {
+    page: diploma; break-inside: avoid; width: 100%; margin: 0; padding: 9mm 13mm 7mm;
+    background: white; border-width: 1.8mm; font-size: 15pt;
+  }
+  .course-diploma::before { inset: 1.6mm; }
+  .course-diploma h1 { font-size: 43pt; }
+  .course-diploma .diploma-recipient { font-size: 27pt; }
+  .diploma-art { width: 104mm; max-width: 100%; height: 61mm; margin: 4mm auto 1mm; }
+}
