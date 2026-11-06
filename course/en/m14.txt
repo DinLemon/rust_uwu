@@ -1,0 +1,420 @@
+# MODULE m14 | Closures and iterators | A conveyor belt for data
+
+## LESSON m14-1 | Closures | 6
+:: goals
+- What a closure is
+- How it "captures" variables
+
+:: text A function made on the spot
+A **closure** is a small function without a name that you write right where you need it. The parameters go between bars `| |`.
+
+```rust
+let double = |x| x * 2;
+println!("{}", double(5)); // 10
+```
+You usually do not need to write the types: the compiler works them out.
+
+:: text A closure sees the variables around it
+Unlike `fn`, a closure **captures** variables from its surroundings:
+
+```rust
+let bonus = 10;
+let add_bonus = |x| x + bonus;
+println!("{}", add_bonus(5)); // 15
+```
+> Analogy: a note with the address already written on it. You do not have to pass the address every time.
+
+:: code
+```rust
+fn main() {
+    let mut count = 0;
+    let mut click = || {
+        count += 1;
+        println!("Click number {count}");
+    };
+    click();
+    click();
+    println!("Total: {count}");
+}
+```
+```out
+Click number 1
+Click number 2
+Total: 2
+```
+The closure changes `count`, so the closure itself must be `mut`.
+
+:: text move — take it along
+The word `move` before a closure makes it **take** the variables into ownership instead of borrowing them.
+
+```rust
+let name = String::from("Anna");
+let hello = move || println!("Hello, {name}");
+```
+This is needed in the module about threads.
+
+:: quiz
+What does `let f = |a, b| a * b; println!("{}", f(3, 4));` print?
+[ ] 7 => `*` is multiplication, not addition.
+[x] 12 => Correct.
+[ ] An error: the closure has no name => It does not need one: we put it into the variable `f`.
+
+:: deep Three kinds of closures
+The compiler sorts closures into three kinds by what they do with the captured variables:
+- `Fn` — only **reads**. It can be called any number of times.
+- `FnMut` — **changes**. The closure itself must be `mut`.
+- `FnOnce` — **takes** ownership. It can be called only once.
+
+A function can require the kind it needs:
+
+```rust
+fn twice<F: Fn()>(f: F) {
+    f();
+    f();
+}
+
+fn main() {
+    let name = String::from("Rust");
+    twice(|| println!("Hello, {name}"));
+}
+```
+```out
+Hello, Rust
+Hello, Rust
+```
+
+:: recap
+- `|parameters| expression` is a closure.
+- A closure sees the variables around it.
+- `move` takes them into ownership.
+
+## LESSON m14-2 | Iterators and the conveyor belt | 7
+:: goals
+- What an iterator is
+- The main operations: `map`, `filter`, `collect`, `sum`
+
+:: text An iterator is a conveyor belt
+An **iterator** gives out elements one by one. You can attach operations to it.
+
+> Analogy: a conveyor belt. Items ride on it; along the way they are washed (`map`), rejected (`filter`), and at the end they are packed into a box (`collect`).
+
+```rust
+let v = vec![1, 2, 3, 4, 5];
+let even_squares: Vec<i32> = v.iter()
+    .filter(|x| *x % 2 == 0)
+    .map(|x| x * x)
+    .collect();
+// [4, 16]
+```
+
+:: text The main operations
+- `map(|x| ...)` — transform each element.
+- `filter(|x| ...)` — keep the matching ones.
+- `collect()` — collect into a collection (usually a `Vec`).
+- `sum()`, `count()`, `max()`, `min()` — compute a total.
+- `enumerate()` — give each element a number.
+- `zip(other)` — walk over two lists in pairs.
+
+:: code
+```rust
+fn main() {
+    let prices = vec![120, 45, 300, 80];
+    let total: i32 = prices.iter().sum();
+    let cheap = prices.iter().filter(|p| **p < 100).count();
+    let with_tax: Vec<i32> = prices.iter().map(|p| p * 12 / 10).collect();
+    println!("Sum: {total}, cheap: {cheap}");
+    println!("With tax: {:?}", with_tax);
+    for (i, p) in prices.iter().enumerate() {
+        println!("{}. {p}", i + 1);
+    }
+}
+```
+```out
+Sum: 545, cheap: 2
+With tax: [144, 54, 360, 96]
+1. 120
+2. 45
+3. 300
+4. 80
+```
+`**p` is two dereferences. `iter()` gives references, and `filter` gives a reference to a reference. If the stars are confusing, write `|&&p| p < 100`, or just follow the compiler's hints.
+
+:: order
+Build the conveyor: the sum of the squares of the numbers from 1 to 3.
+```rust
+let total: i32 = (1..=3)
+    .map(|x| x * x)
+    .sum();
+```
+
+:: quiz
+What does `vec![1, 2, 3].iter().map(|x| x + 10).collect::<Vec<i32>>()` return?
+[x] `[11, 12, 13]` => Correct. `map` changes each element.
+[ ] `[1, 2, 3]` => `map` does not just go through the elements; it transforms them.
+[ ] `36` => That would be `sum()`, not `collect()`.
+
+:: text More useful operations
+- `take(n)` takes the first `n`; `skip(n)` skips the first `n`.
+- `any(|x| ...)` — is there at least one matching element; `all(|x| ...)` — do all elements match.
+- `find(|x| ...)` — the first matching element, in an `Option`.
+- `position(|x| ...)` — the index of the first matching element, in an `Option`.
+- `fold(start, |acc, x| ...)` — fold everything into one value.
+
+```rust
+let v = vec![3, 8, 1, 9];
+v.iter().any(|&x| x > 8);           // true
+v.iter().find(|&&x| x > 5);         // Some(&8)
+v.iter().fold(0, |acc, x| acc + x); // 21
+```
+
+:: recap
+- `.iter()` gives references to the elements.
+- `map`, `filter`, `enumerate`, `zip` work along the way.
+- `collect`, `sum`, `count`, `max` work at the end.
+
+## LESSON m14-3 | Laziness and kinds of iteration | 6
+:: goals
+- Why iterators are lazy
+- The difference between `iter`, `iter_mut`, `into_iter`
+
+:: text The conveyor does not move without a command
+Iterators are **lazy**. Until you ask for the result (`collect`, `sum`, `for`), nothing happens.
+
+```rust
+let v = vec![1, 2, 3];
+v.iter().map(|x| println!("{x}")); // prints nothing!
+```
+The compiler even warns you: "iterators are lazy and do nothing unless consumed".
+
+> This saves work: if you take only the first 3 elements with `.take(3)`, the rest are not even processed.
+
+:: text Three ways to iterate
+- `iter()` — look: gives `&T`.
+- `iter_mut()` — change: gives `&mut T`.
+- `into_iter()` — take: gives `T`; the vector is gone afterwards.
+
+`for x in &v` is the same as `v.iter()`. `for x in v` is the same as `v.into_iter()`.
+
+:: task
+From a list of words, build a new vector: only the words longer than 3 letters, in capital letters.
+```rust
+fn main() {
+    let words = vec!["cat", "doggy", "ox", "parrot"];
+    let result: Vec<String> = words
+        .iter()
+        // your conveyor
+        .collect();
+    println!("{:?}", result);
+}
+```
+```solution
+fn main() {
+    let words = vec!["cat", "doggy", "ox", "parrot"];
+    let result: Vec<String> = words
+        .iter()
+        .filter(|w| w.chars().count() > 3)
+        .map(|w| w.to_uppercase())
+        .collect();
+    println!("{:?}", result);
+}
+```
+```expect
+["DOGGY", "PARROT"]
+```
+hint: Count the length in letters with `w.chars().count()`. `len()` counts bytes, which differs for non-English letters.
+hint: `.filter(|w| w.chars().count() > 3).map(|w| w.to_uppercase())`
+
+:: deep Your own iterator
+Any type with a method `next` that returns an `Option` becomes an iterator. This is the trait `Iterator`:
+
+```rust
+struct Countdown(u32);
+
+impl Iterator for Countdown {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.0 == 0 {
+            None
+        } else {
+            self.0 -= 1;
+            Some(self.0 + 1)
+        }
+    }
+}
+
+fn main() {
+    let v: Vec<u32> = Countdown(3).collect();
+    println!("{:?}", v);
+    println!("{}", Countdown(4).map(|x| x * 10).sum::<u32>());
+}
+```
+```out
+[3, 2, 1]
+100
+```
+Write one `next` — and get `map`, `filter`, `sum` and everything else for free.
+
+By the way, iterator chains run as fast as a hand-written loop: the compiler turns them into a normal loop.
+
+:: recap
+- Iterators are lazy: the work starts at `collect`/`sum`/`for`.
+- `iter` looks, `iter_mut` changes, `into_iter` takes.
+
+## LESSON m14-p | Practice: iterators | 14 | practice
+:: goals
+- Build conveyors from `filter`, `map`, `sum`
+- Search with `find`, `any`, `all`
+- Write closures
+
+:: task
+Calculate the sum of the squares of the odd numbers from 1 to 9 in one chain.
+```rust
+fn main() {
+    let total: i32 = (1..=9)
+        // your chain
+        .sum();
+    println!("{total}");
+}
+```
+```solution
+fn main() {
+    let total: i32 = (1..=9)
+        .filter(|x| x % 2 == 1)
+        .map(|x| x * x)
+        .sum();
+    println!("{total}");
+}
+```
+```expect
+165
+```
+hint: First `filter` for the odd ones, then `map` for the squares.
+hint: `.filter(|x| x % 2 == 1).map(|x| x * x)`
+
+:: task
+Find the first word longer than 5 letters. Use `find`.
+```rust
+fn main() {
+    let words = ["code", "ferrous", "crab", "compiler"];
+    let long = words.iter().find(|w| true);
+    println!("{:?}", long);
+}
+```
+```solution
+fn main() {
+    let words = ["code", "ferrous", "crab", "compiler"];
+    let long = words.iter().find(|w| w.chars().count() > 5);
+    println!("{:?}", long);
+}
+```
+```expect
+Some("ferrous")
+```
+hint: The length in letters is `w.chars().count()`.
+hint: `.find(|w| w.chars().count() > 5)`
+
+:: task
+Check a list of marks: is there at least one 2, and are all marks positive. Print `true` and `true`.
+```rust
+fn main() {
+    let marks = [5, 4, 2, 5, 3];
+    let has_two = false;
+    let all_positive = false;
+    println!("{has_two} {all_positive}");
+}
+```
+```solution
+fn main() {
+    let marks = [5, 4, 2, 5, 3];
+    let has_two = marks.iter().any(|&m| m == 2);
+    let all_positive = marks.iter().all(|&m| m > 0);
+    println!("{has_two} {all_positive}");
+}
+```
+```expect
+true true
+```
+hint: `any` means "at least one", `all` means "all".
+hint: `marks.iter().any(|&m| m == 2)` and `marks.iter().all(|&m| m > 0)`
+
+:: task
+Calculate the product of the numbers from 1 to 6 with `fold`.
+```rust
+fn main() {
+    let product = (1..=6).fold(0, |acc, x| acc);
+    println!("{product}");
+}
+```
+```solution
+fn main() {
+    let product = (1..=6).fold(1, |acc, x| acc * x);
+    println!("{product}");
+}
+```
+```expect
+720
+```
+hint: For multiplication the start value must be `1`, not `0`.
+hint: `(1..=6).fold(1, |acc, x| acc * x)`
+
+:: task
+Write a function `above` that returns a vector of the numbers greater than `limit`. The closure inside `filter` must capture `limit`.
+```rust
+fn above(nums: &[i32], limit: i32) -> Vec<i32> {
+    Vec::new()
+}
+
+fn main() {
+    println!("{:?}", above(&[4, 10, 7, 1, 12], 6));
+}
+```
+```solution
+fn above(nums: &[i32], limit: i32) -> Vec<i32> {
+    nums.iter().filter(|&&x| x > limit).copied().collect()
+}
+
+fn main() {
+    println!("{:?}", above(&[4, 10, 7, 1, 12], 6));
+}
+```
+```expect
+[10, 7, 12]
+```
+hint: `nums.iter().filter(...)` gives references. `.copied()` turns `&i32` into `i32`.
+hint: `nums.iter().filter(|&&x| x > limit).copied().collect()`
+
+:: task
+Number the tasks starting from one with `enumerate` and collect the lines into a vector.
+```rust
+fn main() {
+    let tasks = ["buy bread", "learn Rust"];
+    let lines: Vec<String> = Vec::new();
+    for l in &lines {
+        println!("{l}");
+    }
+}
+```
+```solution
+fn main() {
+    let tasks = ["buy bread", "learn Rust"];
+    let lines: Vec<String> = tasks
+        .iter()
+        .enumerate()
+        .map(|(i, t)| format!("{}. {}", i + 1, t))
+        .collect();
+    for l in &lines {
+        println!("{l}");
+    }
+}
+```
+```expect
+1. buy bread
+2. learn Rust
+```
+hint: `enumerate()` gives pairs `(number, element)`, numbered from zero.
+hint: `.map(|(i, t)| format!("{}. {}", i + 1, t))`
+
+:: recap
+- `filter` → `map` → `sum`/`collect` is the main conveyor.
+- `find`, `any`, `all`, `position` search and check.
+- `fold` folds everything into one value.

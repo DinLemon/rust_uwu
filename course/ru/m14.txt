@@ -59,6 +59,30 @@ let hello = move || println!("Привет, {name}");
 [x] 12 => Верно.
 [ ] Ошибка: у замыкания нет имени => Имя ему и не нужно: мы положили его в переменную `f`.
 
+:: deep Три вида замыканий
+Компилятор делит замыкания на три вида по тому, что они делают с захваченными переменными:
+- `Fn` — только **читает**. Можно вызывать сколько угодно раз.
+- `FnMut` — **меняет**. Само замыкание должно быть `mut`.
+- `FnOnce` — **забирает** владение. Вызвать можно только один раз.
+
+Функция может требовать нужный вид:
+
+```rust
+fn twice<F: Fn()>(f: F) {
+    f();
+    f();
+}
+
+fn main() {
+    let name = String::from("Rust");
+    twice(|| println!("Привет, {name}"));
+}
+```
+```out
+Привет, Rust
+Привет, Rust
+```
+
 :: recap
 - `|параметры| выражение` — замыкание.
 - Замыкание видит переменные вокруг себя.
@@ -129,6 +153,20 @@ let total: i32 = (1..=3)
 [ ] `[1, 2, 3]` => `map` не просто перебирает, он превращает.
 [ ] `36` => Это было бы `sum()`, а не `collect()`.
 
+:: text Ещё полезные операции
+- `take(n)` — взять первые `n`; `skip(n)` — пропустить первые `n`.
+- `any(|x| ...)` — есть ли хоть один подходящий; `all(|x| ...)` — подходят ли все.
+- `find(|x| ...)` — первый подходящий, в `Option`.
+- `position(|x| ...)` — номер первого подходящего, в `Option`.
+- `fold(начало, |акк, x| ...)` — свернуть всё в одно значение.
+
+```rust
+let v = vec![3, 8, 1, 9];
+v.iter().any(|&x| x > 8);          // true
+v.iter().find(|&&x| x > 5);        // Some(&8)
+v.iter().fold(0, |acc, x| acc + x); // 21
+```
+
 :: recap
 - `.iter()` — ссылки на элементы.
 - `map`, `filter`, `enumerate`, `zip` — по пути.
@@ -186,6 +224,197 @@ fn main() {
 hint: Длина в буквах — `w.chars().count()`, не `len()`: русские буквы занимают два байта.
 hint: `.filter(|w| w.chars().count() > 3).map(|w| w.to_uppercase())`
 
+:: deep Свой итератор
+Итератором становится любой тип, у которого есть метод `next`, возвращающий `Option`. Это трейт `Iterator`:
+
+```rust
+struct Countdown(u32);
+
+impl Iterator for Countdown {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.0 == 0 {
+            None
+        } else {
+            self.0 -= 1;
+            Some(self.0 + 1)
+        }
+    }
+}
+
+fn main() {
+    let v: Vec<u32> = Countdown(3).collect();
+    println!("{:?}", v);
+    println!("{}", Countdown(4).map(|x| x * 10).sum::<u32>());
+}
+```
+```out
+[3, 2, 1]
+100
+```
+Написал один `next` — и получил бесплатно `map`, `filter`, `sum` и всё остальное.
+
+Кстати, цепочки итераторов работают так же быстро, как ручной цикл: компилятор превращает их в обычный цикл.
+
 :: recap
 - Итераторы ленивые: работа начинается в `collect`/`sum`/`for`.
 - `iter` — смотреть, `iter_mut` — менять, `into_iter` — забрать.
+
+## LESSON m14-p | Практика: итераторы | 14 | practice
+:: goals
+- Строить конвейеры из `filter`, `map`, `sum`
+- Искать через `find`, `any`, `all`
+- Писать замыкания
+
+:: task
+Посчитай сумму квадратов нечётных чисел от 1 до 9 одной цепочкой.
+```rust
+fn main() {
+    let total: i32 = (1..=9)
+        // твоя цепочка
+        .sum();
+    println!("{total}");
+}
+```
+```solution
+fn main() {
+    let total: i32 = (1..=9)
+        .filter(|x| x % 2 == 1)
+        .map(|x| x * x)
+        .sum();
+    println!("{total}");
+}
+```
+```expect
+165
+```
+hint: Сначала `filter` для нечётных, потом `map` для квадратов.
+hint: `.filter(|x| x % 2 == 1).map(|x| x * x)`
+
+:: task
+Найди первое слово длиннее 5 букв. Используй `find`.
+```rust
+fn main() {
+    let words = ["код", "ржавчина", "краб", "компилятор"];
+    let long = words.iter().find(|w| true);
+    println!("{:?}", long);
+}
+```
+```solution
+fn main() {
+    let words = ["код", "ржавчина", "краб", "компилятор"];
+    let long = words.iter().find(|w| w.chars().count() > 5);
+    println!("{:?}", long);
+}
+```
+```expect
+Some("ржавчина")
+```
+hint: Длина в буквах — `w.chars().count()`.
+hint: `.find(|w| w.chars().count() > 5)`
+
+:: task
+Проверь список оценок: есть ли хоть одна двойка и все ли оценки положительные. Напечатай `true` и `true`.
+```rust
+fn main() {
+    let marks = [5, 4, 2, 5, 3];
+    let has_two = false;
+    let all_positive = false;
+    println!("{has_two} {all_positive}");
+}
+```
+```solution
+fn main() {
+    let marks = [5, 4, 2, 5, 3];
+    let has_two = marks.iter().any(|&m| m == 2);
+    let all_positive = marks.iter().all(|&m| m > 0);
+    println!("{has_two} {all_positive}");
+}
+```
+```expect
+true true
+```
+hint: `any` — «хотя бы один», `all` — «все».
+hint: `marks.iter().any(|&m| m == 2)` и `marks.iter().all(|&m| m > 0)`
+
+:: task
+Посчитай произведение чисел от 1 до 6 через `fold`.
+```rust
+fn main() {
+    let product = (1..=6).fold(0, |acc, x| acc);
+    println!("{product}");
+}
+```
+```solution
+fn main() {
+    let product = (1..=6).fold(1, |acc, x| acc * x);
+    println!("{product}");
+}
+```
+```expect
+720
+```
+hint: Для умножения начальное значение должно быть `1`, а не `0`.
+hint: `(1..=6).fold(1, |acc, x| acc * x)`
+
+:: task
+Напиши функцию `above`, которая возвращает вектор чисел больше `limit`. Замыкание внутри `filter` должно захватить `limit`.
+```rust
+fn above(nums: &[i32], limit: i32) -> Vec<i32> {
+    Vec::new()
+}
+
+fn main() {
+    println!("{:?}", above(&[4, 10, 7, 1, 12], 6));
+}
+```
+```solution
+fn above(nums: &[i32], limit: i32) -> Vec<i32> {
+    nums.iter().filter(|&&x| x > limit).copied().collect()
+}
+
+fn main() {
+    println!("{:?}", above(&[4, 10, 7, 1, 12], 6));
+}
+```
+```expect
+[10, 7, 12]
+```
+hint: `nums.iter().filter(...)` даёт ссылки. `.copied()` превращает `&i32` в `i32`.
+hint: `nums.iter().filter(|&&x| x > limit).copied().collect()`
+
+:: task
+Пронумеруй задачи с единицы через `enumerate` и собери строки в вектор.
+```rust
+fn main() {
+    let tasks = ["купить хлеб", "учить Rust"];
+    let lines: Vec<String> = Vec::new();
+    for l in &lines {
+        println!("{l}");
+    }
+}
+```
+```solution
+fn main() {
+    let tasks = ["купить хлеб", "учить Rust"];
+    let lines: Vec<String> = tasks
+        .iter()
+        .enumerate()
+        .map(|(i, t)| format!("{}. {}", i + 1, t))
+        .collect();
+    for l in &lines {
+        println!("{l}");
+    }
+}
+```
+```expect
+1. купить хлеб
+2. учить Rust
+```
+hint: `enumerate()` даёт пары `(номер, элемент)`, номера с нуля.
+hint: `.map(|(i, t)| format!("{}. {}", i + 1, t))`
+
+:: recap
+- `filter` → `map` → `sum`/`collect` — основной конвейер.
+- `find`, `any`, `all`, `position` — поиск и проверки.
+- `fold` сворачивает всё в одно значение.

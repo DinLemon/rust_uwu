@@ -4406,6 +4406,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Как компилятор думает о временах жизни",
+"md": "Для каждой ссылки компилятор находит **участок кода**, где она используется: от создания до последнего использования. Для каждого значения — участок, где оно живо.\n\nПотом он проверяет одно правило: участок ссылки должен **целиком** помещаться в участок значения.\n\nМетка `'a` — это имя для такого участка. В `longest<'a>` мы говорим: «результат используется только там, где живы обе строки». Компилятор проверяет это в каждом месте вызова."
+},
+{
 "t": "recap",
 "items": [
 "Время жизни — сколько живёт ссылка.",
@@ -4446,6 +4451,11 @@ window.COURSES = {
 "Верно. Это правило элизии.",
 "Только если компилятор не может догадаться сам."
 ]
+},
+{
+"t": "text",
+"title": "Три правила угадывания",
+"md": "Полностью правила элизии такие:\n1. Каждая входная ссылка получает **свою** метку.\n2. Если входная ссылка **одна**, результат получает её метку.\n3. Если среди входов есть `&self` или `&mut self`, результат получает метку `self`.\n\nЕсли после этих правил у результата всё ещё нет метки, компилятор просит написать её вручную. Это и есть ошибка `E0106`."
 },
 {
 "t": "recap",
@@ -4496,6 +4506,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "'static в требованиях к типу",
+"md": "Запись `T: 'static` в требованиях к типу значит не «живёт вечно», а «**не содержит** временных ссылок». `String`, `i32`, `Vec<u8>` подходят: они владеют своими данными.\n\nТакое требование есть, например, у `thread::spawn`: поток может жить сколько угодно, поэтому брать с собой временные ссылки ему нельзя. Про потоки — в модуле 17."
+},
+{
 "t": "recap",
 "items": [
 "Структура со ссылкой: `struct S<'a> { x: &'a str }`.",
@@ -4507,6 +4522,74 @@ window.COURSES = {
 "goals": [
 "Хранить ссылку внутри структуры",
 "Понимать запись `struct Name<'a>`"
+]
+},
+{
+"id": "m13-p",
+"title": "Практика: времена жизни",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Почини ошибку `E0106`: добавь метку времени жизни.",
+"code": "fn shorter(a: &str, b: &str) -> &str {\n    if a.len() < b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", shorter(\"кот\", \"бегемот\"));\n}",
+"solution": "fn shorter<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() < b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", shorter(\"кот\", \"бегемот\"));\n}",
+"expect": "кот",
+"hints": [
+"Объяви метку после имени функции: `fn shorter<'a>(...)`.",
+"`fn shorter<'a>(a: &'a str, b: &'a str) -> &'a str`"
+]
+},
+{
+"t": "task",
+"md": "Функция всегда возвращает первую строку. Тогда вторая строка может жить сколько угодно. Опиши это двумя разными метками.",
+"code": "fn pick_first(a: &str, b: &str) -> &str {\n    println!(\"Второе: {b}\");\n    a\n}\n\nfn main() {\n    let x = String::from(\"первое\");\n    let r;\n    {\n        let y = String::from(\"второе\");\n        r = pick_first(&x, &y);\n    }\n    println!(\"{r}\");\n}",
+"solution": "fn pick_first<'a, 'b>(a: &'a str, b: &'b str) -> &'a str {\n    println!(\"Второе: {b}\");\n    a\n}\n\nfn main() {\n    let x = String::from(\"первое\");\n    let r;\n    {\n        let y = String::from(\"второе\");\n        r = pick_first(&x, &y);\n    }\n    println!(\"{r}\");\n}",
+"expect": "Второе: второе\nпервое",
+"hints": [
+"Две метки: `fn pick_first<'a, 'b>(a: &'a str, b: &'b str) -> &'a str`",
+"Результат связан только с `a`, поэтому `y` может умереть раньше, чем используется `r`."
+]
+},
+{
+"t": "task",
+"md": "Структура со ссылкой. Допиши метод `word_count`, который считает слова в тексте.",
+"code": "struct Note<'a> {\n    text: &'a str,\n}\n\nimpl<'a> Note<'a> {\n}\n\nfn main() {\n    let s = String::from(\"ссылки в структурах работают\");\n    let n = Note { text: &s };\n    println!(\"{}\", n.word_count());\n}",
+"solution": "struct Note<'a> {\n    text: &'a str,\n}\n\nimpl<'a> Note<'a> {\n    fn word_count(&self) -> usize {\n        self.text.split_whitespace().count()\n    }\n}\n\nfn main() {\n    let s = String::from(\"ссылки в структурах работают\");\n    let n = Note { text: &s };\n    println!(\"{}\", n.word_count());\n}",
+"expect": "4",
+"hints": [
+"Метод только читает: `fn word_count(&self) -> usize`.",
+"`self.text.split_whitespace().count()`"
+]
+},
+{
+"t": "quiz",
+"md": "Какой функции **нужна** явная метка времени жизни?",
+"options": [
+"`fn len(s: &str) -> usize`",
+"`fn first(s: &str) -> &str`",
+"`fn pick(a: &str, b: &str) -> &str`"
+],
+"answer": 2,
+"why": [
+"Результат — не ссылка. Метка не нужна.",
+"Входная ссылка одна, компилятор догадается сам.",
+"Верно. Две входные ссылки — непонятно, с какой связан результат."
+]
+},
+{
+"t": "recap",
+"items": [
+"E0106 — добавь метку `'a` и свяжи ею вход и результат.",
+"Разные метки — значит, ссылки живут независимо.",
+"Структура со ссылкой: `struct S<'a>` и `impl<'a> S<'a>`."
+]
+}
+],
+"practice": true,
+"goals": [
+"Чинить ошибку E0106",
+"Хранить ссылки в структурах"
 ]
 }
 ]
@@ -4556,6 +4639,13 @@ window.COURSES = {
 "Верно.",
 "Имя ему и не нужно: мы положили его в переменную `f`."
 ]
+},
+{
+"t": "deep",
+"title": "Три вида замыканий",
+"md": "Компилятор делит замыкания на три вида по тому, что они делают с захваченными переменными:\n- `Fn` — только **читает**. Можно вызывать сколько угодно раз.\n- `FnMut` — **меняет**. Само замыкание должно быть `mut`.\n- `FnOnce` — **забирает** владение. Вызвать можно только один раз.\n\nФункция может требовать нужный вид:",
+"code": "fn twice<F: Fn()>(f: F) {\n    f();\n    f();\n}\n\nfn main() {\n    let name = String::from(\"Rust\");\n    twice(|| println!(\"Привет, {name}\"));\n}",
+"out": "Привет, Rust\nПривет, Rust"
 },
 {
 "t": "recap",
@@ -4617,6 +4707,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Ещё полезные операции",
+"md": "- `take(n)` — взять первые `n`; `skip(n)` — пропустить первые `n`.\n- `any(|x| ...)` — есть ли хоть один подходящий; `all(|x| ...)` — подходят ли все.\n- `find(|x| ...)` — первый подходящий, в `Option`.\n- `position(|x| ...)` — номер первого подходящего, в `Option`.\n- `fold(начало, |акк, x| ...)` — свернуть всё в одно значение.\n\n```\nlet v = vec![3, 8, 1, 9];\nv.iter().any(|&x| x > 8);          // true\nv.iter().find(|&&x| x > 5);        // Some(&8)\nv.iter().fold(0, |acc, x| acc + x); // 21\n```"
+},
+{
 "t": "recap",
 "items": [
 "`.iter()` — ссылки на элементы.",
@@ -4657,6 +4752,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Свой итератор",
+"md": "Итератором становится любой тип, у которого есть метод `next`, возвращающий `Option`. Это трейт `Iterator`:\n\nНаписал один `next` — и получил бесплатно `map`, `filter`, `sum` и всё остальное.\n\nКстати, цепочки итераторов работают так же быстро, как ручной цикл: компилятор превращает их в обычный цикл.",
+"code": "struct Countdown(u32);\n\nimpl Iterator for Countdown {\n    type Item = u32;\n    fn next(&mut self) -> Option<u32> {\n        if self.0 == 0 {\n            None\n        } else {\n            self.0 -= 1;\n            Some(self.0 + 1)\n        }\n    }\n}\n\nfn main() {\n    let v: Vec<u32> = Countdown(3).collect();\n    println!(\"{:?}\", v);\n    println!(\"{}\", Countdown(4).map(|x| x * 10).sum::<u32>());\n}",
+"out": "[3, 2, 1]\n100"
+},
+{
 "t": "recap",
 "items": [
 "Итераторы ленивые: работа начинается в `collect`/`sum`/`for`.",
@@ -4667,6 +4769,93 @@ window.COURSES = {
 "goals": [
 "Почему итераторы ленивые",
 "Разница `iter`, `iter_mut`, `into_iter`"
+]
+},
+{
+"id": "m14-p",
+"title": "Практика: итераторы",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Посчитай сумму квадратов нечётных чисел от 1 до 9 одной цепочкой.",
+"code": "fn main() {\n    let total: i32 = (1..=9)\n        // твоя цепочка\n        .sum();\n    println!(\"{total}\");\n}",
+"solution": "fn main() {\n    let total: i32 = (1..=9)\n        .filter(|x| x % 2 == 1)\n        .map(|x| x * x)\n        .sum();\n    println!(\"{total}\");\n}",
+"expect": "165",
+"hints": [
+"Сначала `filter` для нечётных, потом `map` для квадратов.",
+"`.filter(|x| x % 2 == 1).map(|x| x * x)`"
+]
+},
+{
+"t": "task",
+"md": "Найди первое слово длиннее 5 букв. Используй `find`.",
+"code": "fn main() {\n    let words = [\"код\", \"ржавчина\", \"краб\", \"компилятор\"];\n    let long = words.iter().find(|w| true);\n    println!(\"{:?}\", long);\n}",
+"solution": "fn main() {\n    let words = [\"код\", \"ржавчина\", \"краб\", \"компилятор\"];\n    let long = words.iter().find(|w| w.chars().count() > 5);\n    println!(\"{:?}\", long);\n}",
+"expect": "Some(\"ржавчина\")",
+"hints": [
+"Длина в буквах — `w.chars().count()`.",
+"`.find(|w| w.chars().count() > 5)`"
+]
+},
+{
+"t": "task",
+"md": "Проверь список оценок: есть ли хоть одна двойка и все ли оценки положительные. Напечатай `true` и `true`.",
+"code": "fn main() {\n    let marks = [5, 4, 2, 5, 3];\n    let has_two = false;\n    let all_positive = false;\n    println!(\"{has_two} {all_positive}\");\n}",
+"solution": "fn main() {\n    let marks = [5, 4, 2, 5, 3];\n    let has_two = marks.iter().any(|&m| m == 2);\n    let all_positive = marks.iter().all(|&m| m > 0);\n    println!(\"{has_two} {all_positive}\");\n}",
+"expect": "true true",
+"hints": [
+"`any` — «хотя бы один», `all` — «все».",
+"`marks.iter().any(|&m| m == 2)` и `marks.iter().all(|&m| m > 0)`"
+]
+},
+{
+"t": "task",
+"md": "Посчитай произведение чисел от 1 до 6 через `fold`.",
+"code": "fn main() {\n    let product = (1..=6).fold(0, |acc, x| acc);\n    println!(\"{product}\");\n}",
+"solution": "fn main() {\n    let product = (1..=6).fold(1, |acc, x| acc * x);\n    println!(\"{product}\");\n}",
+"expect": "720",
+"hints": [
+"Для умножения начальное значение должно быть `1`, а не `0`.",
+"`(1..=6).fold(1, |acc, x| acc * x)`"
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `above`, которая возвращает вектор чисел больше `limit`. Замыкание внутри `filter` должно захватить `limit`.",
+"code": "fn above(nums: &[i32], limit: i32) -> Vec<i32> {\n    Vec::new()\n}\n\nfn main() {\n    println!(\"{:?}\", above(&[4, 10, 7, 1, 12], 6));\n}",
+"solution": "fn above(nums: &[i32], limit: i32) -> Vec<i32> {\n    nums.iter().filter(|&&x| x > limit).copied().collect()\n}\n\nfn main() {\n    println!(\"{:?}\", above(&[4, 10, 7, 1, 12], 6));\n}",
+"expect": "[10, 7, 12]",
+"hints": [
+"`nums.iter().filter(...)` даёт ссылки. `.copied()` превращает `&i32` в `i32`.",
+"`nums.iter().filter(|&&x| x > limit).copied().collect()`"
+]
+},
+{
+"t": "task",
+"md": "Пронумеруй задачи с единицы через `enumerate` и собери строки в вектор.",
+"code": "fn main() {\n    let tasks = [\"купить хлеб\", \"учить Rust\"];\n    let lines: Vec<String> = Vec::new();\n    for l in &lines {\n        println!(\"{l}\");\n    }\n}",
+"solution": "fn main() {\n    let tasks = [\"купить хлеб\", \"учить Rust\"];\n    let lines: Vec<String> = tasks\n        .iter()\n        .enumerate()\n        .map(|(i, t)| format!(\"{}. {}\", i + 1, t))\n        .collect();\n    for l in &lines {\n        println!(\"{l}\");\n    }\n}",
+"expect": "1. купить хлеб\n2. учить Rust",
+"hints": [
+"`enumerate()` даёт пары `(номер, элемент)`, номера с нуля.",
+"`.map(|(i, t)| format!(\"{}. {}\", i + 1, t))`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`filter` → `map` → `sum`/`collect` — основной конвейер.",
+"`find`, `any`, `all`, `position` — поиск и проверки.",
+"`fold` сворачивает всё в одно значение."
+]
+}
+],
+"practice": true,
+"goals": [
+"Строить конвейеры из `filter`, `map`, `sum`",
+"Искать через `find`, `any`, `all`",
+"Писать замыкания"
 ]
 }
 ]
@@ -9731,242 +9920,332 @@ window.COURSES = {
 },
 {
 "id": "m13",
-"title": "Времена жизни",
-"sub": "Сколько живёт ссылка",
+"title": "Lifetimes",
+"sub": "How long a reference lives",
 "lessons": [
 {
 "id": "m13-1",
-"title": "Зачем нужны времена жизни",
+"title": "Why lifetimes are needed",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Вспомним висячие ссылки",
-"md": "Мы уже знаем: ссылка не может пережить значение.\n\nОбычно компилятор сам видит, сколько что живёт. Но иногда ему **непонятно**. Тогда он просит подсказку — **метку времени жизни** (lifetime): `'a`.\n\n!> Метка ничего не продлевает. Она только **описывает** связь: «эта ссылка живёт не дольше той»."
+"title": "Remember dangling references",
+"md": "We already know: a reference cannot outlive its value.\n\nUsually the compiler sees by itself how long everything lives. But sometimes it **cannot tell**. Then it asks for a hint — a **lifetime label**: `'a`.\n\n!> A label does not extend anything. It only **describes** a connection: \"this reference lives no longer than that one\"."
 },
 {
 "t": "code",
 "fails": true,
-"md": "Функция возвращает ссылку на одну из двух строк. Запусти.",
-"code": "fn longest(a: &str, b: &str) -> &str {\n    if a.len() > b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", longest(\"кот\", \"бегемот\"));\n}",
-"after": "Ошибка `E0106`: «нужен параметр времени жизни». Компилятор не знает, от **какой** из двух строк зависит результат."
+"md": "The function returns a reference to one of two strings. Run it.",
+"code": "fn longest(a: &str, b: &str) -> &str {\n    if a.len() > b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", longest(\"cat\", \"hippopotamus\"));\n}",
+"after": "Error `E0106`: \"missing lifetime specifier\". The compiler does not know **which** of the two strings the result depends on."
 },
 {
 "t": "text",
-"title": "Подсказываем компилятору",
-"md": "```\nfn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() > b.len() { a } else { b }\n}\n```\nЧитается так: «есть время жизни `'a`. Обе строки живут хотя бы `'a`. Результат тоже живёт `'a`».\n\nПроще: **результат проживёт столько, сколько короче живущая из двух строк**."
+"title": "Giving the compiler a hint",
+"md": "```\nfn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() > b.len() { a } else { b }\n}\n```\nRead it like this: \"there is a lifetime `'a`. Both strings live at least `'a`. The result also lives `'a`\".\n\nSimpler: **the result lives as long as the shorter-living of the two strings**."
 },
 {
 "t": "code",
-"code": "fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() > b.len() { a } else { b }\n}\n\nfn main() {\n    let first = String::from(\"кот\");\n    let result;\n    {\n        let second = String::from(\"бегемот\");\n        result = longest(&first, &second);\n        println!(\"Длиннее: {result}\");\n    }\n}",
-"out": "Длиннее: бегемот",
-"after": "Попробуй перенести `println!` за закрывающую `}`. Компилятор не разрешит: `second` уже умерла, а `result` может на неё смотреть."
+"code": "fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() > b.len() { a } else { b }\n}\n\nfn main() {\n    let first = String::from(\"cat\");\n    let result;\n    {\n        let second = String::from(\"hippopotamus\");\n        result = longest(&first, &second);\n        println!(\"Longer: {result}\");\n    }\n}",
+"out": "Longer: hippopotamus",
+"after": "Try moving `println!` after the closing `}`. The compiler does not allow it: `second` is already gone, and `result` may point to it."
 },
 {
 "t": "quiz",
-"md": "Что делает метка `'a` в `fn f<'a>(x: &'a str) -> &'a str`?",
+"md": "What does the label `'a` do in `fn f<'a>(x: &'a str) -> &'a str`?",
 "options": [
-"Заставляет `x` жить дольше",
-"Говорит: результат живёт не дольше, чем `x`",
-"Делает ссылку изменяемой"
+"It makes `x` live longer",
+"It says: the result lives no longer than `x`",
+"It makes the reference mutable"
 ],
 "answer": 1,
 "why": [
-"Метки ничего не продлевают.",
-"Верно. Это описание связи для компилятора.",
-"За изменяемость отвечает `mut`."
+"Labels do not extend anything.",
+"Correct. It is a description of a connection for the compiler.",
+"Mutability is about `mut`."
 ]
+},
+{
+"t": "deep",
+"title": "How the compiler thinks about lifetimes",
+"md": "For each reference the compiler finds the **part of the code** where it is used: from creation to the last use. For each value — the part where it is alive.\n\nThen it checks one rule: the part of the reference must fit **entirely** inside the part of the value.\n\nThe label `'a` is a name for such a part. In `longest<'a>` we say: \"the result is used only where both strings are alive\". The compiler checks this at every call."
 },
 {
 "t": "recap",
 "items": [
-"Время жизни — сколько живёт ссылка.",
-"Метка `'a` описывает связь между ссылками, но не продлевает жизнь.",
-"Компилятор просит метки, когда сам не может понять связь."
+"A lifetime is how long a reference lives.",
+"The label `'a` describes a connection between references; it does not extend life.",
+"The compiler asks for labels when it cannot work out the connection by itself."
 ]
 }
 ],
 "goals": [
-"Что такое время жизни ссылки",
-"Почему компилятор иногда просит `'a`"
+"What the lifetime of a reference is",
+"Why the compiler sometimes asks for `'a`"
 ]
 },
 {
 "id": "m13-2",
-"title": "Когда метки не нужны",
+"title": "When labels are not needed",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Компилятор часто догадывается сам",
-"md": "Правила угадывания называют **элизией** (пропуском). Главные случаи:\n\n- Одна входная ссылка → результат живёт столько же, сколько она.\n- Метод с `&self` → результат живёт столько же, сколько `self`.\n\nПоэтому `fn first_word(s: &str) -> &str` работает без меток. Метки нужны, когда входных ссылок **несколько** и непонятно, какая главная."
+"title": "The compiler often guesses by itself",
+"md": "The guessing rules are called **elision**. The main cases:\n\n- One input reference → the result lives as long as it does.\n- A method with `&self` → the result lives as long as `self`.\n\nThat is why `fn first_word(s: &str) -> &str` works without labels. Labels are needed when there are **several** input references and it is unclear which one matters."
 },
 {
 "t": "text",
-"title": "'static — живёт всю программу",
-"md": "`'static` — особое время жизни: «до конца программы».\n\nТекст в кавычках — `&'static str`. Он вшит прямо в программу и живёт всегда.\n\n```\nlet s: &'static str = \"я живу вечно\";\n```"
+"title": "'static — lives for the whole program",
+"md": "`'static` is a special lifetime: \"until the end of the program\".\n\nText in quotes is `&'static str`. It is stored right inside the program and always lives.\n\n```\nlet s: &'static str = \"I live forever\";\n```"
 },
 {
 "t": "quiz",
-"md": "Нужна ли метка времени жизни в `fn trim(s: &str) -> &str`?",
+"md": "Does `fn trim(s: &str) -> &str` need a lifetime label?",
 "options": [
-"Нет, ссылка на входе одна, компилятор догадается",
-"Да, всегда, когда возвращается ссылка"
+"No, there is one input reference, the compiler guesses",
+"Yes, always when a reference is returned"
 ],
 "answer": 0,
 "why": [
-"Верно. Это правило элизии.",
-"Только если компилятор не может догадаться сам."
+"Correct. This is an elision rule.",
+"Only if the compiler cannot guess by itself."
 ]
+},
+{
+"t": "text",
+"title": "The three guessing rules",
+"md": "In full, the elision rules are:\n1. Each input reference gets **its own** label.\n2. If there is **one** input reference, the result gets its label.\n3. If one of the inputs is `&self` or `&mut self`, the result gets the label of `self`.\n\nIf after these rules the result still has no label, the compiler asks you to write it by hand. That is error `E0106`."
 },
 {
 "t": "recap",
 "items": [
-"При одной входной ссылке или `&self` метки обычно не нужны.",
-"`'static` — живёт всю программу. Строки в кавычках — `&'static str`."
+"With one input reference or `&self`, labels are usually not needed.",
+"`'static` lives for the whole program. Strings in quotes are `&'static str`."
 ]
 }
 ],
 "goals": [
-"Правила, по которым компилятор угадывает сам",
-"Что такое `'static`"
+"The rules the compiler uses to guess",
+"What `'static` is"
 ]
 },
 {
 "id": "m13-3",
-"title": "Ссылки в структурах",
+"title": "References in structs",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Структура со ссылкой",
-"md": "Структура может не владеть данными, а смотреть на чужие. Тогда нужна метка: структура не должна пережить то, на что смотрит.\n\n```\nstruct Quote<'a> {\n    text: &'a str,\n}\n```"
+"title": "A struct with a reference",
+"md": "A struct may not own its data, but look at someone else's. Then it needs a label: the struct must not outlive what it looks at.\n\n```\nstruct Quote<'a> {\n    text: &'a str,\n}\n```"
 },
 {
 "t": "code",
-"code": "struct Highlight<'a> {\n    part: &'a str,\n}\n\nimpl<'a> Highlight<'a> {\n    fn show(&self) {\n        println!(\"Главное: «{}»\", self.part);\n    }\n}\n\nfn main() {\n    let book = String::from(\"Rust надёжен. И быстр.\");\n    let first = book.split('.').next().unwrap();\n    let h = Highlight { part: first };\n    h.show();\n}",
-"out": "Главное: «Rust надёжен»"
+"code": "struct Highlight<'a> {\n    part: &'a str,\n}\n\nimpl<'a> Highlight<'a> {\n    fn show(&self) {\n        println!(\"Key point: \\\"{}\\\"\", self.part);\n    }\n}\n\nfn main() {\n    let book = String::from(\"Rust is reliable. And fast.\");\n    let first = book.split('.').next().unwrap();\n    let h = Highlight { part: first };\n    h.show();\n}",
+"out": "Key point: \"Rust is reliable\""
 },
 {
 "t": "text",
-"title": "Совет новичку",
-"md": "Сомневаешься? Храни в структуре `String`, а не `&str`. Структура будет владеть данными, и меток не понадобится.\n\nСсылки в структурах — это оптимизация. К ней можно прийти потом."
+"title": "Advice for beginners",
+"md": "Not sure? Store a `String` in the struct, not a `&str`. The struct will own the data, and no labels are needed.\n\nReferences in structs are an optimization. You can come back to it later."
 },
 {
 "t": "quiz",
-"md": "Что проще всего сделать, если метки в структуре запутали?",
+"md": "What is the simplest thing to do if labels in a struct are confusing?",
 "options": [
-"Хранить `String` вместо `&str`",
-"Поставить `'static` везде",
-"Удалить структуру"
+"Store a `String` instead of a `&str`",
+"Put `'static` everywhere",
+"Delete the struct"
 ],
 "answer": 0,
 "why": [
-"Верно. Владеющий тип не требует меток.",
-"Тогда в структуру можно будет класть только вечные строки. Это неудобно.",
-"Слишком радикально. Достаточно поменять тип поля."
+"Correct. An owning type needs no labels.",
+"Then only eternal strings could go into the struct. That is inconvenient.",
+"Too radical. It is enough to change the field type."
+]
+},
+{
+"t": "deep",
+"title": "'static in type requirements",
+"md": "The requirement `T: 'static` on a type does not mean \"lives forever\". It means \"**contains no** temporary references\". `String`, `i32`, `Vec<u8>` fit: they own their data.\n\nFor example, `thread::spawn` has this requirement: a thread can live as long as it wants, so it cannot take temporary references with it. Threads are in module 17."
+},
+{
+"t": "recap",
+"items": [
+"A struct with a reference: `struct S<'a> { x: &'a str }`.",
+"A struct cannot outlive the data it looks at.",
+"Storing a `String` instead of a `&str` is an easy way out."
+]
+}
+],
+"goals": [
+"Store a reference inside a struct",
+"Understand the notation `struct Name<'a>`"
+]
+},
+{
+"id": "m13-p",
+"title": "Practice: lifetimes",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Fix error `E0106`: add a lifetime label.",
+"code": "fn shorter(a: &str, b: &str) -> &str {\n    if a.len() < b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", shorter(\"cat\", \"hippopotamus\"));\n}",
+"solution": "fn shorter<'a>(a: &'a str, b: &'a str) -> &'a str {\n    if a.len() < b.len() { a } else { b }\n}\n\nfn main() {\n    println!(\"{}\", shorter(\"cat\", \"hippopotamus\"));\n}",
+"expect": "cat",
+"hints": [
+"Declare the label after the function name: `fn shorter<'a>(...)`.",
+"`fn shorter<'a>(a: &'a str, b: &'a str) -> &'a str`"
+]
+},
+{
+"t": "task",
+"md": "The function always returns the first string. So the second string can live as long as it wants. Describe this with two different labels.",
+"code": "fn pick_first(a: &str, b: &str) -> &str {\n    println!(\"Second: {b}\");\n    a\n}\n\nfn main() {\n    let x = String::from(\"first\");\n    let r;\n    {\n        let y = String::from(\"second\");\n        r = pick_first(&x, &y);\n    }\n    println!(\"{r}\");\n}",
+"solution": "fn pick_first<'a, 'b>(a: &'a str, b: &'b str) -> &'a str {\n    println!(\"Second: {b}\");\n    a\n}\n\nfn main() {\n    let x = String::from(\"first\");\n    let r;\n    {\n        let y = String::from(\"second\");\n        r = pick_first(&x, &y);\n    }\n    println!(\"{r}\");\n}",
+"expect": "Second: second\nfirst",
+"hints": [
+"Two labels: `fn pick_first<'a, 'b>(a: &'a str, b: &'b str) -> &'a str`",
+"The result is connected only to `a`, so `y` may die before `r` is used."
+]
+},
+{
+"t": "task",
+"md": "A struct with a reference. Complete the method `word_count` that counts the words in the text.",
+"code": "struct Note<'a> {\n    text: &'a str,\n}\n\nimpl<'a> Note<'a> {\n}\n\nfn main() {\n    let s = String::from(\"references in structs work\");\n    let n = Note { text: &s };\n    println!(\"{}\", n.word_count());\n}",
+"solution": "struct Note<'a> {\n    text: &'a str,\n}\n\nimpl<'a> Note<'a> {\n    fn word_count(&self) -> usize {\n        self.text.split_whitespace().count()\n    }\n}\n\nfn main() {\n    let s = String::from(\"references in structs work\");\n    let n = Note { text: &s };\n    println!(\"{}\", n.word_count());\n}",
+"expect": "4",
+"hints": [
+"The method only reads: `fn word_count(&self) -> usize`.",
+"`self.text.split_whitespace().count()`"
+]
+},
+{
+"t": "quiz",
+"md": "Which function **needs** an explicit lifetime label?",
+"options": [
+"`fn len(s: &str) -> usize`",
+"`fn first(s: &str) -> &str`",
+"`fn pick(a: &str, b: &str) -> &str`"
+],
+"answer": 2,
+"why": [
+"The result is not a reference. No label is needed.",
+"There is one input reference; the compiler guesses by itself.",
+"Correct. Two input references — it is unclear which one the result is connected to."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Структура со ссылкой: `struct S<'a> { x: &'a str }`.",
-"Структура не может пережить данные, на которые смотрит.",
-"Хранить `String` вместо `&str` — простой выход."
+"E0106 — add a label `'a` and connect the input and the result with it.",
+"Different labels mean the references live independently.",
+"A struct with a reference: `struct S<'a>` and `impl<'a> S<'a>`."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Хранить ссылку внутри структуры",
-"Понимать запись `struct Name<'a>`"
+"Fix error E0106",
+"Store references in structs"
 ]
 }
 ]
 },
 {
 "id": "m14",
-"title": "Замыкания и итераторы",
-"sub": "Конвейер для данных",
+"title": "Closures and iterators",
+"sub": "A conveyor belt for data",
 "lessons": [
 {
 "id": "m14-1",
-"title": "Замыкания",
+"title": "Closures",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Функция на лету",
-"md": "**Замыкание** (closure) — маленькая функция без имени, которую пишут прямо на месте. Параметры — между палочками `| |`.\n\n```\nlet double = |x| x * 2;\nprintln!(\"{}\", double(5)); // 10\n```\nТипы обычно указывать не нужно: компилятор поймёт сам."
+"title": "A function made on the spot",
+"md": "A **closure** is a small function without a name that you write right where you need it. The parameters go between bars `| |`.\n\n```\nlet double = |x| x * 2;\nprintln!(\"{}\", double(5)); // 10\n```\nYou usually do not need to write the types: the compiler works them out."
 },
 {
 "t": "text",
-"title": "Замыкание видит переменные вокруг",
-"md": "В отличие от `fn`, замыкание **захватывает** переменные из окружения:\n\n```\nlet bonus = 10;\nlet add_bonus = |x| x + bonus;\nprintln!(\"{}\", add_bonus(5)); // 15\n```\n> Как записка, в которой уже вписан адрес. Не нужно передавать его каждый раз."
+"title": "A closure sees the variables around it",
+"md": "Unlike `fn`, a closure **captures** variables from its surroundings:\n\n```\nlet bonus = 10;\nlet add_bonus = |x| x + bonus;\nprintln!(\"{}\", add_bonus(5)); // 15\n```\n> Analogy: a note with the address already written on it. You do not have to pass the address every time."
 },
 {
 "t": "code",
-"code": "fn main() {\n    let mut count = 0;\n    let mut click = || {\n        count += 1;\n        println!(\"Клик номер {count}\");\n    };\n    click();\n    click();\n    println!(\"Всего: {count}\");\n}",
-"out": "Клик номер 1\nКлик номер 2\nВсего: 2",
-"after": "Замыкание меняет `count`, поэтому само должно быть `mut`."
+"code": "fn main() {\n    let mut count = 0;\n    let mut click = || {\n        count += 1;\n        println!(\"Click number {count}\");\n    };\n    click();\n    click();\n    println!(\"Total: {count}\");\n}",
+"out": "Click number 1\nClick number 2\nTotal: 2",
+"after": "The closure changes `count`, so the closure itself must be `mut`."
 },
 {
 "t": "text",
-"title": "move — забрать с собой",
-"md": "Слово `move` перед замыканием заставляет его **забрать** переменные во владение, а не одолжить.\n\n```\nlet name = String::from(\"Аня\");\nlet hello = move || println!(\"Привет, {name}\");\n```\nЭто понадобится в модуле про потоки."
+"title": "move — take it along",
+"md": "The word `move` before a closure makes it **take** the variables into ownership instead of borrowing them.\n\n```\nlet name = String::from(\"Anna\");\nlet hello = move || println!(\"Hello, {name}\");\n```\nThis is needed in the module about threads."
 },
 {
 "t": "quiz",
-"md": "Что напечатает `let f = |a, b| a * b; println!(\"{}\", f(3, 4));`?",
+"md": "What does `let f = |a, b| a * b; println!(\"{}\", f(3, 4));` print?",
 "options": [
 "7",
 "12",
-"Ошибка: у замыкания нет имени"
+"An error: the closure has no name"
 ],
 "answer": 1,
 "why": [
-"`*` — умножение, а не сложение.",
-"Верно.",
-"Имя ему и не нужно: мы положили его в переменную `f`."
+"`*` is multiplication, not addition.",
+"Correct.",
+"It does not need one: we put it into the variable `f`."
 ]
+},
+{
+"t": "deep",
+"title": "Three kinds of closures",
+"md": "The compiler sorts closures into three kinds by what they do with the captured variables:\n- `Fn` — only **reads**. It can be called any number of times.\n- `FnMut` — **changes**. The closure itself must be `mut`.\n- `FnOnce` — **takes** ownership. It can be called only once.\n\nA function can require the kind it needs:",
+"code": "fn twice<F: Fn()>(f: F) {\n    f();\n    f();\n}\n\nfn main() {\n    let name = String::from(\"Rust\");\n    twice(|| println!(\"Hello, {name}\"));\n}",
+"out": "Hello, Rust\nHello, Rust"
 },
 {
 "t": "recap",
 "items": [
-"`|параметры| выражение` — замыкание.",
-"Замыкание видит переменные вокруг себя.",
-"`move` — забрать их во владение."
+"`|parameters| expression` is a closure.",
+"A closure sees the variables around it.",
+"`move` takes them into ownership."
 ]
 }
 ],
 "goals": [
-"Что такое замыкание",
-"Как оно «захватывает» переменные"
+"What a closure is",
+"How it \"captures\" variables"
 ]
 },
 {
 "id": "m14-2",
-"title": "Итераторы и конвейер",
+"title": "Iterators and the conveyor belt",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Итератор — конвейер",
-"md": "**Итератор** выдаёт элементы по одному. На него можно навесить операции.\n\n> Конвейерная лента. Элементы едут по ней, по пути их моют (`map`), отбраковывают (`filter`), а в конце складывают в коробку (`collect`).\n\n```\nlet v = vec![1, 2, 3, 4, 5];\nlet even_squares: Vec<i32> = v.iter()\n    .filter(|x| *x % 2 == 0)\n    .map(|x| x * x)\n    .collect();\n// [4, 16]\n```"
+"title": "An iterator is a conveyor belt",
+"md": "An **iterator** gives out elements one by one. You can attach operations to it.\n\n> Analogy: a conveyor belt. Items ride on it; along the way they are washed (`map`), rejected (`filter`), and at the end they are packed into a box (`collect`).\n\n```\nlet v = vec![1, 2, 3, 4, 5];\nlet even_squares: Vec<i32> = v.iter()\n    .filter(|x| *x % 2 == 0)\n    .map(|x| x * x)\n    .collect();\n// [4, 16]\n```"
 },
 {
 "t": "text",
-"title": "Главные операции",
-"md": "- `map(|x| ...)` — превратить каждый элемент.\n- `filter(|x| ...)` — оставить подходящие.\n- `collect()` — собрать в коллекцию (обычно `Vec`).\n- `sum()`, `count()`, `max()`, `min()` — посчитать итог.\n- `enumerate()` — дать номер каждому элементу.\n- `zip(другой)` — шагать по двум спискам парами."
+"title": "The main operations",
+"md": "- `map(|x| ...)` — transform each element.\n- `filter(|x| ...)` — keep the matching ones.\n- `collect()` — collect into a collection (usually a `Vec`).\n- `sum()`, `count()`, `max()`, `min()` — compute a total.\n- `enumerate()` — give each element a number.\n- `zip(other)` — walk over two lists in pairs."
 },
 {
 "t": "code",
-"code": "fn main() {\n    let prices = vec![120, 45, 300, 80];\n    let total: i32 = prices.iter().sum();\n    let cheap = prices.iter().filter(|p| **p < 100).count();\n    let with_tax: Vec<i32> = prices.iter().map(|p| p * 12 / 10).collect();\n    println!(\"Сумма: {total}, дешёвых: {cheap}\");\n    println!(\"С налогом: {:?}\", with_tax);\n    for (i, p) in prices.iter().enumerate() {\n        println!(\"{}. {p}\", i + 1);\n    }\n}",
-"out": "Сумма: 545, дешёвых: 2\nС налогом: [144, 54, 360, 96]\n1. 120\n2. 45\n3. 300\n4. 80",
-"after": "`**p` — два разыменования. `iter()` даёт ссылки, а `filter` даёт ссылку на ссылку. Если звёздочки путают — пиши `|&&p| p < 100` или просто следуй подсказкам компилятора."
+"code": "fn main() {\n    let prices = vec![120, 45, 300, 80];\n    let total: i32 = prices.iter().sum();\n    let cheap = prices.iter().filter(|p| **p < 100).count();\n    let with_tax: Vec<i32> = prices.iter().map(|p| p * 12 / 10).collect();\n    println!(\"Sum: {total}, cheap: {cheap}\");\n    println!(\"With tax: {:?}\", with_tax);\n    for (i, p) in prices.iter().enumerate() {\n        println!(\"{}. {p}\", i + 1);\n    }\n}",
+"out": "Sum: 545, cheap: 2\nWith tax: [144, 54, 360, 96]\n1. 120\n2. 45\n3. 300\n4. 80",
+"after": "`**p` is two dereferences. `iter()` gives references, and `filter` gives a reference to a reference. If the stars are confusing, write `|&&p| p < 100`, or just follow the compiler's hints."
 },
 {
 "t": "order",
-"md": "Собери конвейер: сумма квадратов чисел от 1 до 3.",
+"md": "Build the conveyor: the sum of the squares of the numbers from 1 to 3.",
 "lines": [
 "let total: i32 = (1..=3)",
 "    .map(|x| x * x)",
@@ -9975,7 +10254,7 @@ window.COURSES = {
 },
 {
 "t": "quiz",
-"md": "Что вернёт `vec![1, 2, 3].iter().map(|x| x + 10).collect::<Vec<i32>>()`?",
+"md": "What does `vec![1, 2, 3].iter().map(|x| x + 10).collect::<Vec<i32>>()` return?",
 "options": [
 "`[11, 12, 13]`",
 "`[1, 2, 3]`",
@@ -9983,62 +10262,161 @@ window.COURSES = {
 ],
 "answer": 0,
 "why": [
-"Верно. `map` меняет каждый элемент.",
-"`map` не просто перебирает, он превращает.",
-"Это было бы `sum()`, а не `collect()`."
+"Correct. `map` changes each element.",
+"`map` does not just go through the elements; it transforms them.",
+"That would be `sum()`, not `collect()`."
 ]
+},
+{
+"t": "text",
+"title": "More useful operations",
+"md": "- `take(n)` takes the first `n`; `skip(n)` skips the first `n`.\n- `any(|x| ...)` — is there at least one matching element; `all(|x| ...)` — do all elements match.\n- `find(|x| ...)` — the first matching element, in an `Option`.\n- `position(|x| ...)` — the index of the first matching element, in an `Option`.\n- `fold(start, |acc, x| ...)` — fold everything into one value.\n\n```\nlet v = vec![3, 8, 1, 9];\nv.iter().any(|&x| x > 8);           // true\nv.iter().find(|&&x| x > 5);         // Some(&8)\nv.iter().fold(0, |acc, x| acc + x); // 21\n```"
 },
 {
 "t": "recap",
 "items": [
-"`.iter()` — ссылки на элементы.",
-"`map`, `filter`, `enumerate`, `zip` — по пути.",
-"`collect`, `sum`, `count`, `max` — в конце."
+"`.iter()` gives references to the elements.",
+"`map`, `filter`, `enumerate`, `zip` work along the way.",
+"`collect`, `sum`, `count`, `max` work at the end."
 ]
 }
 ],
 "goals": [
-"Что такое итератор",
-"Главные операции: `map`, `filter`, `collect`, `sum`"
+"What an iterator is",
+"The main operations: `map`, `filter`, `collect`, `sum`"
 ]
 },
 {
 "id": "m14-3",
-"title": "Ленивость и виды перебора",
+"title": "Laziness and kinds of iteration",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Конвейер не едет без команды",
-"md": "Итераторы **ленивые**. Пока ты не попросишь результат (`collect`, `sum`, `for`), ничего не происходит.\n\n```\nlet v = vec![1, 2, 3];\nv.iter().map(|x| println!(\"{x}\")); // ничего не напечатает!\n```\nКомпилятор даже предупредит: «iterators are lazy and do nothing unless consumed».\n\n> Это экономно: если взять только первые 3 элемента через `.take(3)`, остальные даже не будут обработаны."
+"title": "The conveyor does not move without a command",
+"md": "Iterators are **lazy**. Until you ask for the result (`collect`, `sum`, `for`), nothing happens.\n\n```\nlet v = vec![1, 2, 3];\nv.iter().map(|x| println!(\"{x}\")); // prints nothing!\n```\nThe compiler even warns you: \"iterators are lazy and do nothing unless consumed\".\n\n> This saves work: if you take only the first 3 elements with `.take(3)`, the rest are not even processed."
 },
 {
 "t": "text",
-"title": "Три способа перебора",
-"md": "- `iter()` — смотреть: даёт `&T`.\n- `iter_mut()` — менять: даёт `&mut T`.\n- `into_iter()` — забрать: даёт `T`, вектор после этого исчезает.\n\n`for x in &v` — то же, что `v.iter()`. `for x in v` — то же, что `v.into_iter()`."
+"title": "Three ways to iterate",
+"md": "- `iter()` — look: gives `&T`.\n- `iter_mut()` — change: gives `&mut T`.\n- `into_iter()` — take: gives `T`; the vector is gone afterwards.\n\n`for x in &v` is the same as `v.iter()`. `for x in v` is the same as `v.into_iter()`."
 },
 {
 "t": "task",
-"md": "Из списка слов собери новый вектор: только слова длиннее 3 букв, большими буквами.",
-"code": "fn main() {\n    let words = vec![\"кот\", \"собака\", \"ёж\", \"попугай\"];\n    let result: Vec<String> = words\n        .iter()\n        // твой конвейер\n        .collect();\n    println!(\"{:?}\", result);\n}",
-"solution": "fn main() {\n    let words = vec![\"кот\", \"собака\", \"ёж\", \"попугай\"];\n    let result: Vec<String> = words\n        .iter()\n        .filter(|w| w.chars().count() > 3)\n        .map(|w| w.to_uppercase())\n        .collect();\n    println!(\"{:?}\", result);\n}",
-"expect": "[\"СОБАКА\", \"ПОПУГАЙ\"]",
+"md": "From a list of words, build a new vector: only the words longer than 3 letters, in capital letters.",
+"code": "fn main() {\n    let words = vec![\"cat\", \"doggy\", \"ox\", \"parrot\"];\n    let result: Vec<String> = words\n        .iter()\n        // your conveyor\n        .collect();\n    println!(\"{:?}\", result);\n}",
+"solution": "fn main() {\n    let words = vec![\"cat\", \"doggy\", \"ox\", \"parrot\"];\n    let result: Vec<String> = words\n        .iter()\n        .filter(|w| w.chars().count() > 3)\n        .map(|w| w.to_uppercase())\n        .collect();\n    println!(\"{:?}\", result);\n}",
+"expect": "[\"DOGGY\", \"PARROT\"]",
 "hints": [
-"Длина в буквах — `w.chars().count()`, не `len()`: русские буквы занимают два байта.",
+"Count the length in letters with `w.chars().count()`. `len()` counts bytes, which differs for non-English letters.",
 "`.filter(|w| w.chars().count() > 3).map(|w| w.to_uppercase())`"
+]
+},
+{
+"t": "deep",
+"title": "Your own iterator",
+"md": "Any type with a method `next` that returns an `Option` becomes an iterator. This is the trait `Iterator`:\n\nWrite one `next` — and get `map`, `filter`, `sum` and everything else for free.\n\nBy the way, iterator chains run as fast as a hand-written loop: the compiler turns them into a normal loop.",
+"code": "struct Countdown(u32);\n\nimpl Iterator for Countdown {\n    type Item = u32;\n    fn next(&mut self) -> Option<u32> {\n        if self.0 == 0 {\n            None\n        } else {\n            self.0 -= 1;\n            Some(self.0 + 1)\n        }\n    }\n}\n\nfn main() {\n    let v: Vec<u32> = Countdown(3).collect();\n    println!(\"{:?}\", v);\n    println!(\"{}\", Countdown(4).map(|x| x * 10).sum::<u32>());\n}",
+"out": "[3, 2, 1]\n100"
+},
+{
+"t": "recap",
+"items": [
+"Iterators are lazy: the work starts at `collect`/`sum`/`for`.",
+"`iter` looks, `iter_mut` changes, `into_iter` takes."
+]
+}
+],
+"goals": [
+"Why iterators are lazy",
+"The difference between `iter`, `iter_mut`, `into_iter`"
+]
+},
+{
+"id": "m14-p",
+"title": "Practice: iterators",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Calculate the sum of the squares of the odd numbers from 1 to 9 in one chain.",
+"code": "fn main() {\n    let total: i32 = (1..=9)\n        // your chain\n        .sum();\n    println!(\"{total}\");\n}",
+"solution": "fn main() {\n    let total: i32 = (1..=9)\n        .filter(|x| x % 2 == 1)\n        .map(|x| x * x)\n        .sum();\n    println!(\"{total}\");\n}",
+"expect": "165",
+"hints": [
+"First `filter` for the odd ones, then `map` for the squares.",
+"`.filter(|x| x % 2 == 1).map(|x| x * x)`"
+]
+},
+{
+"t": "task",
+"md": "Find the first word longer than 5 letters. Use `find`.",
+"code": "fn main() {\n    let words = [\"code\", \"ferrous\", \"crab\", \"compiler\"];\n    let long = words.iter().find(|w| true);\n    println!(\"{:?}\", long);\n}",
+"solution": "fn main() {\n    let words = [\"code\", \"ferrous\", \"crab\", \"compiler\"];\n    let long = words.iter().find(|w| w.chars().count() > 5);\n    println!(\"{:?}\", long);\n}",
+"expect": "Some(\"ferrous\")",
+"hints": [
+"The length in letters is `w.chars().count()`.",
+"`.find(|w| w.chars().count() > 5)`"
+]
+},
+{
+"t": "task",
+"md": "Check a list of marks: is there at least one 2, and are all marks positive. Print `true` and `true`.",
+"code": "fn main() {\n    let marks = [5, 4, 2, 5, 3];\n    let has_two = false;\n    let all_positive = false;\n    println!(\"{has_two} {all_positive}\");\n}",
+"solution": "fn main() {\n    let marks = [5, 4, 2, 5, 3];\n    let has_two = marks.iter().any(|&m| m == 2);\n    let all_positive = marks.iter().all(|&m| m > 0);\n    println!(\"{has_two} {all_positive}\");\n}",
+"expect": "true true",
+"hints": [
+"`any` means \"at least one\", `all` means \"all\".",
+"`marks.iter().any(|&m| m == 2)` and `marks.iter().all(|&m| m > 0)`"
+]
+},
+{
+"t": "task",
+"md": "Calculate the product of the numbers from 1 to 6 with `fold`.",
+"code": "fn main() {\n    let product = (1..=6).fold(0, |acc, x| acc);\n    println!(\"{product}\");\n}",
+"solution": "fn main() {\n    let product = (1..=6).fold(1, |acc, x| acc * x);\n    println!(\"{product}\");\n}",
+"expect": "720",
+"hints": [
+"For multiplication the start value must be `1`, not `0`.",
+"`(1..=6).fold(1, |acc, x| acc * x)`"
+]
+},
+{
+"t": "task",
+"md": "Write a function `above` that returns a vector of the numbers greater than `limit`. The closure inside `filter` must capture `limit`.",
+"code": "fn above(nums: &[i32], limit: i32) -> Vec<i32> {\n    Vec::new()\n}\n\nfn main() {\n    println!(\"{:?}\", above(&[4, 10, 7, 1, 12], 6));\n}",
+"solution": "fn above(nums: &[i32], limit: i32) -> Vec<i32> {\n    nums.iter().filter(|&&x| x > limit).copied().collect()\n}\n\nfn main() {\n    println!(\"{:?}\", above(&[4, 10, 7, 1, 12], 6));\n}",
+"expect": "[10, 7, 12]",
+"hints": [
+"`nums.iter().filter(...)` gives references. `.copied()` turns `&i32` into `i32`.",
+"`nums.iter().filter(|&&x| x > limit).copied().collect()`"
+]
+},
+{
+"t": "task",
+"md": "Number the tasks starting from one with `enumerate` and collect the lines into a vector.",
+"code": "fn main() {\n    let tasks = [\"buy bread\", \"learn Rust\"];\n    let lines: Vec<String> = Vec::new();\n    for l in &lines {\n        println!(\"{l}\");\n    }\n}",
+"solution": "fn main() {\n    let tasks = [\"buy bread\", \"learn Rust\"];\n    let lines: Vec<String> = tasks\n        .iter()\n        .enumerate()\n        .map(|(i, t)| format!(\"{}. {}\", i + 1, t))\n        .collect();\n    for l in &lines {\n        println!(\"{l}\");\n    }\n}",
+"expect": "1. buy bread\n2. learn Rust",
+"hints": [
+"`enumerate()` gives pairs `(number, element)`, numbered from zero.",
+"`.map(|(i, t)| format!(\"{}. {}\", i + 1, t))`"
 ]
 },
 {
 "t": "recap",
 "items": [
-"Итераторы ленивые: работа начинается в `collect`/`sum`/`for`.",
-"`iter` — смотреть, `iter_mut` — менять, `into_iter` — забрать."
+"`filter` → `map` → `sum`/`collect` is the main conveyor.",
+"`find`, `any`, `all`, `position` search and check.",
+"`fold` folds everything into one value."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Почему итераторы ленивые",
-"Разница `iter`, `iter_mut`, `into_iter`"
+"Build conveyors from `filter`, `map`, `sum`",
+"Search with `find`, `any`, `all`",
+"Write closures"
 ]
 }
 ]

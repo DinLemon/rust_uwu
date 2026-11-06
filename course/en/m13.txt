@@ -1,0 +1,295 @@
+# MODULE m13 | Lifetimes | How long a reference lives
+
+## LESSON m13-1 | Why lifetimes are needed | 6
+:: goals
+- What the lifetime of a reference is
+- Why the compiler sometimes asks for `'a`
+
+:: text Remember dangling references
+We already know: a reference cannot outlive its value.
+
+Usually the compiler sees by itself how long everything lives. But sometimes it **cannot tell**. Then it asks for a hint — a **lifetime label**: `'a`.
+
+!> A label does not extend anything. It only **describes** a connection: "this reference lives no longer than that one".
+
+:: code
+The function returns a reference to one of two strings. Run it.
+```rust
+fn longest(a: &str, b: &str) -> &str {
+    if a.len() > b.len() { a } else { b }
+}
+
+fn main() {
+    println!("{}", longest("cat", "hippopotamus"));
+}
+```
+fails: yes
+Error `E0106`: "missing lifetime specifier". The compiler does not know **which** of the two strings the result depends on.
+
+:: text Giving the compiler a hint
+```rust
+fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() > b.len() { a } else { b }
+}
+```
+Read it like this: "there is a lifetime `'a`. Both strings live at least `'a`. The result also lives `'a`".
+
+Simpler: **the result lives as long as the shorter-living of the two strings**.
+
+:: code
+```rust
+fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() > b.len() { a } else { b }
+}
+
+fn main() {
+    let first = String::from("cat");
+    let result;
+    {
+        let second = String::from("hippopotamus");
+        result = longest(&first, &second);
+        println!("Longer: {result}");
+    }
+}
+```
+```out
+Longer: hippopotamus
+```
+Try moving `println!` after the closing `}`. The compiler does not allow it: `second` is already gone, and `result` may point to it.
+
+:: quiz
+What does the label `'a` do in `fn f<'a>(x: &'a str) -> &'a str`?
+[ ] It makes `x` live longer => Labels do not extend anything.
+[x] It says: the result lives no longer than `x` => Correct. It is a description of a connection for the compiler.
+[ ] It makes the reference mutable => Mutability is about `mut`.
+
+:: deep How the compiler thinks about lifetimes
+For each reference the compiler finds the **part of the code** where it is used: from creation to the last use. For each value — the part where it is alive.
+
+Then it checks one rule: the part of the reference must fit **entirely** inside the part of the value.
+
+The label `'a` is a name for such a part. In `longest<'a>` we say: "the result is used only where both strings are alive". The compiler checks this at every call.
+
+:: recap
+- A lifetime is how long a reference lives.
+- The label `'a` describes a connection between references; it does not extend life.
+- The compiler asks for labels when it cannot work out the connection by itself.
+
+## LESSON m13-2 | When labels are not needed | 5
+:: goals
+- The rules the compiler uses to guess
+- What `'static` is
+
+:: text The compiler often guesses by itself
+The guessing rules are called **elision**. The main cases:
+
+- One input reference → the result lives as long as it does.
+- A method with `&self` → the result lives as long as `self`.
+
+That is why `fn first_word(s: &str) -> &str` works without labels. Labels are needed when there are **several** input references and it is unclear which one matters.
+
+:: text 'static — lives for the whole program
+`'static` is a special lifetime: "until the end of the program".
+
+Text in quotes is `&'static str`. It is stored right inside the program and always lives.
+
+```rust
+let s: &'static str = "I live forever";
+```
+
+:: quiz
+Does `fn trim(s: &str) -> &str` need a lifetime label?
+[x] No, there is one input reference, the compiler guesses => Correct. This is an elision rule.
+[ ] Yes, always when a reference is returned => Only if the compiler cannot guess by itself.
+
+:: text The three guessing rules
+In full, the elision rules are:
+1. Each input reference gets **its own** label.
+2. If there is **one** input reference, the result gets its label.
+3. If one of the inputs is `&self` or `&mut self`, the result gets the label of `self`.
+
+If after these rules the result still has no label, the compiler asks you to write it by hand. That is error `E0106`.
+
+:: recap
+- With one input reference or `&self`, labels are usually not needed.
+- `'static` lives for the whole program. Strings in quotes are `&'static str`.
+
+## LESSON m13-3 | References in structs | 5
+:: goals
+- Store a reference inside a struct
+- Understand the notation `struct Name<'a>`
+
+:: text A struct with a reference
+A struct may not own its data, but look at someone else's. Then it needs a label: the struct must not outlive what it looks at.
+
+```rust
+struct Quote<'a> {
+    text: &'a str,
+}
+```
+
+:: code
+```rust
+struct Highlight<'a> {
+    part: &'a str,
+}
+
+impl<'a> Highlight<'a> {
+    fn show(&self) {
+        println!("Key point: \"{}\"", self.part);
+    }
+}
+
+fn main() {
+    let book = String::from("Rust is reliable. And fast.");
+    let first = book.split('.').next().unwrap();
+    let h = Highlight { part: first };
+    h.show();
+}
+```
+```out
+Key point: "Rust is reliable"
+```
+
+:: text Advice for beginners
+Not sure? Store a `String` in the struct, not a `&str`. The struct will own the data, and no labels are needed.
+
+References in structs are an optimization. You can come back to it later.
+
+:: quiz
+What is the simplest thing to do if labels in a struct are confusing?
+[x] Store a `String` instead of a `&str` => Correct. An owning type needs no labels.
+[ ] Put `'static` everywhere => Then only eternal strings could go into the struct. That is inconvenient.
+[ ] Delete the struct => Too radical. It is enough to change the field type.
+
+:: deep 'static in type requirements
+The requirement `T: 'static` on a type does not mean "lives forever". It means "**contains no** temporary references". `String`, `i32`, `Vec<u8>` fit: they own their data.
+
+For example, `thread::spawn` has this requirement: a thread can live as long as it wants, so it cannot take temporary references with it. Threads are in module 17.
+
+:: recap
+- A struct with a reference: `struct S<'a> { x: &'a str }`.
+- A struct cannot outlive the data it looks at.
+- Storing a `String` instead of a `&str` is an easy way out.
+
+## LESSON m13-p | Practice: lifetimes | 10 | practice
+:: goals
+- Fix error E0106
+- Store references in structs
+
+:: task
+Fix error `E0106`: add a lifetime label.
+```rust
+fn shorter(a: &str, b: &str) -> &str {
+    if a.len() < b.len() { a } else { b }
+}
+
+fn main() {
+    println!("{}", shorter("cat", "hippopotamus"));
+}
+```
+```solution
+fn shorter<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() < b.len() { a } else { b }
+}
+
+fn main() {
+    println!("{}", shorter("cat", "hippopotamus"));
+}
+```
+```expect
+cat
+```
+hint: Declare the label after the function name: `fn shorter<'a>(...)`.
+hint: `fn shorter<'a>(a: &'a str, b: &'a str) -> &'a str`
+
+:: task
+The function always returns the first string. So the second string can live as long as it wants. Describe this with two different labels.
+```rust
+fn pick_first(a: &str, b: &str) -> &str {
+    println!("Second: {b}");
+    a
+}
+
+fn main() {
+    let x = String::from("first");
+    let r;
+    {
+        let y = String::from("second");
+        r = pick_first(&x, &y);
+    }
+    println!("{r}");
+}
+```
+```solution
+fn pick_first<'a, 'b>(a: &'a str, b: &'b str) -> &'a str {
+    println!("Second: {b}");
+    a
+}
+
+fn main() {
+    let x = String::from("first");
+    let r;
+    {
+        let y = String::from("second");
+        r = pick_first(&x, &y);
+    }
+    println!("{r}");
+}
+```
+```expect
+Second: second
+first
+```
+hint: Two labels: `fn pick_first<'a, 'b>(a: &'a str, b: &'b str) -> &'a str`
+hint: The result is connected only to `a`, so `y` may die before `r` is used.
+
+:: task
+A struct with a reference. Complete the method `word_count` that counts the words in the text.
+```rust
+struct Note<'a> {
+    text: &'a str,
+}
+
+impl<'a> Note<'a> {
+}
+
+fn main() {
+    let s = String::from("references in structs work");
+    let n = Note { text: &s };
+    println!("{}", n.word_count());
+}
+```
+```solution
+struct Note<'a> {
+    text: &'a str,
+}
+
+impl<'a> Note<'a> {
+    fn word_count(&self) -> usize {
+        self.text.split_whitespace().count()
+    }
+}
+
+fn main() {
+    let s = String::from("references in structs work");
+    let n = Note { text: &s };
+    println!("{}", n.word_count());
+}
+```
+```expect
+4
+```
+hint: The method only reads: `fn word_count(&self) -> usize`.
+hint: `self.text.split_whitespace().count()`
+
+:: quiz
+Which function **needs** an explicit lifetime label?
+[ ] `fn len(s: &str) -> usize` => The result is not a reference. No label is needed.
+[ ] `fn first(s: &str) -> &str` => There is one input reference; the compiler guesses by itself.
+[x] `fn pick(a: &str, b: &str) -> &str` => Correct. Two input references — it is unclear which one the result is connected to.
+
+:: recap
+- E0106 — add a label `'a` and connect the input and the result with it.
+- Different labels mean the references live independently.
+- A struct with a reference: `struct S<'a>` and `impl<'a> S<'a>`.
