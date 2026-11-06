@@ -3767,6 +3767,16 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Вложенные модули и пути",
+"md": "Модули можно вкладывать друг в друга. Путь пишут через `::`:\n\n```\nmod game {\n    pub mod score {\n        pub fn reset() -> u32 { 0 }\n    }\n}\n\nlet s = game::score::reset();\n```\nВнутри модулей полезны два слова:\n- `self::` — «в этом модуле»;\n- `super::` — «в модуле уровнем выше»."
+},
+{
+"t": "deep",
+"title": "Уровни видимости",
+"md": "Кроме простого `pub` есть более точные варианты:\n- `pub(crate)` — видно во всём крейте, но не снаружи (не другим библиотекам);\n- `pub(super)` — видно только в родительском модуле;\n- без `pub` — только в этом модуле и во вложенных в него.\n\nУ полей структуры видимость задают по отдельности. Структура может быть `pub`, а её поле — нет. Так поступили с полем `price` в примере выше."
+},
+{
 "t": "recap",
 "items": [
 "`mod имя { }` — модуль.",
@@ -3880,6 +3890,16 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Debug и release",
+"md": "Cargo собирает программу в двух режимах:\n- **debug** (`cargo run`, `cargo build`) — собирается быстро, работает медленнее, проверяет переполнение чисел;\n- **release** (`cargo run --release`) — собирается дольше, работает в разы быстрее.\n\nГотовая программа лежит в папке `target/debug` или `target/release`."
+},
+{
+"t": "deep",
+"title": "Cargo.lock и версии",
+"md": "Рядом с `Cargo.toml` появляется файл `Cargo.lock`. В нём записаны **точные** версии всех библиотек, с которыми проект собрался.\n\nВерсии библиотек пишут по правилу **SemVer**: `МАЖОР.МИНОР.ПАТЧ`, например `1.4.2`.\n- Патч (`1.4.3`) — исправления, ничего не ломают.\n- Минор (`1.5.0`) — новые возможности, старый код работает.\n- Мажор (`2.0.0`) — могут быть несовместимые изменения.\n\nЗапись `rand = \"0.9\"` в `Cargo.toml` значит «любая совместимая с 0.9». `cargo update` обновит версии в пределах этого правила."
+},
+{
 "t": "recap",
 "items": [
 "`cargo new имя` — новый проект.",
@@ -3941,6 +3961,85 @@ window.COURSES = {
 "Что такое крейт",
 "Как подключить чужую библиотеку"
 ]
+},
+{
+"id": "m11-p",
+"title": "Практика: модули",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Создай модуль `math` с публичной функцией `square`. В `main` вызови её через путь.",
+"code": "// модуль math здесь\n\nfn main() {\n    println!(\"{}\", math::square(9));\n}",
+"solution": "mod math {\n    pub fn square(x: i32) -> i32 {\n        x * x\n    }\n}\n\nfn main() {\n    println!(\"{}\", math::square(9));\n}",
+"expect": "81",
+"hints": [
+"`mod math { pub fn square(x: i32) -> i32 { x * x } }`",
+"Без `pub` функция не будет видна из `main`."
+]
+},
+{
+"t": "task",
+"md": "Почини ошибку видимости. Не меняй `main`.",
+"code": "mod greetings {\n    fn hello() -> &'static str {\n        \"Привет\"\n    }\n}\n\nfn main() {\n    println!(\"{}\", greetings::hello());\n}",
+"solution": "mod greetings {\n    pub fn hello() -> &'static str {\n        \"Привет\"\n    }\n}\n\nfn main() {\n    println!(\"{}\", greetings::hello());\n}",
+"expect": "Привет",
+"hints": [
+"Компилятор пишет: function `hello` is private — функция приватная.",
+"Добавь `pub` перед `fn hello`."
+]
+},
+{
+"t": "task",
+"md": "Вложенный модуль. Добавь `use`, чтобы в `main` можно было писать просто `to_km(...)`.",
+"code": "mod units {\n    pub mod length {\n        pub fn to_km(m: f64) -> f64 {\n            m / 1000.0\n        }\n    }\n}\n\nfn main() {\n    println!(\"{}\", to_km(2500.0));\n}",
+"solution": "mod units {\n    pub mod length {\n        pub fn to_km(m: f64) -> f64 {\n            m / 1000.0\n        }\n    }\n}\n\nuse units::length::to_km;\n\nfn main() {\n    println!(\"{}\", to_km(2500.0));\n}",
+"expect": "2.5",
+"hints": [
+"Путь к функции: `units::length::to_km`.",
+"Строка перед `main`: `use units::length::to_km;`"
+]
+},
+{
+"t": "task",
+"md": "Модуль `counter` с закрытым полем. Допиши метод `get`, чтобы `main` мог прочитать значение, но не мог его испортить.",
+"code": "mod counter {\n    pub struct Counter {\n        value: u32,\n    }\n\n    impl Counter {\n        pub fn new() -> Self {\n            Counter { value: 0 }\n        }\n        pub fn inc(&mut self) {\n            self.value += 1;\n        }\n    }\n}\n\nfn main() {\n    let mut c = counter::Counter::new();\n    c.inc();\n    c.inc();\n    println!(\"{}\", c.get());\n}",
+"solution": "mod counter {\n    pub struct Counter {\n        value: u32,\n    }\n\n    impl Counter {\n        pub fn new() -> Self {\n            Counter { value: 0 }\n        }\n        pub fn inc(&mut self) {\n            self.value += 1;\n        }\n        pub fn get(&self) -> u32 {\n            self.value\n        }\n    }\n}\n\nfn main() {\n    let mut c = counter::Counter::new();\n    c.inc();\n    c.inc();\n    println!(\"{}\", c.get());\n}",
+"expect": "2",
+"hints": [
+"Метод только читает — `&self`. И он должен быть `pub`.",
+"`pub fn get(&self) -> u32 { self.value }`"
+]
+},
+{
+"t": "quiz",
+"md": "Какая команда соберёт быструю версию программы для пользователей?",
+"options": [
+"`cargo run`",
+"`cargo check`",
+"`cargo build --release`"
+],
+"answer": 2,
+"why": [
+"Это режим debug: собирается быстро, но работает медленнее.",
+"`check` ничего не собирает, только проверяет.",
+"Верно. Готовый файл появится в `target/release`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Всё в модуле закрыто, пока не помечено `pub`.",
+"`use путь;` сокращает длинные пути.",
+"Закрытые поля + публичные методы защищают данные от порчи."
+]
+}
+],
+"practice": true,
+"goals": [
+"Раскладывать код по модулям",
+"Чинить ошибки видимости"
+]
 }
 ]
 },
@@ -3979,6 +4078,11 @@ window.COURSES = {
 "Верно. `Vec<i32>`, `Vec<String>` — это один и тот же `Vec<T>`.",
 "Количество — это длина, а `T` — тип."
 ]
+},
+{
+"t": "deep",
+"title": "Обобщения ничего не стоят",
+"md": "Когда ты вызываешь `first(&[3, 1, 2])` и `first(&[\"кот\"])`, компилятор создаёт **две отдельные копии** функции: одну для `i32`, другую для `&str`. Это называется **мономорфизация**.\n\nПоэтому обобщённый код работает так же быстро, как если бы ты написал две функции руками. Цена — программа собирается чуть дольше, а файл получается чуть больше."
 },
 {
 "t": "recap",
@@ -4023,6 +4127,11 @@ window.COURSES = {
 "for"
 ]
 ]
+},
+{
+"t": "deep",
+"title": "Чей трейт и чей тип",
+"md": "Есть правило, **для чего** можно реализовать трейт. Реализация `impl Трейт for Тип` разрешена, если твой **трейт** или твой **тип**:\n- свой трейт для своего типа — можно;\n- свой трейт для чужого типа (например `impl Speak for i32`) — можно;\n- чужой трейт для своего типа (например `impl Display for Dog`) — можно;\n- чужой трейт для чужого типа (`impl Display for Vec<i32>`) — **нельзя**.\n\nЭто правило называют **orphan rule** («правило сироты»). Оно не даёт двум библиотекам написать две разные реализации одного и того же."
 },
 {
 "t": "recap",
@@ -4085,6 +4194,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "impl Трейт в результате",
+"md": "`impl Трейт` можно писать и в типе результата. Так функция говорит: «верну что-то, что умеет это. Какой именно тип — моё дело».\n\nНастоящий тип здесь длинный и неудобный. `impl Iterator` его прячет. Итераторы — в модуле 14.",
+"code": "fn evens() -> impl Iterator<Item = u32> {\n    (0..10).filter(|n| n % 2 == 0)\n}\n\nfn main() {\n    for n in evens() {\n        print!(\"{n} \");\n    }\n    println!();\n}",
+"out": "0 2 4 6 8 "
+},
+{
 "t": "recap",
 "items": [
 "`<T: Трейт>` — T должен уметь это.",
@@ -4141,6 +4257,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Свои операторы: трейт Add",
+"md": "Знак `+` в Rust — это вызов метода трейта `std::ops::Add`. Если реализовать его для своего типа, `+` заработает и для него:\n\nТак же устроены `-` (`Sub`), `*` (`Mul`), `==` (`PartialEq`), `<` (`PartialOrd`).",
+"code": "use std::ops::Add;\n\n#[derive(Debug, Clone, Copy)]\nstruct Vec2 {\n    x: i32,\n    y: i32,\n}\n\nimpl Add for Vec2 {\n    type Output = Vec2;\n    fn add(self, other: Vec2) -> Vec2 {\n        Vec2 { x: self.x + other.x, y: self.y + other.y }\n    }\n}\n\nfn main() {\n    let a = Vec2 { x: 1, y: 2 };\n    let b = Vec2 { x: 10, y: 20 };\n    println!(\"{:?}\", a + b);\n}",
+"out": "Vec2 { x: 11, y: 22 }"
+},
+{
 "t": "recap",
 "items": [
 "`#[derive(Debug, Clone, PartialEq, Default)]` — трейты одной строкой.",
@@ -4154,6 +4277,82 @@ window.COURSES = {
 "Display: печать через `{}`",
 "derive: трейты одной строчкой",
 "From/Into: превращения типов"
+]
+},
+{
+"id": "m12-p",
+"title": "Практика: обобщения и трейты",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Напиши обобщённую функцию `swap_pair`, которая меняет местами два значения любого типа.",
+"code": "// напиши swap_pair\n\nfn main() {\n    println!(\"{:?}\", swap_pair(1, 2));\n    println!(\"{:?}\", swap_pair(\"а\", \"б\"));\n}",
+"solution": "fn swap_pair<T>(a: T, b: T) -> (T, T) {\n    (b, a)\n}\n\nfn main() {\n    println!(\"{:?}\", swap_pair(1, 2));\n    println!(\"{:?}\", swap_pair(\"а\", \"б\"));\n}",
+"expect": "(2, 1)\n(\"б\", \"а\")",
+"hints": [
+"Заголовок: `fn swap_pair<T>(a: T, b: T) -> (T, T)`",
+"Тело: `(b, a)`"
+]
+},
+{
+"t": "task",
+"md": "Опиши трейт `Area` с методом `area(&self) -> f64` и реализуй его для `Square` и `Circle` (площадь круга: `3.14 × r × r`).",
+"code": "struct Square(f64);\nstruct Circle(f64);\n\n// трейт Area и две реализации\n\nfn main() {\n    println!(\"{}\", Square(3.0).area());\n    println!(\"{}\", Circle(2.0).area());\n}",
+"solution": "struct Square(f64);\nstruct Circle(f64);\n\ntrait Area {\n    fn area(&self) -> f64;\n}\n\nimpl Area for Square {\n    fn area(&self) -> f64 {\n        self.0 * self.0\n    }\n}\n\nimpl Area for Circle {\n    fn area(&self) -> f64 {\n        3.14 * self.0 * self.0\n    }\n}\n\nfn main() {\n    println!(\"{}\", Square(3.0).area());\n    println!(\"{}\", Circle(2.0).area());\n}",
+"expect": "9\n12.56",
+"hints": [
+"`trait Area { fn area(&self) -> f64; }`",
+"`impl Area for Square { fn area(&self) -> f64 { self.0 * self.0 } }` — и так же для `Circle`."
+]
+},
+{
+"t": "task",
+"md": "Реализуй `Display` для точки, чтобы она печаталась как `(3, -1)`.",
+"code": "use std::fmt;\n\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\n// impl fmt::Display for Point\n\nfn main() {\n    let p = Point { x: 3, y: -1 };\n    println!(\"Точка {p}\");\n}",
+"solution": "use std::fmt;\n\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\nimpl fmt::Display for Point {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"({}, {})\", self.x, self.y)\n    }\n}\n\nfn main() {\n    let p = Point { x: 3, y: -1 };\n    println!(\"Точка {p}\");\n}",
+"expect": "Точка (3, -1)",
+"hints": [
+"Заголовок метода: `fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result`",
+"Тело: `write!(f, \"({}, {})\", self.x, self.y)`"
+]
+},
+{
+"t": "task",
+"md": "Трейт с методом по умолчанию. Реализуй `Greet` для `Robot`, задав только `name`. Метод `hello` уже написан в трейте.",
+"code": "trait Greet {\n    fn name(&self) -> String;\n    fn hello(&self) -> String {\n        format!(\"Привет, я {}!\", self.name())\n    }\n}\n\nstruct Robot;\n\nfn main() {\n    println!(\"{}\", Robot.hello());\n}",
+"solution": "trait Greet {\n    fn name(&self) -> String;\n    fn hello(&self) -> String {\n        format!(\"Привет, я {}!\", self.name())\n    }\n}\n\nstruct Robot;\n\nimpl Greet for Robot {\n    fn name(&self) -> String {\n        String::from(\"Робот\")\n    }\n}\n\nfn main() {\n    println!(\"{}\", Robot.hello());\n}",
+"expect": "Привет, я Робот!",
+"hints": [
+"`impl Greet for Robot { fn name(&self) -> String { ... } }`",
+"Внутри: `String::from(\"Робот\")`"
+]
+},
+{
+"t": "task",
+"md": "Реализуй `From<(i32, i32)> for Point`, чтобы точку можно было получить из кортежа через `.into()`.",
+"code": "#[derive(Debug)]\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\n// impl From<(i32, i32)> for Point\n\nfn main() {\n    let p: Point = (5, 7).into();\n    println!(\"{:?}\", p);\n}",
+"solution": "#[derive(Debug)]\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\nimpl From<(i32, i32)> for Point {\n    fn from(t: (i32, i32)) -> Self {\n        Point { x: t.0, y: t.1 }\n    }\n}\n\nfn main() {\n    let p: Point = (5, 7).into();\n    println!(\"{:?}\", p);\n}",
+"expect": "Point { x: 5, y: 7 }",
+"hints": [
+"Метод трейта `From` называется `from`: `fn from(t: (i32, i32)) -> Self`",
+"Тело: `Point { x: t.0, y: t.1 }`. Метод `into` появится сам."
+]
+},
+{
+"t": "recap",
+"items": [
+"`<T>` — функция для любого типа, `<T: Трейт>` — для умеющих.",
+"`trait` + `impl Трейт for Тип` — научить тип новому.",
+"`Display` — печать через `{}`, `From` — превращение типов."
+]
+}
+],
+"practice": true,
+"goals": [
+"Писать обобщённые функции",
+"Описывать и реализовывать трейты",
+"Реализовывать `Display` и `From`"
 ]
 }
 ]
@@ -8902,90 +9101,100 @@ window.COURSES = {
 },
 {
 "id": "m11",
-"title": "Модули и Cargo",
-"sub": "Как устроен настоящий проект",
+"title": "Modules and Cargo",
+"sub": "How a real project is organized",
 "lessons": [
 {
 "id": "m11-1",
-"title": "Модули: mod, pub, use",
+"title": "Modules: mod, pub, use",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Модуль — папка для кода",
-"md": "Большую программу делят на **модули** (`mod`). Это как ящики в шкафу: инструменты отдельно, документы отдельно.\n\n```\nmod math {\n    pub fn double(x: i32) -> i32 {\n        x * 2\n    }\n    fn secret() {} // видно только внутри math\n}\n```"
+"title": "A module is a folder for code",
+"md": "A big program is split into **modules** (`mod`). Analogy: drawers in a cabinet — tools in one, documents in another.\n\n```\nmod math {\n    pub fn double(x: i32) -> i32 {\n        x * 2\n    }\n    fn secret() {} // visible only inside math\n}\n```"
 },
 {
 "t": "text",
-"title": "pub — открыть наружу",
-"md": "По умолчанию всё внутри модуля **закрыто**. Чтобы пользоваться снаружи, пометь `pub` (public — публичный).\n\nОбращаются через `::` — `math::double(5)`.\n\n`use` создаёт короткое имя: после `use math::double;` можно писать просто `double(5)`."
+"title": "pub — open to the outside",
+"md": "By default everything inside a module is **closed**. To use it from outside, mark it `pub` (public).\n\nYou access it with `::` — `math::double(5)`.\n\n`use` creates a short name: after `use math::double;` you can just write `double(5)`."
 },
 {
 "t": "code",
-"code": "mod shop {\n    pub struct Item {\n        pub name: String,\n        price: u32,\n    }\n\n    impl Item {\n        pub fn new(name: &str, price: u32) -> Self {\n            Item { name: name.to_string(), price }\n        }\n        pub fn price_with_tax(&self) -> u32 {\n            self.price * 120 / 100\n        }\n    }\n}\n\nuse shop::Item;\n\nfn main() {\n    let it = Item::new(\"чай\", 100);\n    println!(\"{}: {} руб.\", it.name, it.price_with_tax());\n}",
-"out": "чай: 120 руб.",
-"after": "Поле `price` закрыто: снаружи его не прочесть и не испортить. Доступ — только через метод."
+"code": "mod shop {\n    pub struct Item {\n        pub name: String,\n        price: u32,\n    }\n\n    impl Item {\n        pub fn new(name: &str, price: u32) -> Self {\n            Item { name: name.to_string(), price }\n        }\n        pub fn price_with_tax(&self) -> u32 {\n            self.price * 120 / 100\n        }\n    }\n}\n\nuse shop::Item;\n\nfn main() {\n    let it = Item::new(\"tea\", 100);\n    println!(\"{}: {} cents\", it.name, it.price_with_tax());\n}",
+"out": "tea: 120 cents",
+"after": "The field `price` is closed: it cannot be read or broken from outside. Access is only through a method."
 },
 {
 "t": "quiz",
-"md": "Что будет, если вызвать `math::secret()` из `main`?",
+"md": "What happens if you call `math::secret()` from `main`?",
 "options": [
-"Сработает",
-"Ошибка: функция приватная"
+"It works",
+"An error: the function is private"
 ],
 "answer": 1,
 "why": [
-"`secret` без `pub`, значит она закрыта.",
-"Верно. Без `pub` — только для своих."
+"`secret` has no `pub`, so it is closed.",
+"Correct. Without `pub` it is only for the module itself."
 ]
+},
+{
+"t": "text",
+"title": "Nested modules and paths",
+"md": "Modules can be nested inside each other. A path is written with `::`:\n\n```\nmod game {\n    pub mod score {\n        pub fn reset() -> u32 { 0 }\n    }\n}\n\nlet s = game::score::reset();\n```\nInside modules two words are useful:\n- `self::` means \"in this module\";\n- `super::` means \"in the module one level up\"."
+},
+{
+"t": "deep",
+"title": "Visibility levels",
+"md": "Besides plain `pub` there are more precise variants:\n- `pub(crate)` — visible in the whole crate, but not outside (not to other libraries);\n- `pub(super)` — visible only in the parent module;\n- no `pub` — only in this module and the modules nested inside it.\n\nStruct fields have their own visibility. A struct can be `pub` while its field is not. This is what happened with the field `price` in the example above."
 },
 {
 "t": "recap",
 "items": [
-"`mod имя { }` — модуль.",
-"Всё закрыто, пока не помечено `pub`.",
-"`use путь::имя;` — короткое имя."
+"`mod name { }` is a module.",
+"Everything is closed until it is marked `pub`.",
+"`use path::name;` creates a short name."
 ]
 }
 ],
 "goals": [
-"Раскладывать код по модулям",
-"Решать, что видно снаружи"
+"Organize code into modules",
+"Decide what is visible from outside"
 ]
 },
 {
 "id": "m11-2",
-"title": "Установка Rust на компьютер",
+"title": "Installing Rust on your computer",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Пора на свой компьютер",
-"md": "До сих пор мы запускали код в браузере. Для настоящих проектов Rust ставят на компьютер.\n\nОфициальный установщик называется **rustup**. Он ставит компилятор `rustc`, менеджер проектов `cargo` и документацию."
+"title": "Time for your own computer",
+"md": "Until now we ran code in the browser. For real projects, Rust is installed on the computer.\n\nThe official installer is called **rustup**. It installs the compiler `rustc`, the project manager `cargo` and the documentation."
 },
 {
 "t": "text",
 "title": "Windows",
-"md": "1. Открой [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).\n2. Скачай `rustup-init.exe` и запусти.\n3. Он предложит поставить Visual Studio Build Tools — соглашайся. Это нужно для сборки программ.\n4. Жми Enter на стандартных настройках.\n\n> Установка занимает 5–15 минут. Хороший момент для перерыва."
+"md": "1. Open [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).\n2. Download `rustup-init.exe` and run it.\n3. It offers to install Visual Studio Build Tools — agree. They are needed to build programs.\n4. Press Enter for the default settings.\n\n> Installation takes 5–15 minutes. A good moment for a break."
 },
 {
 "t": "text",
-"title": "macOS и Linux",
-"md": "Открой терминал и вставь одну команду:\n\n```sh\ncurl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh\n```\nНа Linux ещё понадобится компилятор C: пакет `build-essential` (Ubuntu) или похожий."
+"title": "macOS and Linux",
+"md": "Open a terminal and paste one command:\n\n```sh\ncurl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh\n```\nOn Linux you also need a C compiler: the package `build-essential` (Ubuntu) or a similar one."
 },
 {
 "t": "text",
-"title": "Проверь, что всё работает",
-"md": "Открой **новое** окно терминала и введи:\n\n```sh\nrustc --version\ncargo --version\n```\nДолжны появиться номера версий. Например, `rustc 1.99.1`. Версии выходят каждые 6 недель. Обновиться: `rustup update`."
+"title": "Check that everything works",
+"md": "Open a **new** terminal window and type:\n\n```sh\nrustc --version\ncargo --version\n```\nVersion numbers should appear. For example, `rustc 1.99.1`. New versions come out every 6 weeks. To update: `rustup update`."
 },
 {
 "t": "text",
-"title": "Редактор",
-"md": "- **VS Code** + расширение **rust-analyzer**. Бесплатно. Подсветка, подсказки, ошибки прямо в коде.\n- **RustRover** от JetBrains. Бесплатен для некоммерческого использования.\n\n> rust-analyzer показывает типы переменных серым прямо в коде. Для новичка это очень помогает."
+"title": "An editor",
+"md": "- **VS Code** + the **rust-analyzer** extension. Free. Highlighting, hints, errors right in the code.\n- **RustRover** by JetBrains. Free for non-commercial use.\n\n> rust-analyzer shows the types of variables in gray right in the code. For a beginner this helps a lot."
 },
 {
 "t": "quiz",
-"md": "Как называется официальный установщик Rust?",
+"md": "What is the official Rust installer called?",
 "options": [
 "rustup",
 "cargo",
@@ -8993,53 +9202,53 @@ window.COURSES = {
 ],
 "answer": 0,
 "why": [
-"Верно. Он ставит и обновляет весь набор инструментов.",
-"`cargo` ставится вместе с Rust. Это менеджер проектов.",
-"Это менеджер пакетов JavaScript."
+"Correct. It installs and updates the whole toolset.",
+"`cargo` is installed together with Rust. It is the project manager.",
+"That is the JavaScript package manager."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Установка — через rustup с rust-lang.org.",
-"Проверка: `rustc --version`, обновление: `rustup update`.",
-"Редактор: VS Code + rust-analyzer или RustRover."
+"Install Rust with rustup from rust-lang.org.",
+"Check: `rustc --version`; update: `rustup update`.",
+"Editor: VS Code + rust-analyzer, or RustRover."
 ]
 }
 ],
 "goals": [
-"Установить Rust через rustup",
-"Выбрать редактор"
+"Install Rust with rustup",
+"Choose an editor"
 ]
 },
 {
 "id": "m11-3",
-"title": "Cargo: первый проект",
+"title": "Cargo: your first project",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Cargo — завхоз проекта",
-"md": "**Cargo** создаёт проекты, собирает их, запускает, скачивает библиотеки и гоняет тесты. Почти всё делают через него."
+"title": "Cargo is the project manager",
+"md": "**Cargo** creates projects, builds them, runs them, downloads libraries and runs tests. Almost everything is done through it."
 },
 {
 "t": "text",
-"title": "Новый проект",
-"md": "```sh\ncargo new hello\ncd hello\ncargo run\n```\nТы увидишь `Hello, world!`. Cargo уже написал программу за тебя."
+"title": "A new project",
+"md": "```sh\ncargo new hello\ncd hello\ncargo run\n```\nYou will see `Hello, world!`. Cargo already wrote the program for you."
 },
 {
 "t": "text",
-"title": "Что внутри",
-"md": "```sh\nhello/\n├── Cargo.toml     ← описание проекта\n└── src/\n    └── main.rs    ← твой код\n```\n`Cargo.toml` выглядит так:\n\n```sh\n[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n```\n`edition = \"2024\"` — какая редакция языка. Мы весь курс пишем на 2024."
+"title": "What is inside",
+"md": "```sh\nhello/\n├── Cargo.toml     ← the project description\n└── src/\n    └── main.rs    ← your code\n```\n`Cargo.toml` looks like this:\n\n```sh\n[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n```\n`edition = \"2024\"` is the edition of the language. We use 2024 in the whole course."
 },
 {
 "t": "text",
-"title": "Главные команды",
-"md": "- `cargo run` — собрать и запустить.\n- `cargo check` — только проверить ошибки. Очень быстро.\n- `cargo build --release` — собрать быструю версию для пользователей.\n- `cargo test` — запустить тесты.\n- `cargo fmt` — красиво выровнять код.\n- `cargo clippy` — подсказки, как писать лучше."
+"title": "The main commands",
+"md": "- `cargo run` — build and run.\n- `cargo check` — only check for errors. Very fast.\n- `cargo build --release` — build the fast version for users.\n- `cargo test` — run the tests.\n- `cargo fmt` — format the code neatly.\n- `cargo clippy` — hints on how to write better code."
 },
 {
 "t": "quiz",
-"md": "Какая команда быстрее всего покажет ошибки компиляции, ничего не запуская?",
+"md": "Which command shows compile errors the fastest, without running anything?",
 "options": [
 "`cargo run`",
 "`cargo check`",
@@ -9047,147 +9256,241 @@ window.COURSES = {
 ],
 "answer": 1,
 "why": [
-"Она ещё и запускает. Медленнее.",
-"Верно. Только проверка, без сборки программы.",
-"Это самая долгая сборка: с оптимизацией."
+"It also runs the program. Slower.",
+"Correct. Only checking, without building the program.",
+"This is the longest build: with optimization."
 ]
+},
+{
+"t": "text",
+"title": "Debug and release",
+"md": "Cargo builds a program in two modes:\n- **debug** (`cargo run`, `cargo build`) — builds fast, runs slower, checks for number overflow;\n- **release** (`cargo run --release`) — builds longer, runs many times faster.\n\nThe finished program is in the folder `target/debug` or `target/release`."
+},
+{
+"t": "deep",
+"title": "Cargo.lock and versions",
+"md": "Next to `Cargo.toml` a file `Cargo.lock` appears. It records the **exact** versions of all libraries the project was built with.\n\nLibrary versions follow the **SemVer** rule: `MAJOR.MINOR.PATCH`, for example `1.4.2`.\n- Patch (`1.4.3`) — fixes, nothing breaks.\n- Minor (`1.5.0`) — new features, old code still works.\n- Major (`2.0.0`) — there may be incompatible changes.\n\nThe entry `rand = \"0.9\"` in `Cargo.toml` means \"any version compatible with 0.9\". `cargo update` updates versions within this rule."
 },
 {
 "t": "recap",
 "items": [
-"`cargo new имя` — новый проект.",
-"Код в `src/main.rs`, настройки в `Cargo.toml`.",
+"`cargo new name` creates a new project.",
+"The code is in `src/main.rs`, the settings in `Cargo.toml`.",
 "`run`, `check`, `build --release`, `test`, `fmt`, `clippy`."
 ]
 }
 ],
 "goals": [
-"Создать проект командой `cargo new`",
-"Собрать и запустить его"
+"Create a project with `cargo new`",
+"Build and run it"
 ]
 },
 {
 "id": "m11-4",
-"title": "Крейты и библиотеки",
+"title": "Crates and libraries",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Крейт — единица кода",
-"md": "**Крейт** (crate) — то, что собирается за один раз: программа или библиотека.\n\nТысячи готовых библиотек лежат на сайте [crates.io](https://crates.io). Не нужно писать всё самому."
+"title": "A crate is a unit of code",
+"md": "A **crate** is what gets built in one go: a program or a library.\n\nThousands of ready-made libraries are on the site [crates.io](https://crates.io). You do not have to write everything yourself."
 },
 {
 "t": "text",
-"title": "Подключаем библиотеку",
-"md": "Например, библиотеку случайных чисел `rand`. В папке проекта:\n\n```sh\ncargo add rand\n```\nCargo сам допишет её в `Cargo.toml` и скачает при сборке. Потом в коде:\n\n```\nuse rand::Rng;\nlet n = rand::rng().random_range(1..=6);\n```\n!> Rust Playground знает только самые популярные библиотеки. Поэтому в задачах курса мы обходимся стандартной библиотекой `std`."
+"title": "Adding a library",
+"md": "For example, the random numbers library `rand`. In the project folder:\n\n```sh\ncargo add rand\n```\nCargo adds it to `Cargo.toml` and downloads it during the build. Then in the code:\n\n```sh\nuse rand::Rng;\nlet n = rand::rng().random_range(1..=6);\n```\n!> Rust Playground knows only the most popular libraries. That is why the tasks of this course use only the standard library `std`."
 },
 {
 "t": "text",
-"title": "Модули в разных файлах",
-"md": "В настоящем проекте модуль часто лежит в своём файле. Если в `main.rs` написать `mod shop;` (с точкой с запятой), Cargo возьмёт код из `src/shop.rs`."
+"title": "Modules in separate files",
+"md": "In a real project a module often lives in its own file. If you write `mod shop;` (with a semicolon) in `main.rs`, Cargo takes the code from `src/shop.rs`."
 },
 {
 "t": "quiz",
-"md": "Где искать готовые библиотеки для Rust?",
+"md": "Where do you look for ready-made Rust libraries?",
 "options": [
 "crates.io",
-"В Rust Playground",
-"В Cargo.toml"
+"In Rust Playground",
+"In Cargo.toml"
 ],
 "answer": 0,
 "why": [
-"Верно. Это официальный реестр крейтов.",
-"Playground лишь запускает код. Библиотеки живут на crates.io.",
-"В `Cargo.toml` их только перечисляют, а лежат они на crates.io."
+"Correct. It is the official crate registry.",
+"Playground only runs code. Libraries live on crates.io.",
+"`Cargo.toml` only lists them; they live on crates.io."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Крейт — программа или библиотека.",
-"Библиотеки — на crates.io, подключать: `cargo add имя`.",
-"`mod shop;` берёт код из файла `src/shop.rs`."
+"A crate is a program or a library.",
+"Libraries are on crates.io; add one with `cargo add name`.",
+"`mod shop;` takes code from the file `src/shop.rs`."
 ]
 }
 ],
 "goals": [
-"Что такое крейт",
-"Как подключить чужую библиотеку"
+"What a crate is",
+"How to add someone else's library"
+]
+},
+{
+"id": "m11-p",
+"title": "Practice: modules",
+"min": 10,
+"cards": [
+{
+"t": "task",
+"md": "Create a module `math` with a public function `square`. In `main`, call it through the path.",
+"code": "// the module math goes here\n\nfn main() {\n    println!(\"{}\", math::square(9));\n}",
+"solution": "mod math {\n    pub fn square(x: i32) -> i32 {\n        x * x\n    }\n}\n\nfn main() {\n    println!(\"{}\", math::square(9));\n}",
+"expect": "81",
+"hints": [
+"`mod math { pub fn square(x: i32) -> i32 { x * x } }`",
+"Without `pub` the function is not visible from `main`."
+]
+},
+{
+"t": "task",
+"md": "Fix the visibility error. Do not change `main`.",
+"code": "mod greetings {\n    fn hello() -> &'static str {\n        \"Hello\"\n    }\n}\n\nfn main() {\n    println!(\"{}\", greetings::hello());\n}",
+"solution": "mod greetings {\n    pub fn hello() -> &'static str {\n        \"Hello\"\n    }\n}\n\nfn main() {\n    println!(\"{}\", greetings::hello());\n}",
+"expect": "Hello",
+"hints": [
+"The compiler says: function `hello` is private.",
+"Add `pub` before `fn hello`."
+]
+},
+{
+"t": "task",
+"md": "A nested module. Add a `use` so that `main` can simply write `to_km(...)`.",
+"code": "mod units {\n    pub mod length {\n        pub fn to_km(m: f64) -> f64 {\n            m / 1000.0\n        }\n    }\n}\n\nfn main() {\n    println!(\"{}\", to_km(2500.0));\n}",
+"solution": "mod units {\n    pub mod length {\n        pub fn to_km(m: f64) -> f64 {\n            m / 1000.0\n        }\n    }\n}\n\nuse units::length::to_km;\n\nfn main() {\n    println!(\"{}\", to_km(2500.0));\n}",
+"expect": "2.5",
+"hints": [
+"The path to the function: `units::length::to_km`.",
+"The line before `main`: `use units::length::to_km;`"
+]
+},
+{
+"t": "task",
+"md": "A module `counter` with a closed field. Add a method `get` so that `main` can read the value but cannot break it.",
+"code": "mod counter {\n    pub struct Counter {\n        value: u32,\n    }\n\n    impl Counter {\n        pub fn new() -> Self {\n            Counter { value: 0 }\n        }\n        pub fn inc(&mut self) {\n            self.value += 1;\n        }\n    }\n}\n\nfn main() {\n    let mut c = counter::Counter::new();\n    c.inc();\n    c.inc();\n    println!(\"{}\", c.get());\n}",
+"solution": "mod counter {\n    pub struct Counter {\n        value: u32,\n    }\n\n    impl Counter {\n        pub fn new() -> Self {\n            Counter { value: 0 }\n        }\n        pub fn inc(&mut self) {\n            self.value += 1;\n        }\n        pub fn get(&self) -> u32 {\n            self.value\n        }\n    }\n}\n\nfn main() {\n    let mut c = counter::Counter::new();\n    c.inc();\n    c.inc();\n    println!(\"{}\", c.get());\n}",
+"expect": "2",
+"hints": [
+"The method only reads — `&self`. And it must be `pub`.",
+"`pub fn get(&self) -> u32 { self.value }`"
+]
+},
+{
+"t": "quiz",
+"md": "Which command builds the fast version of a program for users?",
+"options": [
+"`cargo run`",
+"`cargo check`",
+"`cargo build --release`"
+],
+"answer": 2,
+"why": [
+"This is debug mode: it builds fast but runs slower.",
+"`check` builds nothing; it only checks.",
+"Correct. The finished file appears in `target/release`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Everything in a module is closed until it is marked `pub`.",
+"`use path;` shortens long paths.",
+"Closed fields + public methods protect data from being broken."
+]
+}
+],
+"practice": true,
+"goals": [
+"Organize code into modules",
+"Fix visibility errors"
 ]
 }
 ]
 },
 {
 "id": "m12",
-"title": "Обобщения и трейты",
-"sub": "Один код для многих типов",
+"title": "Generics and traits",
+"sub": "One piece of code for many types",
 "lessons": [
 {
 "id": "m12-1",
-"title": "Обобщения: <T>",
+"title": "Generics: <T>",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Не повторяйся",
-"md": "Допустим, нужна функция «первый элемент» для списка чисел. Потом — для списка строк. Потом — для списка дробных. Три одинаковые функции?\n\nНет. Пишем одну **обобщённую** функцию с параметром типа `T`:\n\n```\nfn first<T>(list: &[T]) -> &T {\n    &list[0]\n}\n```\n`<T>` читается «для любого типа T»."
+"title": "Do not repeat yourself",
+"md": "Suppose you need a function \"first element\" for a list of numbers. Then for a list of strings. Then for a list of fractional numbers. Three identical functions?\n\nNo. We write one **generic** function with a type parameter `T`:\n\n```\nfn first<T>(list: &[T]) -> &T {\n    &list[0]\n}\n```\n`<T>` reads as \"for any type T\"."
 },
 {
 "t": "code",
-"code": "fn first<T>(list: &[T]) -> &T {\n    &list[0]\n}\n\nstruct Pair<T> {\n    a: T,\n    b: T,\n}\n\nfn main() {\n    println!(\"{}\", first(&[3, 1, 2]));\n    println!(\"{}\", first(&[\"кот\", \"пёс\"]));\n    let p = Pair { a: 1.5, b: 2.5 };\n    println!(\"{} {}\", p.a, p.b);\n}",
-"out": "3\nкот\n1.5 2.5",
-"after": "Ты уже встречал обобщения: `Vec<T>`, `Option<T>`, `Result<T, E>`."
+"code": "fn first<T>(list: &[T]) -> &T {\n    &list[0]\n}\n\nstruct Pair<T> {\n    a: T,\n    b: T,\n}\n\nfn main() {\n    println!(\"{}\", first(&[3, 1, 2]));\n    println!(\"{}\", first(&[\"cat\", \"dog\"]));\n    let p = Pair { a: 1.5, b: 2.5 };\n    println!(\"{} {}\", p.a, p.b);\n}",
+"out": "3\ncat\n1.5 2.5",
+"after": "You have already met generics: `Vec<T>`, `Option<T>`, `Result<T, E>`."
 },
 {
 "t": "quiz",
-"md": "Что означает `T` в `Vec<T>`?",
+"md": "What does `T` mean in `Vec<T>`?",
 "options": [
-"Тип text",
-"Тип элементов, любой",
-"Количество элементов"
+"The type \"text\"",
+"The type of the elements, any type",
+"The number of elements"
 ],
 "answer": 1,
 "why": [
-"Это не текст, а «какой-то тип».",
-"Верно. `Vec<i32>`, `Vec<String>` — это один и тот же `Vec<T>`.",
-"Количество — это длина, а `T` — тип."
+"It is not text, it is \"some type\".",
+"Correct. `Vec<i32>` and `Vec<String>` are the same `Vec<T>`.",
+"The number is the length, and `T` is the type."
 ]
+},
+{
+"t": "deep",
+"title": "Generics cost nothing",
+"md": "When you call `first(&[3, 1, 2])` and `first(&[\"cat\"])`, the compiler creates **two separate copies** of the function: one for `i32`, another for `&str`. This is called **monomorphization**.\n\nThat is why generic code runs as fast as if you had written two functions by hand. The price: the program builds a bit longer, and the file is a bit bigger."
 },
 {
 "t": "recap",
 "items": [
-"`<T>` — параметр типа, «любой тип».",
-"Работает для функций, структур, enum.",
-"`Vec<T>`, `Option<T>` — тоже обобщения."
+"`<T>` is a type parameter: \"any type\".",
+"It works for functions, structs, enums.",
+"`Vec<T>` and `Option<T>` are generics too."
 ]
 }
 ],
 "goals": [
-"Писать функции для любого типа",
-"Читать запись `<T>`"
+"Write functions for any type",
+"Read the notation `<T>`"
 ]
 },
 {
 "id": "m12-2",
-"title": "Трейты — умения типа",
+"title": "Traits are skills of a type",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Трейт — удостоверение навыка",
-"md": "**Трейт** (trait) описывает **умение**: какие методы должны быть у типа. Иногда по-русски говорят «типаж» — это то же самое.\n\n```\ntrait Speak {\n    fn speak(&self) -> String;\n}\n```\n> Как права на вождение. Неважно, кто ты — если есть права, ты умеешь водить. Трейт `Speak` — «умеет говорить»."
+"title": "A trait is a skill certificate",
+"md": "A **trait** describes a **skill**: which methods a type must have.\n\n```\ntrait Speak {\n    fn speak(&self) -> String;\n}\n```\n> Analogy: a driving license. It does not matter who you are — if you have a license, you can drive. The trait `Speak` means \"can speak\"."
 },
 {
 "t": "code",
-"code": "trait Speak {\n    fn speak(&self) -> String;\n\n    fn greet(&self) -> String {\n        format!(\"Я говорю: {}\", self.speak())\n    }\n}\n\nstruct Dog;\nstruct Cat;\n\nimpl Speak for Dog {\n    fn speak(&self) -> String {\n        \"Гав\".to_string()\n    }\n}\n\nimpl Speak for Cat {\n    fn speak(&self) -> String {\n        \"Мяу\".to_string()\n    }\n}\n\nfn main() {\n    println!(\"{}\", Dog.greet());\n    println!(\"{}\", Cat.greet());\n}",
-"out": "Я говорю: Гав\nЯ говорю: Мяу",
-"after": "`greet` — метод **по умолчанию**: он написан прямо в трейте. Типам достаточно реализовать `speak`."
+"code": "trait Speak {\n    fn speak(&self) -> String;\n\n    fn greet(&self) -> String {\n        format!(\"I say: {}\", self.speak())\n    }\n}\n\nstruct Dog;\nstruct Cat;\n\nimpl Speak for Dog {\n    fn speak(&self) -> String {\n        \"Woof\".to_string()\n    }\n}\n\nimpl Speak for Cat {\n    fn speak(&self) -> String {\n        \"Meow\".to_string()\n    }\n}\n\nfn main() {\n    println!(\"{}\", Dog.greet());\n    println!(\"{}\", Cat.greet());\n}",
+"out": "I say: Woof\nI say: Meow",
+"after": "`greet` is a **default** method: it is written right in the trait. The types only need to implement `speak`."
 },
 {
 "t": "fill",
-"explain": "Шаблон: `impl Трейт for Тип { ... }`.",
-"md": "Допиши реализацию трейта для типа `Robot`.",
-"code": "___ Speak ___ Robot {\n    fn speak(&self) -> String {\n        \"Бип\".to_string()\n    }\n}",
+"explain": "The pattern: `impl Trait for Type { ... }`.",
+"md": "Complete the trait implementation for the type `Robot`.",
+"code": "___ Speak ___ Robot {\n    fn speak(&self) -> String {\n        \"Beep\".to_string()\n    }\n}",
 "answers": [
 [
 "impl"
@@ -9198,109 +9501,121 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Whose trait and whose type",
+"md": "There is a rule about **what** you may implement a trait for. An implementation `impl Trait for Type` is allowed if either the **trait** or the **type** is yours:\n- your trait for your type — allowed;\n- your trait for someone else's type (for example `impl Speak for i32`) — allowed;\n- someone else's trait for your type (for example `impl Display for Dog`) — allowed;\n- someone else's trait for someone else's type (`impl Display for Vec<i32>`) — **not allowed**.\n\nThis rule is called the **orphan rule**. It prevents two libraries from writing two different implementations of the same thing."
+},
+{
 "t": "recap",
 "items": [
-"`trait Имя { fn метод(&self); }` — описание умения.",
-"`impl Трейт for Тип { ... }` — научить тип.",
-"В трейте могут быть методы по умолчанию."
+"`trait Name { fn method(&self); }` describes a skill.",
+"`impl Trait for Type { ... }` teaches a type.",
+"A trait can have default methods."
 ]
 }
 ],
 "goals": [
-"Что такое трейт",
-"Как реализовать трейт для своего типа"
+"What a trait is",
+"How to implement a trait for your own type"
 ]
 },
 {
 "id": "m12-3",
-"title": "Трейт как требование",
+"title": "A trait as a requirement",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Не любой тип, а умеющий",
-"md": "Обобщённой функции часто нужно, чтобы `T` что-то **умел**. Например, сравниваться.\n\n```\nfn largest<T: PartialOrd>(list: &[T]) -> &T { ... }\n```\n`T: PartialOrd` — «любой T, который умеет сравниваться через `<` и `>`». Это называется **ограничение трейтом**."
+"title": "Not any type, but a skilled one",
+"md": "A generic function often needs `T` to be **able** to do something. For example, to be compared.\n\n```\nfn largest<T: PartialOrd>(list: &[T]) -> &T { ... }\n```\n`T: PartialOrd` means \"any T that can be compared with `<` and `>`\". This is called a **trait bound**."
 },
 {
 "t": "code",
-"code": "fn largest<T: PartialOrd>(list: &[T]) -> &T {\n    let mut best = &list[0];\n    for item in list {\n        if item > best {\n            best = item;\n        }\n    }\n    best\n}\n\nfn main() {\n    println!(\"{}\", largest(&[3, 9, 4]));\n    println!(\"{}\", largest(&['я', 'б', 'ю']));\n}",
-"out": "9\nя"
+"code": "fn largest<T: PartialOrd>(list: &[T]) -> &T {\n    let mut best = &list[0];\n    for item in list {\n        if item > best {\n            best = item;\n        }\n    }\n    best\n}\n\nfn main() {\n    println!(\"{}\", largest(&[3, 9, 4]));\n    println!(\"{}\", largest(&['y', 'b', 'z']));\n}",
+"out": "9\nz"
 },
 {
 "t": "text",
-"title": "impl Трейт — короче",
-"md": "Если тип нужен один раз, есть сокращение:\n\n```\nfn announce(x: &impl Speak) {\n    println!(\"{}\", x.speak());\n}\n```\nЭто то же, что `fn announce<T: Speak>(x: &T)`.\n\nДлинный список требований удобно выносить в `where`:\n\n```\nfn show<T>(x: T) where T: std::fmt::Debug + Clone { ... }\n```"
+"title": "impl Trait — shorter",
+"md": "If a type is needed only once, there is a shortcut:\n\n```\nfn announce(x: &impl Speak) {\n    println!(\"{}\", x.speak());\n}\n```\nThis is the same as `fn announce<T: Speak>(x: &T)`.\n\nA long list of requirements is conveniently moved into `where`:\n\n```\nfn show<T>(x: T) where T: std::fmt::Debug + Clone { ... }\n```"
 },
 {
 "t": "quiz",
-"md": "Что значит `T: PartialOrd`?",
+"md": "What does `T: PartialOrd` mean?",
 "options": [
-"T — это число",
-"T должен уметь сравниваться",
-"T можно копировать"
+"T is a number",
+"T must be comparable",
+"T can be copied"
 ],
 "answer": 1,
 "why": [
-"Не обязательно число. Буквы и строки тоже сравниваются.",
-"Верно. Это требование к типу.",
-"Копирование — это трейт `Copy` или `Clone`."
+"Not necessarily a number. Letters and strings can also be compared.",
+"Correct. It is a requirement on the type.",
+"Copying is the trait `Copy` or `Clone`."
 ]
 },
 {
 "t": "task",
-"md": "Напиши функцию `print_all`, которая печатает каждый элемент среза через `{:?}`. Подойдёт любой `T`, который умеет `Debug`.",
-"code": "use std::fmt::Debug;\n\n// напиши print_all\n\nfn main() {\n    print_all(&[1, 2]);\n    print_all(&[\"а\", \"б\"]);\n}",
-"solution": "use std::fmt::Debug;\n\nfn print_all<T: Debug>(items: &[T]) {\n    for x in items {\n        println!(\"{:?}\", x);\n    }\n}\n\nfn main() {\n    print_all(&[1, 2]);\n    print_all(&[\"а\", \"б\"]);\n}",
-"expect": "1\n2\n\"а\"\n\"б\"",
+"md": "Write a function `print_all` that prints each element of a slice with `{:?}`. Any `T` that can do `Debug` fits.",
+"code": "use std::fmt::Debug;\n\n// write print_all\n\nfn main() {\n    print_all(&[1, 2]);\n    print_all(&[\"a\", \"b\"]);\n}",
+"solution": "use std::fmt::Debug;\n\nfn print_all<T: Debug>(items: &[T]) {\n    for x in items {\n        println!(\"{:?}\", x);\n    }\n}\n\nfn main() {\n    print_all(&[1, 2]);\n    print_all(&[\"a\", \"b\"]);\n}",
+"expect": "1\n2\n\"a\"\n\"b\"",
 "hints": [
-"Заголовок: `fn print_all<T: Debug>(items: &[T])`",
-"Внутри цикл `for x in items { println!(\"{:?}\", x); }`"
+"The header: `fn print_all<T: Debug>(items: &[T])`",
+"Inside, the loop `for x in items { println!(\"{:?}\", x); }`"
 ]
+},
+{
+"t": "deep",
+"title": "impl Trait in the return type",
+"md": "`impl Trait` can also be written in the result type. This way a function says: \"I will return something that can do this. Which exact type is my business\".\n\nThe real type here is long and awkward. `impl Iterator` hides it. Iterators are in module 14.",
+"code": "fn evens() -> impl Iterator<Item = u32> {\n    (0..10).filter(|n| n % 2 == 0)\n}\n\nfn main() {\n    for n in evens() {\n        print!(\"{n} \");\n    }\n    println!();\n}",
+"out": "0 2 4 6 8"
 },
 {
 "t": "recap",
 "items": [
-"`<T: Трейт>` — T должен уметь это.",
-"`impl Трейт` — короткая запись.",
-"`where` — для длинных списков требований."
+"`<T: Trait>` means T must be able to do this.",
+"`impl Trait` is the short form.",
+"`where` is for long lists of requirements."
 ]
 }
 ],
 "goals": [
-"Требовать от `T` умение: `T: Трейт`",
-"Короткая запись `impl Трейт`"
+"Require a skill from `T`: `T: Trait`",
+"The short form `impl Trait`"
 ]
 },
 {
 "id": "m12-4",
-"title": "Полезные трейты стандартной библиотеки",
+"title": "Useful traits of the standard library",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "derive — трейты бесплатно",
-"md": "Многие трейты компилятор умеет написать сам:\n\n```\n#[derive(Debug, Clone, PartialEq, Default)]\nstruct Point { x: i32, y: i32 }\n```\n- `Debug` — печать через `{:?}`;\n- `Clone` — метод `.clone()`;\n- `PartialEq` — сравнение `==`;\n- `Default` — значение «по умолчанию» (нули)."
+"title": "derive — traits for free",
+"md": "The compiler can write many traits by itself:\n\n```\n#[derive(Debug, Clone, PartialEq, Default)]\nstruct Point { x: i32, y: i32 }\n```\n- `Debug` — printing with `{:?}`;\n- `Clone` — the method `.clone()`;\n- `PartialEq` — comparing with `==`;\n- `Default` — a \"default\" value (zeros)."
 },
 {
 "t": "code",
-"md": "`Display` — печать через `{}` — пишут руками. Ты решаешь, как выглядит тип.",
-"code": "use std::fmt;\n\nstruct Money {\n    rubles: u32,\n    kopecks: u32,\n}\n\nimpl fmt::Display for Money {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"{} руб. {:02} коп.\", self.rubles, self.kopecks)\n    }\n}\n\nfn main() {\n    let price = Money { rubles: 99, kopecks: 5 };\n    println!(\"Цена: {price}\");\n}",
-"out": "Цена: 99 руб. 05 коп.",
-"after": "`{:02}` — «минимум две цифры, слева нули»."
+"md": "`Display` — printing with `{}` — is written by hand. You decide how the type looks.",
+"code": "use std::fmt;\n\nstruct Money {\n    dollars: u32,\n    cents: u32,\n}\n\nimpl fmt::Display for Money {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"${}.{:02}\", self.dollars, self.cents)\n    }\n}\n\nfn main() {\n    let price = Money { dollars: 99, cents: 5 };\n    println!(\"Price: {price}\");\n}",
+"out": "Price: $99.05",
+"after": "`{:02}` means \"at least two digits, with zeros on the left\"."
 },
 {
 "t": "text",
-"title": "From и Into — превращения",
-"md": "Трейт `From` описывает, как сделать один тип из другого.\n\n```\nlet s = String::from(\"текст\");  // String из &str\nlet n: i64 = i64::from(5i32);    // i64 из i32\nlet s2: String = \"ещё\".into();   // into — тот же From, но с другой стороны\n```\nЕсли ты реализовал `From<A> for B`, то `into()` у `A` появляется сам."
+"title": "From and Into — conversions",
+"md": "The trait `From` describes how to make one type from another.\n\n```\nlet s = String::from(\"text\");    // String from &str\nlet n: i64 = i64::from(5i32);    // i64 from i32\nlet s2: String = \"more\".into();  // into is the same From, from the other side\n```\nIf you implemented `From<A> for B`, then `into()` appears on `A` automatically."
 },
 {
 "t": "text",
-"title": "dyn Трейт — разные типы в одном списке",
-"md": "Можно сложить в один вектор **разные** типы, если у них общий трейт:\n\n```\nlet animals: Vec<Box<dyn Speak>> = vec![Box::new(Dog), Box::new(Cat)];\nfor a in &animals {\n    println!(\"{}\", a.speak());\n}\n```\n`dyn` — «какой-то тип с этим умением». `Box` разберём в модуле про умные указатели."
+"title": "dyn Trait — different types in one list",
+"md": "You can put **different** types into one vector if they share a trait:\n\n```\nlet animals: Vec<Box<dyn Speak>> = vec![Box::new(Dog), Box::new(Cat)];\nfor a in &animals {\n    println!(\"{}\", a.speak());\n}\n```\n`dyn` means \"some type with this skill\". `Box` is explained in the module about smart pointers."
 },
 {
 "t": "quiz",
-"md": "Какой трейт нужен, чтобы печатать тип через `{}`?",
+"md": "Which trait is needed to print a type with `{}`?",
 "options": [
 "`Debug`",
 "`Display`",
@@ -9308,25 +9623,108 @@ window.COURSES = {
 ],
 "answer": 1,
 "why": [
-"`Debug` — для `{:?}`.",
-"Верно. Его реализуют вручную.",
-"`Clone` про копирование, а не про печать."
+"`Debug` is for `{:?}`.",
+"Correct. It is implemented by hand.",
+"`Clone` is about copying, not printing."
+]
+},
+{
+"t": "deep",
+"title": "Your own operators: the Add trait",
+"md": "The `+` sign in Rust is a call to a method of the trait `std::ops::Add`. If you implement it for your type, `+` works for it too:\n\n`-` (`Sub`), `*` (`Mul`), `==` (`PartialEq`), `<` (`PartialOrd`) work the same way.",
+"code": "use std::ops::Add;\n\n#[derive(Debug, Clone, Copy)]\nstruct Vec2 {\n    x: i32,\n    y: i32,\n}\n\nimpl Add for Vec2 {\n    type Output = Vec2;\n    fn add(self, other: Vec2) -> Vec2 {\n        Vec2 { x: self.x + other.x, y: self.y + other.y }\n    }\n}\n\nfn main() {\n    let a = Vec2 { x: 1, y: 2 };\n    let b = Vec2 { x: 10, y: 20 };\n    println!(\"{:?}\", a + b);\n}",
+"out": "Vec2 { x: 11, y: 22 }"
+},
+{
+"t": "recap",
+"items": [
+"`#[derive(Debug, Clone, PartialEq, Default)]` gives traits in one line.",
+"`Display` is written by hand to print with `{}`.",
+"`From`/`Into` convert types.",
+"`Box<dyn Trait>` holds different types with a shared skill."
+]
+}
+],
+"goals": [
+"Display: printing with `{}`",
+"derive: traits in one line",
+"From/Into: type conversions"
+]
+},
+{
+"id": "m12-p",
+"title": "Practice: generics and traits",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Write a generic function `swap_pair` that swaps two values of any type.",
+"code": "// write swap_pair\n\nfn main() {\n    println!(\"{:?}\", swap_pair(1, 2));\n    println!(\"{:?}\", swap_pair(\"a\", \"b\"));\n}",
+"solution": "fn swap_pair<T>(a: T, b: T) -> (T, T) {\n    (b, a)\n}\n\nfn main() {\n    println!(\"{:?}\", swap_pair(1, 2));\n    println!(\"{:?}\", swap_pair(\"a\", \"b\"));\n}",
+"expect": "(2, 1)\n(\"b\", \"a\")",
+"hints": [
+"The header: `fn swap_pair<T>(a: T, b: T) -> (T, T)`",
+"The body: `(b, a)`"
+]
+},
+{
+"t": "task",
+"md": "Describe a trait `Area` with a method `area(&self) -> f64` and implement it for `Square` and `Circle` (the area of a circle: `3.14 × r × r`).",
+"code": "struct Square(f64);\nstruct Circle(f64);\n\n// the trait Area and two implementations\n\nfn main() {\n    println!(\"{}\", Square(3.0).area());\n    println!(\"{}\", Circle(2.0).area());\n}",
+"solution": "struct Square(f64);\nstruct Circle(f64);\n\ntrait Area {\n    fn area(&self) -> f64;\n}\n\nimpl Area for Square {\n    fn area(&self) -> f64 {\n        self.0 * self.0\n    }\n}\n\nimpl Area for Circle {\n    fn area(&self) -> f64 {\n        3.14 * self.0 * self.0\n    }\n}\n\nfn main() {\n    println!(\"{}\", Square(3.0).area());\n    println!(\"{}\", Circle(2.0).area());\n}",
+"expect": "9\n12.56",
+"hints": [
+"`trait Area { fn area(&self) -> f64; }`",
+"`impl Area for Square { fn area(&self) -> f64 { self.0 * self.0 } }` — and the same for `Circle`."
+]
+},
+{
+"t": "task",
+"md": "Implement `Display` for a point so that it prints as `(3, -1)`.",
+"code": "use std::fmt;\n\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\n// impl fmt::Display for Point\n\nfn main() {\n    let p = Point { x: 3, y: -1 };\n    println!(\"Point {p}\");\n}",
+"solution": "use std::fmt;\n\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\nimpl fmt::Display for Point {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"({}, {})\", self.x, self.y)\n    }\n}\n\nfn main() {\n    let p = Point { x: 3, y: -1 };\n    println!(\"Point {p}\");\n}",
+"expect": "Point (3, -1)",
+"hints": [
+"The method header: `fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result`",
+"The body: `write!(f, \"({}, {})\", self.x, self.y)`"
+]
+},
+{
+"t": "task",
+"md": "A trait with a default method. Implement `Greet` for `Robot` by giving only `name`. The method `hello` is already written in the trait.",
+"code": "trait Greet {\n    fn name(&self) -> String;\n    fn hello(&self) -> String {\n        format!(\"Hello, I am {}!\", self.name())\n    }\n}\n\nstruct Robot;\n\nfn main() {\n    println!(\"{}\", Robot.hello());\n}",
+"solution": "trait Greet {\n    fn name(&self) -> String;\n    fn hello(&self) -> String {\n        format!(\"Hello, I am {}!\", self.name())\n    }\n}\n\nstruct Robot;\n\nimpl Greet for Robot {\n    fn name(&self) -> String {\n        String::from(\"Robot\")\n    }\n}\n\nfn main() {\n    println!(\"{}\", Robot.hello());\n}",
+"expect": "Hello, I am Robot!",
+"hints": [
+"`impl Greet for Robot { fn name(&self) -> String { ... } }`",
+"Inside: `String::from(\"Robot\")`"
+]
+},
+{
+"t": "task",
+"md": "Implement `From<(i32, i32)> for Point` so that a point can be made from a tuple with `.into()`.",
+"code": "#[derive(Debug)]\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\n// impl From<(i32, i32)> for Point\n\nfn main() {\n    let p: Point = (5, 7).into();\n    println!(\"{:?}\", p);\n}",
+"solution": "#[derive(Debug)]\nstruct Point {\n    x: i32,\n    y: i32,\n}\n\nimpl From<(i32, i32)> for Point {\n    fn from(t: (i32, i32)) -> Self {\n        Point { x: t.0, y: t.1 }\n    }\n}\n\nfn main() {\n    let p: Point = (5, 7).into();\n    println!(\"{:?}\", p);\n}",
+"expect": "Point { x: 5, y: 7 }",
+"hints": [
+"The method of the trait `From` is called `from`: `fn from(t: (i32, i32)) -> Self`",
+"The body: `Point { x: t.0, y: t.1 }`. The method `into` appears automatically."
 ]
 },
 {
 "t": "recap",
 "items": [
-"`#[derive(Debug, Clone, PartialEq, Default)]` — трейты одной строкой.",
-"`Display` пишут вручную, чтобы печатать через `{}`.",
-"`From`/`Into` — превращения типов.",
-"`Box<dyn Трейт>` — разные типы с общим умением."
+"`<T>` is a function for any type, `<T: Trait>` for types with a skill.",
+"`trait` + `impl Trait for Type` teach a type something new.",
+"`Display` prints with `{}`, `From` converts types."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Display: печать через `{}`",
-"derive: трейты одной строчкой",
-"From/Into: превращения типов"
+"Write generic functions",
+"Describe and implement traits",
+"Implement `Display` and `From`"
 ]
 }
 ]

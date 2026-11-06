@@ -1,0 +1,568 @@
+# MODULE m12 | Generics and traits | One piece of code for many types
+
+## LESSON m12-1 | Generics: <T> | 6
+:: goals
+- Write functions for any type
+- Read the notation `<T>`
+
+:: text Do not repeat yourself
+Suppose you need a function "first element" for a list of numbers. Then for a list of strings. Then for a list of fractional numbers. Three identical functions?
+
+No. We write one **generic** function with a type parameter `T`:
+
+```rust
+fn first<T>(list: &[T]) -> &T {
+    &list[0]
+}
+```
+`<T>` reads as "for any type T".
+
+:: code
+```rust
+fn first<T>(list: &[T]) -> &T {
+    &list[0]
+}
+
+struct Pair<T> {
+    a: T,
+    b: T,
+}
+
+fn main() {
+    println!("{}", first(&[3, 1, 2]));
+    println!("{}", first(&["cat", "dog"]));
+    let p = Pair { a: 1.5, b: 2.5 };
+    println!("{} {}", p.a, p.b);
+}
+```
+```out
+3
+cat
+1.5 2.5
+```
+You have already met generics: `Vec<T>`, `Option<T>`, `Result<T, E>`.
+
+:: quiz
+What does `T` mean in `Vec<T>`?
+[ ] The type "text" => It is not text, it is "some type".
+[x] The type of the elements, any type => Correct. `Vec<i32>` and `Vec<String>` are the same `Vec<T>`.
+[ ] The number of elements => The number is the length, and `T` is the type.
+
+:: deep Generics cost nothing
+When you call `first(&[3, 1, 2])` and `first(&["cat"])`, the compiler creates **two separate copies** of the function: one for `i32`, another for `&str`. This is called **monomorphization**.
+
+That is why generic code runs as fast as if you had written two functions by hand. The price: the program builds a bit longer, and the file is a bit bigger.
+
+:: recap
+- `<T>` is a type parameter: "any type".
+- It works for functions, structs, enums.
+- `Vec<T>` and `Option<T>` are generics too.
+
+## LESSON m12-2 | Traits are skills of a type | 7
+:: goals
+- What a trait is
+- How to implement a trait for your own type
+
+:: text A trait is a skill certificate
+A **trait** describes a **skill**: which methods a type must have.
+
+```rust
+trait Speak {
+    fn speak(&self) -> String;
+}
+```
+> Analogy: a driving license. It does not matter who you are — if you have a license, you can drive. The trait `Speak` means "can speak".
+
+:: code
+```rust
+trait Speak {
+    fn speak(&self) -> String;
+
+    fn greet(&self) -> String {
+        format!("I say: {}", self.speak())
+    }
+}
+
+struct Dog;
+struct Cat;
+
+impl Speak for Dog {
+    fn speak(&self) -> String {
+        "Woof".to_string()
+    }
+}
+
+impl Speak for Cat {
+    fn speak(&self) -> String {
+        "Meow".to_string()
+    }
+}
+
+fn main() {
+    println!("{}", Dog.greet());
+    println!("{}", Cat.greet());
+}
+```
+```out
+I say: Woof
+I say: Meow
+```
+`greet` is a **default** method: it is written right in the trait. The types only need to implement `speak`.
+
+:: fill
+Complete the trait implementation for the type `Robot`.
+```rust
+___ Speak ___ Robot {
+    fn speak(&self) -> String {
+        "Beep".to_string()
+    }
+}
+```
+= impl
+= for
+explain: The pattern: `impl Trait for Type { ... }`.
+
+:: deep Whose trait and whose type
+There is a rule about **what** you may implement a trait for. An implementation `impl Trait for Type` is allowed if either the **trait** or the **type** is yours:
+- your trait for your type — allowed;
+- your trait for someone else's type (for example `impl Speak for i32`) — allowed;
+- someone else's trait for your type (for example `impl Display for Dog`) — allowed;
+- someone else's trait for someone else's type (`impl Display for Vec<i32>`) — **not allowed**.
+
+This rule is called the **orphan rule**. It prevents two libraries from writing two different implementations of the same thing.
+
+:: recap
+- `trait Name { fn method(&self); }` describes a skill.
+- `impl Trait for Type { ... }` teaches a type.
+- A trait can have default methods.
+
+## LESSON m12-3 | A trait as a requirement | 7
+:: goals
+- Require a skill from `T`: `T: Trait`
+- The short form `impl Trait`
+
+:: text Not any type, but a skilled one
+A generic function often needs `T` to be **able** to do something. For example, to be compared.
+
+```rust
+fn largest<T: PartialOrd>(list: &[T]) -> &T { ... }
+```
+`T: PartialOrd` means "any T that can be compared with `<` and `>`". This is called a **trait bound**.
+
+:: code
+```rust
+fn largest<T: PartialOrd>(list: &[T]) -> &T {
+    let mut best = &list[0];
+    for item in list {
+        if item > best {
+            best = item;
+        }
+    }
+    best
+}
+
+fn main() {
+    println!("{}", largest(&[3, 9, 4]));
+    println!("{}", largest(&['y', 'b', 'z']));
+}
+```
+```out
+9
+z
+```
+
+:: text impl Trait — shorter
+If a type is needed only once, there is a shortcut:
+
+```rust
+fn announce(x: &impl Speak) {
+    println!("{}", x.speak());
+}
+```
+This is the same as `fn announce<T: Speak>(x: &T)`.
+
+A long list of requirements is conveniently moved into `where`:
+
+```rust
+fn show<T>(x: T) where T: std::fmt::Debug + Clone { ... }
+```
+
+:: quiz
+What does `T: PartialOrd` mean?
+[ ] T is a number => Not necessarily a number. Letters and strings can also be compared.
+[x] T must be comparable => Correct. It is a requirement on the type.
+[ ] T can be copied => Copying is the trait `Copy` or `Clone`.
+
+:: task
+Write a function `print_all` that prints each element of a slice with `{:?}`. Any `T` that can do `Debug` fits.
+```rust
+use std::fmt::Debug;
+
+// write print_all
+
+fn main() {
+    print_all(&[1, 2]);
+    print_all(&["a", "b"]);
+}
+```
+```solution
+use std::fmt::Debug;
+
+fn print_all<T: Debug>(items: &[T]) {
+    for x in items {
+        println!("{:?}", x);
+    }
+}
+
+fn main() {
+    print_all(&[1, 2]);
+    print_all(&["a", "b"]);
+}
+```
+```expect
+1
+2
+"a"
+"b"
+```
+hint: The header: `fn print_all<T: Debug>(items: &[T])`
+hint: Inside, the loop `for x in items { println!("{:?}", x); }`
+
+:: deep impl Trait in the return type
+`impl Trait` can also be written in the result type. This way a function says: "I will return something that can do this. Which exact type is my business".
+
+```rust
+fn evens() -> impl Iterator<Item = u32> {
+    (0..10).filter(|n| n % 2 == 0)
+}
+
+fn main() {
+    for n in evens() {
+        print!("{n} ");
+    }
+    println!();
+}
+```
+```out
+0 2 4 6 8
+```
+The real type here is long and awkward. `impl Iterator` hides it. Iterators are in module 14.
+
+:: recap
+- `<T: Trait>` means T must be able to do this.
+- `impl Trait` is the short form.
+- `where` is for long lists of requirements.
+
+## LESSON m12-4 | Useful traits of the standard library | 7
+:: goals
+- Display: printing with `{}`
+- derive: traits in one line
+- From/Into: type conversions
+
+:: text derive — traits for free
+The compiler can write many traits by itself:
+
+```rust
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Point { x: i32, y: i32 }
+```
+- `Debug` — printing with `{:?}`;
+- `Clone` — the method `.clone()`;
+- `PartialEq` — comparing with `==`;
+- `Default` — a "default" value (zeros).
+
+:: code
+`Display` — printing with `{}` — is written by hand. You decide how the type looks.
+```rust
+use std::fmt;
+
+struct Money {
+    dollars: u32,
+    cents: u32,
+}
+
+impl fmt::Display for Money {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "${}.{:02}", self.dollars, self.cents)
+    }
+}
+
+fn main() {
+    let price = Money { dollars: 99, cents: 5 };
+    println!("Price: {price}");
+}
+```
+```out
+Price: $99.05
+```
+`{:02}` means "at least two digits, with zeros on the left".
+
+:: text From and Into — conversions
+The trait `From` describes how to make one type from another.
+
+```rust
+let s = String::from("text");    // String from &str
+let n: i64 = i64::from(5i32);    // i64 from i32
+let s2: String = "more".into();  // into is the same From, from the other side
+```
+If you implemented `From<A> for B`, then `into()` appears on `A` automatically.
+
+:: text dyn Trait — different types in one list
+You can put **different** types into one vector if they share a trait:
+
+```rust
+let animals: Vec<Box<dyn Speak>> = vec![Box::new(Dog), Box::new(Cat)];
+for a in &animals {
+    println!("{}", a.speak());
+}
+```
+`dyn` means "some type with this skill". `Box` is explained in the module about smart pointers.
+
+:: quiz
+Which trait is needed to print a type with `{}`?
+[ ] `Debug` => `Debug` is for `{:?}`.
+[x] `Display` => Correct. It is implemented by hand.
+[ ] `Clone` => `Clone` is about copying, not printing.
+
+:: deep Your own operators: the Add trait
+The `+` sign in Rust is a call to a method of the trait `std::ops::Add`. If you implement it for your type, `+` works for it too:
+
+```rust
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy)]
+struct Vec2 {
+    x: i32,
+    y: i32,
+}
+
+impl Add for Vec2 {
+    type Output = Vec2;
+    fn add(self, other: Vec2) -> Vec2 {
+        Vec2 { x: self.x + other.x, y: self.y + other.y }
+    }
+}
+
+fn main() {
+    let a = Vec2 { x: 1, y: 2 };
+    let b = Vec2 { x: 10, y: 20 };
+    println!("{:?}", a + b);
+}
+```
+```out
+Vec2 { x: 11, y: 22 }
+```
+`-` (`Sub`), `*` (`Mul`), `==` (`PartialEq`), `<` (`PartialOrd`) work the same way.
+
+:: recap
+- `#[derive(Debug, Clone, PartialEq, Default)]` gives traits in one line.
+- `Display` is written by hand to print with `{}`.
+- `From`/`Into` convert types.
+- `Box<dyn Trait>` holds different types with a shared skill.
+
+## LESSON m12-p | Practice: generics and traits | 14 | practice
+:: goals
+- Write generic functions
+- Describe and implement traits
+- Implement `Display` and `From`
+
+:: task
+Write a generic function `swap_pair` that swaps two values of any type.
+```rust
+// write swap_pair
+
+fn main() {
+    println!("{:?}", swap_pair(1, 2));
+    println!("{:?}", swap_pair("a", "b"));
+}
+```
+```solution
+fn swap_pair<T>(a: T, b: T) -> (T, T) {
+    (b, a)
+}
+
+fn main() {
+    println!("{:?}", swap_pair(1, 2));
+    println!("{:?}", swap_pair("a", "b"));
+}
+```
+```expect
+(2, 1)
+("b", "a")
+```
+hint: The header: `fn swap_pair<T>(a: T, b: T) -> (T, T)`
+hint: The body: `(b, a)`
+
+:: task
+Describe a trait `Area` with a method `area(&self) -> f64` and implement it for `Square` and `Circle` (the area of a circle: `3.14 × r × r`).
+```rust
+struct Square(f64);
+struct Circle(f64);
+
+// the trait Area and two implementations
+
+fn main() {
+    println!("{}", Square(3.0).area());
+    println!("{}", Circle(2.0).area());
+}
+```
+```solution
+struct Square(f64);
+struct Circle(f64);
+
+trait Area {
+    fn area(&self) -> f64;
+}
+
+impl Area for Square {
+    fn area(&self) -> f64 {
+        self.0 * self.0
+    }
+}
+
+impl Area for Circle {
+    fn area(&self) -> f64 {
+        3.14 * self.0 * self.0
+    }
+}
+
+fn main() {
+    println!("{}", Square(3.0).area());
+    println!("{}", Circle(2.0).area());
+}
+```
+```expect
+9
+12.56
+```
+hint: `trait Area { fn area(&self) -> f64; }`
+hint: `impl Area for Square { fn area(&self) -> f64 { self.0 * self.0 } }` — and the same for `Circle`.
+
+:: task
+Implement `Display` for a point so that it prints as `(3, -1)`.
+```rust
+use std::fmt;
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+// impl fmt::Display for Point
+
+fn main() {
+    let p = Point { x: 3, y: -1 };
+    println!("Point {p}");
+}
+```
+```solution
+use std::fmt;
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+fn main() {
+    let p = Point { x: 3, y: -1 };
+    println!("Point {p}");
+}
+```
+```expect
+Point (3, -1)
+```
+hint: The method header: `fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result`
+hint: The body: `write!(f, "({}, {})", self.x, self.y)`
+
+:: task
+A trait with a default method. Implement `Greet` for `Robot` by giving only `name`. The method `hello` is already written in the trait.
+```rust
+trait Greet {
+    fn name(&self) -> String;
+    fn hello(&self) -> String {
+        format!("Hello, I am {}!", self.name())
+    }
+}
+
+struct Robot;
+
+fn main() {
+    println!("{}", Robot.hello());
+}
+```
+```solution
+trait Greet {
+    fn name(&self) -> String;
+    fn hello(&self) -> String {
+        format!("Hello, I am {}!", self.name())
+    }
+}
+
+struct Robot;
+
+impl Greet for Robot {
+    fn name(&self) -> String {
+        String::from("Robot")
+    }
+}
+
+fn main() {
+    println!("{}", Robot.hello());
+}
+```
+```expect
+Hello, I am Robot!
+```
+hint: `impl Greet for Robot { fn name(&self) -> String { ... } }`
+hint: Inside: `String::from("Robot")`
+
+:: task
+Implement `From<(i32, i32)> for Point` so that a point can be made from a tuple with `.into()`.
+```rust
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+// impl From<(i32, i32)> for Point
+
+fn main() {
+    let p: Point = (5, 7).into();
+    println!("{:?}", p);
+}
+```
+```solution
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl From<(i32, i32)> for Point {
+    fn from(t: (i32, i32)) -> Self {
+        Point { x: t.0, y: t.1 }
+    }
+}
+
+fn main() {
+    let p: Point = (5, 7).into();
+    println!("{:?}", p);
+}
+```
+```expect
+Point { x: 5, y: 7 }
+```
+hint: The method of the trait `From` is called `from`: `fn from(t: (i32, i32)) -> Self`
+hint: The body: `Point { x: t.0, y: t.1 }`. The method `into` appears automatically.
+
+:: recap
+- `<T>` is a function for any type, `<T: Trait>` for types with a skill.
+- `trait` + `impl Trait for Type` teach a type something new.
+- `Display` prints with `{}`, `From` converts types.

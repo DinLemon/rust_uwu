@@ -1,0 +1,415 @@
+# MODULE m11 | Modules and Cargo | How a real project is organized
+
+## LESSON m11-1 | Modules: mod, pub, use | 6
+:: goals
+- Organize code into modules
+- Decide what is visible from outside
+
+:: text A module is a folder for code
+A big program is split into **modules** (`mod`). Analogy: drawers in a cabinet — tools in one, documents in another.
+
+```rust
+mod math {
+    pub fn double(x: i32) -> i32 {
+        x * 2
+    }
+    fn secret() {} // visible only inside math
+}
+```
+
+:: text pub — open to the outside
+By default everything inside a module is **closed**. To use it from outside, mark it `pub` (public).
+
+You access it with `::` — `math::double(5)`.
+
+`use` creates a short name: after `use math::double;` you can just write `double(5)`.
+
+:: code
+```rust
+mod shop {
+    pub struct Item {
+        pub name: String,
+        price: u32,
+    }
+
+    impl Item {
+        pub fn new(name: &str, price: u32) -> Self {
+            Item { name: name.to_string(), price }
+        }
+        pub fn price_with_tax(&self) -> u32 {
+            self.price * 120 / 100
+        }
+    }
+}
+
+use shop::Item;
+
+fn main() {
+    let it = Item::new("tea", 100);
+    println!("{}: {} cents", it.name, it.price_with_tax());
+}
+```
+```out
+tea: 120 cents
+```
+The field `price` is closed: it cannot be read or broken from outside. Access is only through a method.
+
+:: quiz
+What happens if you call `math::secret()` from `main`?
+[ ] It works => `secret` has no `pub`, so it is closed.
+[x] An error: the function is private => Correct. Without `pub` it is only for the module itself.
+
+:: text Nested modules and paths
+Modules can be nested inside each other. A path is written with `::`:
+
+```rust
+mod game {
+    pub mod score {
+        pub fn reset() -> u32 { 0 }
+    }
+}
+
+let s = game::score::reset();
+```
+Inside modules two words are useful:
+- `self::` means "in this module";
+- `super::` means "in the module one level up".
+
+:: deep Visibility levels
+Besides plain `pub` there are more precise variants:
+- `pub(crate)` — visible in the whole crate, but not outside (not to other libraries);
+- `pub(super)` — visible only in the parent module;
+- no `pub` — only in this module and the modules nested inside it.
+
+Struct fields have their own visibility. A struct can be `pub` while its field is not. This is what happened with the field `price` in the example above.
+
+:: recap
+- `mod name { }` is a module.
+- Everything is closed until it is marked `pub`.
+- `use path::name;` creates a short name.
+
+## LESSON m11-2 | Installing Rust on your computer | 7
+:: goals
+- Install Rust with rustup
+- Choose an editor
+
+:: text Time for your own computer
+Until now we ran code in the browser. For real projects, Rust is installed on the computer.
+
+The official installer is called **rustup**. It installs the compiler `rustc`, the project manager `cargo` and the documentation.
+
+:: text Windows
+1. Open [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install).
+2. Download `rustup-init.exe` and run it.
+3. It offers to install Visual Studio Build Tools — agree. They are needed to build programs.
+4. Press Enter for the default settings.
+
+> Installation takes 5–15 minutes. A good moment for a break.
+
+:: text macOS and Linux
+Open a terminal and paste one command:
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+On Linux you also need a C compiler: the package `build-essential` (Ubuntu) or a similar one.
+
+:: text Check that everything works
+Open a **new** terminal window and type:
+
+```sh
+rustc --version
+cargo --version
+```
+Version numbers should appear. For example, `rustc 1.99.1`. New versions come out every 6 weeks. To update: `rustup update`.
+
+:: text An editor
+- **VS Code** + the **rust-analyzer** extension. Free. Highlighting, hints, errors right in the code.
+- **RustRover** by JetBrains. Free for non-commercial use.
+
+> rust-analyzer shows the types of variables in gray right in the code. For a beginner this helps a lot.
+
+:: quiz
+What is the official Rust installer called?
+[x] rustup => Correct. It installs and updates the whole toolset.
+[ ] cargo => `cargo` is installed together with Rust. It is the project manager.
+[ ] npm => That is the JavaScript package manager.
+
+:: recap
+- Install Rust with rustup from rust-lang.org.
+- Check: `rustc --version`; update: `rustup update`.
+- Editor: VS Code + rust-analyzer, or RustRover.
+
+## LESSON m11-3 | Cargo: your first project | 7
+:: goals
+- Create a project with `cargo new`
+- Build and run it
+
+:: text Cargo is the project manager
+**Cargo** creates projects, builds them, runs them, downloads libraries and runs tests. Almost everything is done through it.
+
+:: text A new project
+```sh
+cargo new hello
+cd hello
+cargo run
+```
+You will see `Hello, world!`. Cargo already wrote the program for you.
+
+:: text What is inside
+```sh
+hello/
+├── Cargo.toml     ← the project description
+└── src/
+    └── main.rs    ← your code
+```
+`Cargo.toml` looks like this:
+
+```sh
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+```
+`edition = "2024"` is the edition of the language. We use 2024 in the whole course.
+
+:: text The main commands
+- `cargo run` — build and run.
+- `cargo check` — only check for errors. Very fast.
+- `cargo build --release` — build the fast version for users.
+- `cargo test` — run the tests.
+- `cargo fmt` — format the code neatly.
+- `cargo clippy` — hints on how to write better code.
+
+:: quiz
+Which command shows compile errors the fastest, without running anything?
+[ ] `cargo run` => It also runs the program. Slower.
+[x] `cargo check` => Correct. Only checking, without building the program.
+[ ] `cargo build --release` => This is the longest build: with optimization.
+
+:: text Debug and release
+Cargo builds a program in two modes:
+- **debug** (`cargo run`, `cargo build`) — builds fast, runs slower, checks for number overflow;
+- **release** (`cargo run --release`) — builds longer, runs many times faster.
+
+The finished program is in the folder `target/debug` or `target/release`.
+
+:: deep Cargo.lock and versions
+Next to `Cargo.toml` a file `Cargo.lock` appears. It records the **exact** versions of all libraries the project was built with.
+
+Library versions follow the **SemVer** rule: `MAJOR.MINOR.PATCH`, for example `1.4.2`.
+- Patch (`1.4.3`) — fixes, nothing breaks.
+- Minor (`1.5.0`) — new features, old code still works.
+- Major (`2.0.0`) — there may be incompatible changes.
+
+The entry `rand = "0.9"` in `Cargo.toml` means "any version compatible with 0.9". `cargo update` updates versions within this rule.
+
+:: recap
+- `cargo new name` creates a new project.
+- The code is in `src/main.rs`, the settings in `Cargo.toml`.
+- `run`, `check`, `build --release`, `test`, `fmt`, `clippy`.
+
+## LESSON m11-4 | Crates and libraries | 5
+:: goals
+- What a crate is
+- How to add someone else's library
+
+:: text A crate is a unit of code
+A **crate** is what gets built in one go: a program or a library.
+
+Thousands of ready-made libraries are on the site [crates.io](https://crates.io). You do not have to write everything yourself.
+
+:: text Adding a library
+For example, the random numbers library `rand`. In the project folder:
+
+```sh
+cargo add rand
+```
+Cargo adds it to `Cargo.toml` and downloads it during the build. Then in the code:
+
+```sh
+use rand::Rng;
+let n = rand::rng().random_range(1..=6);
+```
+!> Rust Playground knows only the most popular libraries. That is why the tasks of this course use only the standard library `std`.
+
+:: text Modules in separate files
+In a real project a module often lives in its own file. If you write `mod shop;` (with a semicolon) in `main.rs`, Cargo takes the code from `src/shop.rs`.
+
+:: quiz
+Where do you look for ready-made Rust libraries?
+[x] crates.io => Correct. It is the official crate registry.
+[ ] In Rust Playground => Playground only runs code. Libraries live on crates.io.
+[ ] In Cargo.toml => `Cargo.toml` only lists them; they live on crates.io.
+
+:: recap
+- A crate is a program or a library.
+- Libraries are on crates.io; add one with `cargo add name`.
+- `mod shop;` takes code from the file `src/shop.rs`.
+
+## LESSON m11-p | Practice: modules | 10 | practice
+:: goals
+- Organize code into modules
+- Fix visibility errors
+
+:: task
+Create a module `math` with a public function `square`. In `main`, call it through the path.
+```rust
+// the module math goes here
+
+fn main() {
+    println!("{}", math::square(9));
+}
+```
+```solution
+mod math {
+    pub fn square(x: i32) -> i32 {
+        x * x
+    }
+}
+
+fn main() {
+    println!("{}", math::square(9));
+}
+```
+```expect
+81
+```
+hint: `mod math { pub fn square(x: i32) -> i32 { x * x } }`
+hint: Without `pub` the function is not visible from `main`.
+
+:: task
+Fix the visibility error. Do not change `main`.
+```rust
+mod greetings {
+    fn hello() -> &'static str {
+        "Hello"
+    }
+}
+
+fn main() {
+    println!("{}", greetings::hello());
+}
+```
+```solution
+mod greetings {
+    pub fn hello() -> &'static str {
+        "Hello"
+    }
+}
+
+fn main() {
+    println!("{}", greetings::hello());
+}
+```
+```expect
+Hello
+```
+hint: The compiler says: function `hello` is private.
+hint: Add `pub` before `fn hello`.
+
+:: task
+A nested module. Add a `use` so that `main` can simply write `to_km(...)`.
+```rust
+mod units {
+    pub mod length {
+        pub fn to_km(m: f64) -> f64 {
+            m / 1000.0
+        }
+    }
+}
+
+fn main() {
+    println!("{}", to_km(2500.0));
+}
+```
+```solution
+mod units {
+    pub mod length {
+        pub fn to_km(m: f64) -> f64 {
+            m / 1000.0
+        }
+    }
+}
+
+use units::length::to_km;
+
+fn main() {
+    println!("{}", to_km(2500.0));
+}
+```
+```expect
+2.5
+```
+hint: The path to the function: `units::length::to_km`.
+hint: The line before `main`: `use units::length::to_km;`
+
+:: task
+A module `counter` with a closed field. Add a method `get` so that `main` can read the value but cannot break it.
+```rust
+mod counter {
+    pub struct Counter {
+        value: u32,
+    }
+
+    impl Counter {
+        pub fn new() -> Self {
+            Counter { value: 0 }
+        }
+        pub fn inc(&mut self) {
+            self.value += 1;
+        }
+    }
+}
+
+fn main() {
+    let mut c = counter::Counter::new();
+    c.inc();
+    c.inc();
+    println!("{}", c.get());
+}
+```
+```solution
+mod counter {
+    pub struct Counter {
+        value: u32,
+    }
+
+    impl Counter {
+        pub fn new() -> Self {
+            Counter { value: 0 }
+        }
+        pub fn inc(&mut self) {
+            self.value += 1;
+        }
+        pub fn get(&self) -> u32 {
+            self.value
+        }
+    }
+}
+
+fn main() {
+    let mut c = counter::Counter::new();
+    c.inc();
+    c.inc();
+    println!("{}", c.get());
+}
+```
+```expect
+2
+```
+hint: The method only reads — `&self`. And it must be `pub`.
+hint: `pub fn get(&self) -> u32 { self.value }`
+
+:: quiz
+Which command builds the fast version of a program for users?
+[ ] `cargo run` => This is debug mode: it builds fast but runs slower.
+[ ] `cargo check` => `check` builds nothing; it only checks.
+[x] `cargo build --release` => Correct. The finished file appears in `target/release`.
+
+:: recap
+- Everything in a module is closed until it is marked `pub`.
+- `use path;` shortens long paths.
+- Closed fields + public methods protect data from being broken.

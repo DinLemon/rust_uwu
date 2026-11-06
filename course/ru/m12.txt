@@ -48,6 +48,11 @@ fn main() {
 [x] Тип элементов, любой => Верно. `Vec<i32>`, `Vec<String>` — это один и тот же `Vec<T>`.
 [ ] Количество элементов => Количество — это длина, а `T` — тип.
 
+:: deep Обобщения ничего не стоят
+Когда ты вызываешь `first(&[3, 1, 2])` и `first(&["кот"])`, компилятор создаёт **две отдельные копии** функции: одну для `i32`, другую для `&str`. Это называется **мономорфизация**.
+
+Поэтому обобщённый код работает так же быстро, как если бы ты написал две функции руками. Цена — программа собирается чуть дольше, а файл получается чуть больше.
+
 :: recap
 - `<T>` — параметр типа, «любой тип».
 - Работает для функций, структур, enum.
@@ -116,6 +121,15 @@ ___ Speak ___ Robot {
 = impl
 = for
 explain: Шаблон: `impl Трейт for Тип { ... }`.
+
+:: deep Чей трейт и чей тип
+Есть правило, **для чего** можно реализовать трейт. Реализация `impl Трейт for Тип` разрешена, если твой **трейт** или твой **тип**:
+- свой трейт для своего типа — можно;
+- свой трейт для чужого типа (например `impl Speak for i32`) — можно;
+- чужой трейт для своего типа (например `impl Display for Dog`) — можно;
+- чужой трейт для чужого типа (`impl Display for Vec<i32>`) — **нельзя**.
+
+Это правило называют **orphan rule** («правило сироты»). Оно не даёт двум библиотекам написать две разные реализации одного и того же.
 
 :: recap
 - `trait Имя { fn метод(&self); }` — описание умения.
@@ -214,6 +228,26 @@ fn main() {
 hint: Заголовок: `fn print_all<T: Debug>(items: &[T])`
 hint: Внутри цикл `for x in items { println!("{:?}", x); }`
 
+:: deep impl Трейт в результате
+`impl Трейт` можно писать и в типе результата. Так функция говорит: «верну что-то, что умеет это. Какой именно тип — моё дело».
+
+```rust
+fn evens() -> impl Iterator<Item = u32> {
+    (0..10).filter(|n| n % 2 == 0)
+}
+
+fn main() {
+    for n in evens() {
+        print!("{n} ");
+    }
+    println!();
+}
+```
+```out
+0 2 4 6 8 
+```
+Настоящий тип здесь длинный и неудобный. `impl Iterator` его прячет. Итераторы — в модуле 14.
+
 :: recap
 - `<T: Трейт>` — T должен уметь это.
 - `impl Трейт` — короткая запись.
@@ -290,8 +324,245 @@ for a in &animals {
 [x] `Display` => Верно. Его реализуют вручную.
 [ ] `Clone` => `Clone` про копирование, а не про печать.
 
+:: deep Свои операторы: трейт Add
+Знак `+` в Rust — это вызов метода трейта `std::ops::Add`. Если реализовать его для своего типа, `+` заработает и для него:
+
+```rust
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy)]
+struct Vec2 {
+    x: i32,
+    y: i32,
+}
+
+impl Add for Vec2 {
+    type Output = Vec2;
+    fn add(self, other: Vec2) -> Vec2 {
+        Vec2 { x: self.x + other.x, y: self.y + other.y }
+    }
+}
+
+fn main() {
+    let a = Vec2 { x: 1, y: 2 };
+    let b = Vec2 { x: 10, y: 20 };
+    println!("{:?}", a + b);
+}
+```
+```out
+Vec2 { x: 11, y: 22 }
+```
+Так же устроены `-` (`Sub`), `*` (`Mul`), `==` (`PartialEq`), `<` (`PartialOrd`).
+
 :: recap
 - `#[derive(Debug, Clone, PartialEq, Default)]` — трейты одной строкой.
 - `Display` пишут вручную, чтобы печатать через `{}`.
 - `From`/`Into` — превращения типов.
 - `Box<dyn Трейт>` — разные типы с общим умением.
+
+## LESSON m12-p | Практика: обобщения и трейты | 14 | practice
+:: goals
+- Писать обобщённые функции
+- Описывать и реализовывать трейты
+- Реализовывать `Display` и `From`
+
+:: task
+Напиши обобщённую функцию `swap_pair`, которая меняет местами два значения любого типа.
+```rust
+// напиши swap_pair
+
+fn main() {
+    println!("{:?}", swap_pair(1, 2));
+    println!("{:?}", swap_pair("а", "б"));
+}
+```
+```solution
+fn swap_pair<T>(a: T, b: T) -> (T, T) {
+    (b, a)
+}
+
+fn main() {
+    println!("{:?}", swap_pair(1, 2));
+    println!("{:?}", swap_pair("а", "б"));
+}
+```
+```expect
+(2, 1)
+("б", "а")
+```
+hint: Заголовок: `fn swap_pair<T>(a: T, b: T) -> (T, T)`
+hint: Тело: `(b, a)`
+
+:: task
+Опиши трейт `Area` с методом `area(&self) -> f64` и реализуй его для `Square` и `Circle` (площадь круга: `3.14 × r × r`).
+```rust
+struct Square(f64);
+struct Circle(f64);
+
+// трейт Area и две реализации
+
+fn main() {
+    println!("{}", Square(3.0).area());
+    println!("{}", Circle(2.0).area());
+}
+```
+```solution
+struct Square(f64);
+struct Circle(f64);
+
+trait Area {
+    fn area(&self) -> f64;
+}
+
+impl Area for Square {
+    fn area(&self) -> f64 {
+        self.0 * self.0
+    }
+}
+
+impl Area for Circle {
+    fn area(&self) -> f64 {
+        3.14 * self.0 * self.0
+    }
+}
+
+fn main() {
+    println!("{}", Square(3.0).area());
+    println!("{}", Circle(2.0).area());
+}
+```
+```expect
+9
+12.56
+```
+hint: `trait Area { fn area(&self) -> f64; }`
+hint: `impl Area for Square { fn area(&self) -> f64 { self.0 * self.0 } }` — и так же для `Circle`.
+
+:: task
+Реализуй `Display` для точки, чтобы она печаталась как `(3, -1)`.
+```rust
+use std::fmt;
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+// impl fmt::Display for Point
+
+fn main() {
+    let p = Point { x: 3, y: -1 };
+    println!("Точка {p}");
+}
+```
+```solution
+use std::fmt;
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+fn main() {
+    let p = Point { x: 3, y: -1 };
+    println!("Точка {p}");
+}
+```
+```expect
+Точка (3, -1)
+```
+hint: Заголовок метода: `fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result`
+hint: Тело: `write!(f, "({}, {})", self.x, self.y)`
+
+:: task
+Трейт с методом по умолчанию. Реализуй `Greet` для `Robot`, задав только `name`. Метод `hello` уже написан в трейте.
+```rust
+trait Greet {
+    fn name(&self) -> String;
+    fn hello(&self) -> String {
+        format!("Привет, я {}!", self.name())
+    }
+}
+
+struct Robot;
+
+fn main() {
+    println!("{}", Robot.hello());
+}
+```
+```solution
+trait Greet {
+    fn name(&self) -> String;
+    fn hello(&self) -> String {
+        format!("Привет, я {}!", self.name())
+    }
+}
+
+struct Robot;
+
+impl Greet for Robot {
+    fn name(&self) -> String {
+        String::from("Робот")
+    }
+}
+
+fn main() {
+    println!("{}", Robot.hello());
+}
+```
+```expect
+Привет, я Робот!
+```
+hint: `impl Greet for Robot { fn name(&self) -> String { ... } }`
+hint: Внутри: `String::from("Робот")`
+
+:: task
+Реализуй `From<(i32, i32)> for Point`, чтобы точку можно было получить из кортежа через `.into()`.
+```rust
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+// impl From<(i32, i32)> for Point
+
+fn main() {
+    let p: Point = (5, 7).into();
+    println!("{:?}", p);
+}
+```
+```solution
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl From<(i32, i32)> for Point {
+    fn from(t: (i32, i32)) -> Self {
+        Point { x: t.0, y: t.1 }
+    }
+}
+
+fn main() {
+    let p: Point = (5, 7).into();
+    println!("{:?}", p);
+}
+```
+```expect
+Point { x: 5, y: 7 }
+```
+hint: Метод трейта `From` называется `from`: `fn from(t: (i32, i32)) -> Self`
+hint: Тело: `Point { x: t.0, y: t.1 }`. Метод `into` появится сам.
+
+:: recap
+- `<T>` — функция для любого типа, `<T: Трейт>` — для умеющих.
+- `trait` + `impl Трейт for Тип` — научить тип новому.
+- `Display` — печать через `{}`, `From` — превращение типов.

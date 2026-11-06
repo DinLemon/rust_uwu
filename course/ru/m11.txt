@@ -59,6 +59,30 @@ fn main() {
 [ ] Сработает => `secret` без `pub`, значит она закрыта.
 [x] Ошибка: функция приватная => Верно. Без `pub` — только для своих.
 
+:: text Вложенные модули и пути
+Модули можно вкладывать друг в друга. Путь пишут через `::`:
+
+```rust
+mod game {
+    pub mod score {
+        pub fn reset() -> u32 { 0 }
+    }
+}
+
+let s = game::score::reset();
+```
+Внутри модулей полезны два слова:
+- `self::` — «в этом модуле»;
+- `super::` — «в модуле уровнем выше».
+
+:: deep Уровни видимости
+Кроме простого `pub` есть более точные варианты:
+- `pub(crate)` — видно во всём крейте, но не снаружи (не другим библиотекам);
+- `pub(super)` — видно только в родительском модуле;
+- без `pub` — только в этом модуле и во вложенных в него.
+
+У полей структуры видимость задают по отдельности. Структура может быть `pub`, а её поле — нет. Так поступили с полем `price` в примере выше.
+
 :: recap
 - `mod имя { }` — модуль.
 - Всё закрыто, пока не помечено `pub`.
@@ -165,6 +189,23 @@ edition = "2024"
 [x] `cargo check` => Верно. Только проверка, без сборки программы.
 [ ] `cargo build --release` => Это самая долгая сборка: с оптимизацией.
 
+:: text Debug и release
+Cargo собирает программу в двух режимах:
+- **debug** (`cargo run`, `cargo build`) — собирается быстро, работает медленнее, проверяет переполнение чисел;
+- **release** (`cargo run --release`) — собирается дольше, работает в разы быстрее.
+
+Готовая программа лежит в папке `target/debug` или `target/release`.
+
+:: deep Cargo.lock и версии
+Рядом с `Cargo.toml` появляется файл `Cargo.lock`. В нём записаны **точные** версии всех библиотек, с которыми проект собрался.
+
+Версии библиотек пишут по правилу **SemVer**: `МАЖОР.МИНОР.ПАТЧ`, например `1.4.2`.
+- Патч (`1.4.3`) — исправления, ничего не ломают.
+- Минор (`1.5.0`) — новые возможности, старый код работает.
+- Мажор (`2.0.0`) — могут быть несовместимые изменения.
+
+Запись `rand = "0.9"` в `Cargo.toml` значит «любая совместимая с 0.9». `cargo update` обновит версии в пределах этого правила.
+
 :: recap
 - `cargo new имя` — новый проект.
 - Код в `src/main.rs`, настройки в `Cargo.toml`.
@@ -207,3 +248,168 @@ let n = rand::rng().random_range(1..=6);
 - Крейт — программа или библиотека.
 - Библиотеки — на crates.io, подключать: `cargo add имя`.
 - `mod shop;` берёт код из файла `src/shop.rs`.
+
+## LESSON m11-p | Практика: модули | 10 | practice
+:: goals
+- Раскладывать код по модулям
+- Чинить ошибки видимости
+
+:: task
+Создай модуль `math` с публичной функцией `square`. В `main` вызови её через путь.
+```rust
+// модуль math здесь
+
+fn main() {
+    println!("{}", math::square(9));
+}
+```
+```solution
+mod math {
+    pub fn square(x: i32) -> i32 {
+        x * x
+    }
+}
+
+fn main() {
+    println!("{}", math::square(9));
+}
+```
+```expect
+81
+```
+hint: `mod math { pub fn square(x: i32) -> i32 { x * x } }`
+hint: Без `pub` функция не будет видна из `main`.
+
+:: task
+Почини ошибку видимости. Не меняй `main`.
+```rust
+mod greetings {
+    fn hello() -> &'static str {
+        "Привет"
+    }
+}
+
+fn main() {
+    println!("{}", greetings::hello());
+}
+```
+```solution
+mod greetings {
+    pub fn hello() -> &'static str {
+        "Привет"
+    }
+}
+
+fn main() {
+    println!("{}", greetings::hello());
+}
+```
+```expect
+Привет
+```
+hint: Компилятор пишет: function `hello` is private — функция приватная.
+hint: Добавь `pub` перед `fn hello`.
+
+:: task
+Вложенный модуль. Добавь `use`, чтобы в `main` можно было писать просто `to_km(...)`.
+```rust
+mod units {
+    pub mod length {
+        pub fn to_km(m: f64) -> f64 {
+            m / 1000.0
+        }
+    }
+}
+
+fn main() {
+    println!("{}", to_km(2500.0));
+}
+```
+```solution
+mod units {
+    pub mod length {
+        pub fn to_km(m: f64) -> f64 {
+            m / 1000.0
+        }
+    }
+}
+
+use units::length::to_km;
+
+fn main() {
+    println!("{}", to_km(2500.0));
+}
+```
+```expect
+2.5
+```
+hint: Путь к функции: `units::length::to_km`.
+hint: Строка перед `main`: `use units::length::to_km;`
+
+:: task
+Модуль `counter` с закрытым полем. Допиши метод `get`, чтобы `main` мог прочитать значение, но не мог его испортить.
+```rust
+mod counter {
+    pub struct Counter {
+        value: u32,
+    }
+
+    impl Counter {
+        pub fn new() -> Self {
+            Counter { value: 0 }
+        }
+        pub fn inc(&mut self) {
+            self.value += 1;
+        }
+    }
+}
+
+fn main() {
+    let mut c = counter::Counter::new();
+    c.inc();
+    c.inc();
+    println!("{}", c.get());
+}
+```
+```solution
+mod counter {
+    pub struct Counter {
+        value: u32,
+    }
+
+    impl Counter {
+        pub fn new() -> Self {
+            Counter { value: 0 }
+        }
+        pub fn inc(&mut self) {
+            self.value += 1;
+        }
+        pub fn get(&self) -> u32 {
+            self.value
+        }
+    }
+}
+
+fn main() {
+    let mut c = counter::Counter::new();
+    c.inc();
+    c.inc();
+    println!("{}", c.get());
+}
+```
+```expect
+2
+```
+hint: Метод только читает — `&self`. И он должен быть `pub`.
+hint: `pub fn get(&self) -> u32 { self.value }`
+
+:: quiz
+Какая команда соберёт быструю версию программы для пользователей?
+[ ] `cargo run` => Это режим debug: собирается быстро, но работает медленнее.
+[ ] `cargo check` => `check` ничего не собирает, только проверяет.
+[x] `cargo build --release` => Верно. Готовый файл появится в `target/release`.
+
+:: recap
+- Всё в модуле закрыто, пока не помечено `pub`.
+- `use путь;` сокращает длинные пути.
+- Закрытые поля + публичные методы защищают данные от порчи.
