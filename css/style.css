@@ -325,9 +325,39 @@ pre.code code { background: none; padding: 0; font-size: inherit; }
 
 /* Глоссарий, шпаргалка, настройки */
 .search { width: 100%; font: inherit; padding: .6rem .9rem; border-radius: var(--radius); border: 2px solid var(--line); background: var(--surface); color: var(--text); margin-bottom: 1rem; }
-.gloss dt { font-weight: 700; margin-top: .9rem; }
-.gloss dt small { font-weight: 400; color: var(--muted); font-family: var(--mono); }
-.gloss dd { margin: .15rem 0 0; }
+.gloss-entry { border-bottom: 1px solid var(--line); }
+.gloss-entry summary { padding: .7rem 0; cursor: pointer; font-weight: 700; }
+.gloss-entry summary small { font-weight: 400; color: var(--muted); font-family: var(--mono); }
+.gloss-definition { display: grid; gap: .65rem 1rem; padding: .15rem 0 1rem; }
+.gloss-empty { text-align: center; }
+.gloss-empty .section-fox { margin: .4rem auto 0; }
+.section-fox { width: min(100%, 16rem); }
+.section-fox img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; }
+.cheat-recap-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin: 1.3rem 0 .5rem; }
+.cheat .cheat-recap-head h3 { margin: 0; }
+.cheat-reaction { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem; color: var(--muted); }
+.cheat-reaction:has(.section-fox:not([hidden])) { margin-bottom: .6rem; }
+@media (min-width: 600px) {
+  .gloss-definition { grid-template-columns: minmax(0, 1fr) 16rem; align-items: center; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .anim [data-fox-scene="book"] .ready { animation: fox-shelf .55s ease-out; }
+  .anim [data-fox-scene="search"] .ready { animation: fox-look .72s ease-in-out; }
+  .anim [data-fox-scene="copy"] .ready { animation: fox-note .52s ease-out; }
+}
+@keyframes fox-shelf {
+  from { opacity: 0; transform: translateX(13px) rotate(3deg); }
+  66% { transform: translateX(-3px) rotate(-1deg); }
+}
+@keyframes fox-look {
+  0% { opacity: 0; transform: translateY(-5px); }
+  42% { transform: translate(3px, 3px) rotate(2deg); }
+  76% { transform: translateX(-3px) rotate(-2deg); }
+}
+@keyframes fox-note {
+  from { opacity: 0; transform: translateY(9px) rotate(-3deg); }
+  65% { transform: translateY(-3px) rotate(1deg); }
+}
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 1rem; }
 .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 2px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .seg button { border: 0; background: transparent; color: var(--text); padding: .4rem .9rem; cursor: pointer; }
