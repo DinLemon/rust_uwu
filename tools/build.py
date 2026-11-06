@@ -12,6 +12,9 @@
   :: fill             — markdown, ```rust с ___, строки "= ответ | вариант" по одной на пропуск
   :: order            — markdown, ```rust с правильным порядком строк
   :: task             — markdown, ```rust заготовка, ```solution, ```expect, "hint: ..." (несколько)
+                        ```format — шаблон строк с {{text}} и {{int}} для свободных значений
+                        check: number — проверить одно число с необязательной подписью
+                        check: exact — сохранить буквальную проверку строк
   :: recap            — строки "- ..."
   Общие ключи: "explain: ...", "hint: ...", "tests: yes", "contains: строка"
 """
@@ -21,6 +24,25 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+FORMAT_FIELDS = {"{{text}}": r"\S[^\r\n]*", "{{int}}": r"[0-9]+"}
+NUMBER_RESULT = re.compile(r"(?:[^:\n0-9]+:[ \t]*)?[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+
+
+def format_pattern(template, where):
+    parts = re.split(r"(\{\{[^{}\r\n]+\}\})", template.strip())
+    fields = parts[1::2]
+    if not fields or any(field not in FORMAT_FIELDS for field in fields):
+        raise SystemExit(f"{where}: шаблону format нужны поля {{{{text}}}} или {{{{int}}}}")
+    literals = parts[::2]
+    if any("{{" in part or "}}" in part for part in literals):
+        raise SystemExit(f"{where}: незакрытое поле format")
+    return "".join(
+        FORMAT_FIELDS[part] if i % 2 else
+        r"\n".join(re.escape(line).replace(r"\ ", " ").replace(": ", r"[ \t]*:[ \t]*") for line in part.split("\n"))
+        for i, part in enumerate(parts)
+    )
 
 
 def parse_card(kind, title, lines, where):
@@ -75,6 +97,8 @@ def parse_card(kind, title, lines, where):
             card["fails"] = line[7:].strip() in ("yes", "true", "да")
         elif line.startswith("contains: "):
             card.setdefault("mustContain", []).append(line[10:].strip())
+        elif kind == "task" and line.startswith("check: "):
+            card["outputCheck"] = line[7:].strip()
         elif kind == "code" and seen_fence:
             after.append(line)
         else:
@@ -91,7 +115,7 @@ def parse_card(kind, title, lines, where):
             raise SystemExit(f"{where}: в карточке {kind} должен быть ровно один блок ```rust, а их {n_rust}")
         # блоки с другими тегами (text, sh) внутри описания задачи — часть markdown
         for t, body in fences:
-            if t not in ("rust", "out", "solution", "expect"):
+            if t not in ("rust", "out", "solution", "expect", "format"):
                 md.extend(["```" + t, body, "```"])
     for tag, body in fences:
         fd.setdefault(tag, body)
@@ -137,6 +161,19 @@ def parse_card(kind, title, lines, where):
             card["solution"] = fd["solution"]
         if "expect" in fd:
             card["expect"] = fd["expect"]
+        mode = card.get("outputCheck")
+        if mode is not None:
+            if mode not in ("number", "exact") or "expect" not in fd or "format" in fd:
+                raise SystemExit(f"{where}: check должен быть number или exact и требует expect без format")
+            if mode == "number" and not NUMBER_RESULT.fullmatch(fd["expect"].strip()):
+                raise SystemExit(f"{where}: check: number требует одного числа в expect")
+        if "format" in fd:
+            pattern = format_pattern(fd["format"], where)
+            example = "\n".join(line.strip() for line in fd.get("expect", "").strip().split("\n"))
+            if "expect" not in fd or not re.fullmatch(pattern, example):
+                raise SystemExit(f"{where}: пример expect должен соответствовать шаблону format")
+            card["expectFormat"] = fd["format"]
+            card["expectPattern"] = pattern
         if hints:
             card["hints"] = hints
         if "solution" not in fd:
@@ -220,7 +257,7 @@ def shape(modules):
     for m in modules:
         for l in m["lessons"]:
             out[l["id"]] = (m["id"], bool(l.get("practice")), tuple(
-                (c["t"], bool(c.get("tests")), len(c.get("options", [])), c.get("answer"), len(c.get("answers", [])), len(c.get("lines", [])))
+                (c["t"], bool(c.get("tests")), len(c.get("options", [])), c.get("answer"), len(c.get("answers", [])), len(c.get("lines", [])), c.get("outputCheck"), bool(c.get("expectFormat")))
                 for c in l["cards"]))
     return out
 
@@ -260,12 +297,12 @@ def main():
         print(f"ВНИМАНИЕ: {len(missing_en)} уроков без перевода, вставлены по-русски")
     out = ROOT / "content" / "course-data.js"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(
+    content = (
         "// Сгенерировано tools/build.py из course/<язык>/*.txt. Не редактируй вручную.\n"
         f"window.COURSES = {json.dumps({k: {'modules': v} for k, v in courses.items()}, ensure_ascii=False, indent=0)};\n"
-        f"window.GLOSSARIES = {json.dumps(glossaries, ensure_ascii=False, indent=0)};\n",
-        encoding="utf-8",
+        f"window.GLOSSARIES = {json.dumps(glossaries, ensure_ascii=False, indent=0)};\n"
     )
+    out.write_bytes(content.encode("utf-8"))
     for lang, modules in courses.items():
         n_l = sum(len(m["lessons"]) for m in modules)
         n_c = sum(len(l["cards"]) for m in modules for l in m["lessons"])
