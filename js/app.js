@@ -51,6 +51,7 @@
   }
   const doneCount = () => lessons.filter((l) => S.done[l.id]).length;
   const nextLesson = () => lessons.find((l) => !S.done[l.id]);
+  const courseComplete = () => lessons.length > 0 && !nextLesson();
 
   function applySettings() {
     const r = document.documentElement;
@@ -192,7 +193,7 @@
             <h1>${T.heroTitle}</h1>
             <p>${T.heroText}</p>
             <div class="hero-actions">
-              ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
+              ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : T.diploma && courseComplete() ? `<a class="btn" href="#/diploma">${T.diploma.open}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
               ${doneCount() > 0 ? `<a class="btn btn-ghost" href="#/review">${T.reviewBtn}</a>` : ""}
             </div>
             ${saved && S.step[saved.id] > 0 && T.mascotBookmark ? `<div class="resume-note">${mascotBubble("bookmark", esc(T.mascotBookmark))}</div>` : ""}
@@ -342,10 +343,11 @@
     const first = !S.done[lesson.id];
     S.done[lesson.id] = true; S.step[lesson.id] = 0; save(true);
     const recap = lesson.cards.filter((c) => c.t === "recap").flatMap((c) => c.items);
-    const nl = lessons[lesson.idx + 1];
+    const complete = courseComplete();
+    const nl = lessons[lesson.idx + 1] || nextLesson();
     const modDone = lesson.module.lessons.every((l) => S.done[l.id]);
     if (modDone && first) freshStamps.add(lesson.mi);
-    const breakTip = (doneCount() % 3 === 0) ? `<div class="break-box">${mascotBubble("rest", T.breakTip)}</div>` : "";
+    const breakTip = (!complete && doneCount() % 3 === 0) ? `<div class="break-box">${mascotBubble("rest", T.breakTip)}</div>` : "";
     app.innerHTML = `<div class="wrap"><article class="card finish${first ? " finish-new" : ""}">
       <div class="finish-head">
         <img class="finish-mark" src="assets/crab.svg" width="54" height="54" alt="">
@@ -354,10 +356,14 @@
           <p class="muted">${esc(T.finishSub(lesson.title, doneCount(), lessons.length))}</p>
         </div>
       </div>
+      ${complete && T.diploma ? `<div class="diploma-award">
+        <img src="assets/fox-diploma.webp" alt="">
+        <div><p>${T.diploma.award}</p><a class="btn" href="#/diploma">${T.diploma.open}</a></div>
+      </div>` : ""}
       ${recap.length ? `<h3>${T.remember}</h3><ul class="tldr">${recap.map((r) => `<li>${inline(r)}</li>`).join("")}</ul>` : ""}
       ${breakTip}
       <div class="row">
-        ${nl ? `<a class="btn" href="#/l/${nl.id}/0">${esc(T.nextLesson(nl.title))}</a>` : `<a class="btn" href="#/review">${T.courseDone}</a>`}
+        ${nl && !complete ? `<a class="btn" href="#/l/${nl.id}/0">${esc(T.nextLesson(nl.title))}</a>` : `<a class="btn btn-quiet" href="#/review">${T.courseDone}</a>`}
         <a class="btn btn-quiet" href="#/">${T.toMapShort}</a>
       </div></article></div>`;
     L = null;
@@ -947,6 +953,61 @@
     };
   }
 
+  // ---------- Диплом ----------
+  function viewDiploma() {
+    const d = T.diploma;
+    setNav("");
+    document.title = d.title + T.titleSuffix;
+    if (!courseComplete()) {
+      app.innerHTML = `<div class="wrap"><h1>${d.title}</h1><p>${d.locked}</p>
+        <p class="muted">${T.statLessons(doneCount(), lessons.length)}</p><a class="btn" href="#/">${T.toMap}</a></div>`;
+      return;
+    }
+
+    app.innerHTML = `<div class="wrap-wide diploma-page">
+      <div class="diploma-tools">
+        <a href="#/">${T.toMap}</a>
+        <div class="diploma-actions">
+          <label>${d.nameLabel}<input type="text" autocomplete="name" maxlength="80" id="diploma-name"></label>
+          <button type="button" class="btn" id="print-diploma" disabled>${d.print}</button>
+        </div>
+        <p class="small muted" role="status">${d.printTip}</p>
+      </div>
+      <article class="course-diploma" aria-labelledby="diploma-title">
+        <p class="diploma-brand">Rust UwU</p>
+        <h1 id="diploma-title">${d.title}</h1>
+        <p class="diploma-subtitle">${d.subtitle}</p>
+        <p class="diploma-recipient"></p>
+        <p class="diploma-scope">${d.scope(COURSE.modules.length, lessons.length)}</p>
+        <img class="diploma-art" src="assets/fox-diploma.webp" alt="${d.imageAlt}">
+        <p class="diploma-signature">${d.signature}</p>
+      </article>
+    </div>`;
+    const input = document.getElementById("diploma-name");
+    const print = document.getElementById("print-diploma");
+    const recipient = app.querySelector(".diploma-recipient");
+    const art = app.querySelector(".diploma-art");
+    const status = app.querySelector(".diploma-tools [role=status]");
+    input.value = typeof S.diplomaName === "string" ? S.diplomaName.slice(0, input.maxLength) : "";
+    const sync = () => {
+      const name = input.value.trim();
+      recipient.textContent = name || d.namePlaceholder;
+      print.disabled = !name || !art.complete || !art.naturalWidth;
+    };
+    const artError = () => { status.textContent = d.imageError; };
+    art.addEventListener("load", sync, { once: true });
+    art.addEventListener("error", artError, { once: true });
+    if (art.complete && !art.naturalWidth) artError();
+    input.addEventListener("input", () => {
+      S.diplomaName = input.value;
+      save(true);
+      sync();
+    });
+    print.addEventListener("click", () => window.print());
+    sync();
+    window.scrollTo(0, 0);
+  }
+
   // ---------- Роутер ----------
   function route() {
     const p = location.hash.replace(/^#\/?/, "").split("/");
@@ -958,6 +1019,7 @@
     else if (p[0] === "glossary") viewGlossary();
     else if (p[0] === "cheat") viewCheat();
     else if (p[0] === "settings") viewSettings();
+    else if (p[0] === "diploma" && T.diploma) viewDiploma();
     else viewHome();
   }
 
