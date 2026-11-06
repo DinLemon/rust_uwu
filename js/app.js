@@ -73,12 +73,53 @@
   }
   function h(html) { const d = document.createElement("div"); d.innerHTML = html; return d.firstElementChild; }
 
+  const foxHead = `<g class="fox-head" stroke="#713924" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <g class="fox-ear"><path d="M10 30 8 9q0-4 4-2l17 14Z" fill="#f99754"/><path d="m13 14 11 10-9 5Z" fill="#ffc2b2" stroke="none"/></g>
+    <g class="fox-ear"><path d="M38 21 54 7q4-2 4 2l-2 21Z" fill="#f99754"/><path d="m52 14-11 10 9 5Z" fill="#ffc2b2" stroke="none"/></g>
+    <path d="M12 31q6-13 21-13t21 13l9 8-8 3 4 4-10 3q-7 8-16 8t-16-8L7 46l4-4-8-3Z" fill="#f99754"/>
+    <path d="M8 40q10-5 25 5 15-10 25-5l-6 4 4 2-9 2q-7 7-14 7t-14-7l-9-2 4-2Z" fill="#ffe8cd" stroke="none"/>
+    <path d="M20 35q3-4 6 0m14 0q3-4 6 0m-17 9q2 3 4 0 2 3 4 0" fill="none"/><path d="m30 40 3-1 3 1-3 3Z" fill="#713924" stroke="none"/>
+    <path d="m18 41 4 1m22 0 4-1" stroke="#da7770"/>
+  </g>`;
+  const crabArt = `<g stroke="#713924" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path class="crab-claws" d="M16 37C5 36 5 23 11 21l1 6 5-4q7 7-1 14Zm32 0c11-1 11-14 5-16l-1 6-5-4q-7 7 1 14Z" fill="#ff9d61"/>
+    <path d="m20 46-6 5m9-3-4 6m25-8 6 5m-9-3 4 6" fill="none"/><ellipse cx="32" cy="38" rx="18" ry="13" fill="#ff9d61"/>
+    <path d="M23 36q2-4 5 0m8 0q3-4 5 0m-13 5q2 3 4 0 2 3 4 0" fill="none"/>
+  </g>`;
+  const mascotArt = {
+    hint: `<g transform="translate(16 0)">${foxHead}</g><path d="M73 12v12m-6-6h12" stroke="#b696d8" stroke-width="3" stroke-linecap="round"/>`,
+    success: `<g transform="translate(0 2) scale(.87)">${foxHead}</g><g transform="translate(49 18) scale(.78)">${crabArt}</g>`,
+    error: `<g transform="translate(16 0)">${foxHead}</g>`,
+    run: `<g transform="translate(0 14) scale(.84)">${crabArt}</g>
+      <path d="M52 15h34v29H52z" fill="#e8d5ff" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M50 44h38l5 9H45Z" fill="#b592d3" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>
+      <circle class="screen-led" cx="69" cy="29" r="4" fill="#43845e"/><rect x="55" y="47" width="15" height="3" rx="1.5" fill="#ffe8cd"/>
+      <path class="key-claw" d="M44 44q0-7 6-8l1 4 4-3q5 6-2 10Z" fill="#ff9d61" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>`,
+    rest: `<g transform="translate(6 1) scale(.82)">${foxHead}</g>
+      <path d="M46 53h43l-4 4H42Z" fill="#ad89d0" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>
+      <path class="laptop-lid" d="M49 52 54 27h34l-3 25Z" fill="#d8bce9" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>`,
+    paw: `<g fill="currentColor"><ellipse cx="35" cy="23" rx="6" ry="8" transform="rotate(-22 35 23)"/><ellipse cx="45" cy="16" rx="5.5" ry="8"/><ellipse cx="56" cy="18" rx="5.5" ry="8"/><ellipse cx="65" cy="26" rx="5.5" ry="7.5" transform="rotate(20 65 26)"/><path d="M35 40q7-11 14-11t14 11q5 12-6 12-4 0-8-3-5 3-9 3-10 0-5-12Z"/></g>`,
+    bookmark: `<g transform="translate(2 2) scale(.8)">${foxHead}</g>
+      <path d="M56 40q9-5 16 0 7-5 15 0v15q-8-4-15 0-7-4-16 0Z" fill="#ffe8cd" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>
+      <path class="ribbon" d="M67 25h10v17l-5-4-5 4Z" fill="#bc96db" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>`,
+    night: `<g transform="translate(0 3) scale(.83)">${foxHead}</g>
+      <ellipse class="lamp-light" cx="74" cy="35" rx="20" ry="18" fill="#ffd881" opacity=".45"/>
+      <path d="M74 28v24m-10 0h20" fill="none" stroke="#713924" stroke-width="3" stroke-linecap="round"/><path d="M64 17h20l6 15H58Z" fill="#ffe095" stroke="#713924" stroke-width="2" stroke-linejoin="round"/>`,
+    day: `<g transform="translate(0 3) scale(.83)">${foxHead}</g>
+      <rect x="55" y="13" width="37" height="39" rx="3" fill="#ffe6a5" stroke="#713924" stroke-width="2"/><path d="M73.5 15v35M57 32h33" stroke="#c09367" stroke-width="2"/>
+      <path class="curtain-left" d="M55 13h18v36H55Z" fill="#bb98d8" stroke="#713924" stroke-width="2"/><path class="curtain-right" d="M74 13h18v36H74Z" fill="#bb98d8" stroke="#713924" stroke-width="2"/>`
+  };
+  const mascot = (kind) => `<svg class="mascot mascot-${kind}" viewBox="0 0 96 64" aria-hidden="true" focusable="false">${mascotArt[kind]}</svg>`;
+  const mascotBubble = (kind, content) => `<div class="mascot-bubble">${mascot(kind)}<div>${content}</div></div>`;
+  const freshStamps = new Set();
+
   // ---------- Главная ----------
   function viewHome() {
     setNav("home");
     document.title = T.docTitle;
     const n = nextLesson();
-    const cont = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : n;
+    const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
+    const cont = saved || n;
     const started = doneCount() > 0 || S.last;
     let html = `<div class="wrap-wide">
       <section class="hero">
@@ -91,6 +132,7 @@
               ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
               ${doneCount() > 0 ? `<a class="btn btn-ghost" href="#/review">${T.reviewBtn}</a>` : ""}
             </div>
+            ${saved && S.step[saved.id] > 0 && T.mascotBookmark ? `<div class="resume-note">${mascotBubble("bookmark", esc(T.mascotBookmark))}</div>` : ""}
             <div class="stats">
               <span>${T.statLessons(doneCount(), lessons.length)}</span>
               <span>${T.statModules(COURSE.modules.length)}</span>
@@ -114,9 +156,10 @@
       const d = ls.filter((l) => S.done[l.id]).length;
       const pct = Math.round((d / ls.length) * 100);
       const open = cont && cont.module === m;
-      html += `<details class="module${d === ls.length ? " done" : ""}"${open ? " open" : ""}>
+      const complete = d === ls.length;
+      html += `<details class="module${complete ? " done" : ""}${complete && freshStamps.has(mi) ? " stamp-new" : ""}"${open ? " open" : ""}>
         <summary>
-          <span class="mod-num">${d === ls.length ? "✓" : mi}</span>
+          <span class="mod-num">${complete ? mascot("paw") : mi}</span>
           <span><span class="mod-title">${esc(m.title)}</span><br><span class="mod-sub">${esc(m.sub || "")}</span></span>
           <span class="mod-meter">${d}/${ls.length}<span class="bar"><i style="width:${pct}%"></i></span></span>
         </summary>
@@ -126,6 +169,7 @@
     });
     html += `<p class="muted small" style="margin-top:1.5rem">${T.storageNote}</p></div>`;
     app.innerHTML = html;
+    freshStamps.clear();
   }
 
   // ---------- Урок ----------
@@ -210,7 +254,8 @@
     const recap = lesson.cards.filter((c) => c.t === "recap").flatMap((c) => c.items);
     const nl = lessons[lesson.idx + 1];
     const modDone = lesson.module.lessons.every((l) => S.done[l.id]);
-    const breakTip = (doneCount() % 3 === 0) ? `<div class="break-box">${T.breakTip}</div>` : "";
+    if (modDone && first) freshStamps.add(lesson.mi);
+    const breakTip = (doneCount() % 3 === 0) ? `<div class="break-box">${mascotBubble("rest", T.breakTip)}</div>` : "";
     app.innerHTML = `<div class="wrap"><article class="card finish${first ? " finish-new" : ""}">
       <div class="finish-head">
         <img class="finish-mark" src="assets/crab.svg" width="54" height="54" alt="">
@@ -311,6 +356,8 @@
     };
   }
 
+  const hasCompileError = (stderr) => /^error(?:\[E\d+\])?:(?!\s*(?:test failed\b|doctest failed\b|process didn't exit\b))/m.test(stderr || "");
+
   function outputBox(res, expectNote) {
     const box = document.createElement("div");
     if (!res) return box;
@@ -323,9 +370,8 @@
     const wrap = document.createElement("div");
     wrap.className = "out-wrap";
     const tips = !res.ok && res.stderr ? RK.explainErrors(res.stderr, S.settings.lang) : [];
-    tips.forEach((x) => {
-      wrap.insertAdjacentHTML("beforeend", `<div class="explain-err"><b>${x.code === "panic" ? T.panicTitle : T.errorTitle(x.code)}.</b> ${RK.inline(x.text)}</div>`);
-    });
+    const compileError = !res.ok && hasCompileError(res.stderr);
+    const explanations = tips.map((x) => `<p class="compiler-tip"><b>${x.code === "panic" ? T.panicTitle : T.errorTitle(x.code)}.</b> ${RK.inline(x.text)}</p>`).join("");
     box.className = "output " + (res.ok ? "ok" : "err");
     let html = "";
     if (res.stdout) html += `<span class="lbl">${T.outLabel}</span>${esc(res.stdout)}`;
@@ -333,16 +379,22 @@
     if (res.ok && !res.stdout) html += `<span class="lbl">${T.outLabel}</span><span class="muted">${T.noOutput}</span>`;
     box.innerHTML = html;
     wrap.appendChild(box);
+    if (compileError || explanations) {
+      const content = compileError ? mascotBubble("error", explanations || esc(T.noCompileText)) : explanations;
+      wrap.insertAdjacentHTML(compileError ? "beforeend" : "afterbegin", `<div class="explain-err">${content}</div>`);
+    }
     return wrap;
   }
 
   async function doRun(code, outEl, btn, opts) {
     btn.disabled = true; const label = btn.textContent; btn.textContent = T.running;
-    outEl.replaceChildren(h(`<div class="output"><span class="lbl">${T.compiling}</span>${T.compilingText}</div>`));
+    const running = h(`<div class="output" role="status">${mascotBubble("run", `<span class="lbl">${T.compiling}</span>${T.compilingText}`)}</div>`);
+    outEl.replaceChildren(running);
     let res;
     try { res = await RK.runRust(code, opts); }
     catch (e) { res = { netError: e.name === "AbortError" ? T.netTimeout : String(e.message || e) }; }
     btn.disabled = false; btn.textContent = label;
+    if (!outEl.isConnected || outEl.firstChild !== running) return null;
     outEl.replaceChildren(outputBox(res, opts && opts.expect));
     return res;
   }
@@ -396,6 +448,7 @@
         if (right) {
           box.querySelectorAll(".opt").forEach((x) => (x.disabled = true));
           if (c.explain && why) fb.innerHTML += "<br>" + inline(c.explain);
+          fb.innerHTML = mascotBubble("success", fb.innerHTML);
         } else b.disabled = true;
         attempt(c); onDone && onDone(right);
       };
@@ -430,7 +483,7 @@
     fb.setAttribute("aria-live", "polite");
     el.appendChild(bar); el.appendChild(fb);
     let first = true;
-    function check() {
+    function check(revealed = false) {
       let all = true;
       inputs.forEach((inp, i) => {
         const ok = c.answers[i].some((a) => norm(a) === norm(inp.value));
@@ -441,12 +494,13 @@
       fb.className = "feedback " + (all ? "good" : "bad");
       fb.innerHTML = all ? `<b>${T.right}</b> ` + (c.explain ? inline(c.explain) : "") :
         `<b>${T.notYet}</b> ${T.fixRed} ` + (c.hint ? inline(c.hint) : "");
+      if (all && !revealed) fb.innerHTML = mascotBubble("success", fb.innerHTML);
       attempt(c); onDone && onDone(all);
     }
-    bar.querySelector(".btn").onclick = check;
+    bar.querySelector(".btn").onclick = () => check();
     bar.querySelector("[data-show]").onclick = () => {
       inputs.forEach((inp, i) => { inp.value = c.answers[i][0]; });
-      check();
+      check(true);
     };
   }
 
@@ -485,17 +539,18 @@
         pool.appendChild(b);
       });
     }
-    function check() {
+    function check(revealed = false) {
       const ok = chosen.every((x, k) => c.lines[k].trim() === x.t.trim());
       if (first) { stat(c.key, ok); first = false; }
       fb.className = "feedback " + (ok ? "good" : "bad");
       fb.innerHTML = ok ? `<b>${T.orderOk}</b> ` + (c.explain ? inline(c.explain) : "") :
         `<b>${T.orderBad}</b> ${T.orderBadText} ` + (c.hint ? inline(c.hint) : "");
+      if (ok && !revealed) fb.innerHTML = mascotBubble("success", fb.innerHTML);
       attempt(c); onDone && onDone(ok);
     }
     paint();
     const bar = h(`<div class="runbar" style="margin-top:.4rem"><button class="btn btn-quiet btn-sm">${T.showAnswer}</button></div>`);
-    bar.firstChild.onclick = () => { chosen = c.lines.map((t, i) => ({ t, i })); left.length = 0; paint(); check(); };
+    bar.firstChild.onclick = () => { chosen = c.lines.map((t, i) => ({ t, i })); left.length = 0; paint(); check(true); };
     el.appendChild(bar);
   }
 
@@ -511,6 +566,7 @@
       <button class="btn btn-quiet btn-sm" data-reset>${T.startOver}</button></div>`);
     holder.appendChild(bar);
     const hints = document.createElement("div");
+    hints.setAttribute("aria-live", "polite");
     const out = document.createElement("div");
     const fb = document.createElement("div");
     fb.setAttribute("aria-live", "polite");
@@ -524,7 +580,7 @@
     refreshHintBtn();
     hintBtn.onclick = () => {
       if (shown < levels.length) {
-        hints.insertAdjacentHTML("beforeend", `<div class="tip"><b>${T.hintN(shown + 1)}</b> ${inline(levels[shown])}</div>`);
+        hints.insertAdjacentHTML("beforeend", `<div class="tip">${mascotBubble("hint", `<b>${T.hintN(shown + 1)}</b> ${inline(levels[shown])}`)}</div>`);
         shown++; refreshHintBtn();
       } else if (c.solution) {
         hints.insertAdjacentHTML("beforeend", `<div class="note">${T.solution}</div><pre class="code"><code>${highlightRust(c.solution)}</code></pre>`);
@@ -535,7 +591,9 @@
     const runBtn = bar.querySelector("[data-run]");
     runBtn.onclick = async () => {
       fb.replaceChildren();
-      const res = await doRun(ed.get(), out, runBtn, { tests: c.tests, expect: c.expect });
+      const code = ed.get();
+      const res = await doRun(code, out, runBtn, { tests: c.tests, expect: c.expect });
+      if (!res) return;
       attempt(c);
       if (res.netError) {
         if (c.expect != null) fb.innerHTML = `<div class="feedback bad">${T.cantCheck}<pre class="code" style="margin:.4rem 0 0"><code>${esc(c.expect)}</code></pre></div>`;
@@ -543,13 +601,13 @@
       }
       let ok = res.ok;
       if (ok && c.expect != null) ok = norm(res.stdout) === norm(c.expect);
-      if (ok && c.mustContain) ok = c.mustContain.every((s) => ed.get().includes(s));
+      if (ok && c.mustContain) ok = c.mustContain.every((s) => code.includes(s));
       stat(c.key, ok);
-      if (ok) fb.innerHTML = `<div class="feedback good"><b>${T.gotIt}</b> ${c.explain ? inline(c.explain) : T.taskDone}</div>`;
+      if (ok) fb.innerHTML = `<div class="feedback good">${mascotBubble("success", `<b>${T.gotIt}</b> ${c.explain ? inline(c.explain) : T.taskDone}`)}</div>`;
       else if (res.ok && c.expect != null && norm(res.stdout) !== norm(c.expect)) fb.innerHTML = `<div class="feedback bad"><b>${T.wrongOut}</b> ${T.expected}<pre class="code" style="margin:.4rem 0 0"><code>${esc(c.expect)}</code></pre></div>`;
       else if (res.ok && c.mustContain) fb.innerHTML = `<div class="feedback bad"><b>${T.missing}</b> ${c.mustContain.map((s) => `<code>${esc(s)}</code>`).join(", ")}</div>`;
-      else if (c.tests && !/error(\[E\d+\])?:/.test(res.stderr || "")) fb.innerHTML = `<div class="feedback bad"><b>${T.testsFailed}</b> ${inline(T.testsFailedText)}</div>`;
-      else fb.innerHTML = `<div class="feedback bad"><b>${T.noCompile}</b> ${T.noCompileText}</div>`;
+      else if (hasCompileError(res.stderr)) fb.innerHTML = `<div class="feedback bad"><b>${T.noCompile}</b> ${T.noCompileText}</div>`;
+      else if (c.tests) fb.innerHTML = `<div class="feedback bad"><b>${T.testsFailed}</b> ${inline(T.testsFailedText)}</div>`;
     };
   }
 
@@ -631,6 +689,11 @@
     S.settings.lang = lang; save(true); indexCourse(); route();
   }
 
+  function themeMascot(theme) {
+    const dark = theme === "dark" || (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    return mascot(dark ? "night" : "day");
+  }
+
   function viewSettings() {
     setNav("settings");
     document.title = T.setTitle + T.titleSuffix;
@@ -638,7 +701,8 @@
     const seg = (name, opts, cur) => `<div class="seg" data-set="${name}">${opts.map(([v, t]) => `<button data-v="${v}" aria-pressed="${String(v) === String(cur)}">${t}</button>`).join("")}</div>`;
     app.innerHTML = `<div class="wrap"><h1>${T.setTitle}</h1>
       <div class="panel"><h3>${T.setLang}</h3>${seg("lang", [["ru", "Русский"], ["en", "English"]], st.lang)}</div>
-      <div class="panel"><h3>${T.setTheme}</h3>${seg("theme", [["auto", T.themeAuto], ["light", T.themeLight], ["dark", T.themeDark]], st.theme)}</div>
+      <div class="panel theme-panel"><div><h3>${T.setTheme}</h3>${seg("theme", [["auto", T.themeAuto], ["light", T.themeLight], ["dark", T.themeDark]], st.theme)}</div>
+        <div class="theme-mascot">${themeMascot(st.theme)}</div></div>
       <div class="panel"><h3>${T.setFont}</h3>${seg("fs", [[16, T.fs16], [18, T.fs18], [20, T.fs20], [23, T.fs23]], st.fs)}</div>
       <div class="panel"><h3>${T.setMotion}</h3>${seg("motion", [["true", T.on], ["false", T.off]], st.motion)}</div>
       <div class="panel"><h3>${T.setFocus}</h3><p class="small muted">${T.setFocusText}</p>${seg("focus", [["false", T.off], ["true", T.on]], st.focus)}</div>
@@ -653,7 +717,13 @@
       let v = b.dataset.v; const name = g.dataset.set;
       if (name === "lang") return setLang(v);
       if (name === "fs") v = +v; if (name === "motion" || name === "focus") v = v === "true";
+      const themeChanged = name === "theme" && v !== st.theme;
       S.settings[name] = v; save(true); applySettings();
+      if (themeChanged) {
+        const art = app.querySelector(".theme-mascot");
+        art.innerHTML = themeMascot(v);
+        art.classList.add("is-new");
+      }
       g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     }));
     app.querySelector("#exp").onclick = () => {
