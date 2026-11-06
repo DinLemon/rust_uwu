@@ -483,6 +483,7 @@ fn main() {
 Площадь: 21
 Периметр: 20
 ```
+check: exact
 hint: Площадь — `width * height`. Периметр — `2 * (width + height)`.
 hint: `println!("Площадь: {}", width * height);`
 
