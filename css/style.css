@@ -159,8 +159,7 @@ li { margin: .2rem 0; }
 .hero-art[data-fox-reaction="cookie"] .fox-cookie-crumbs,
 .hero-art[data-fox-reaction="nap"] .fox-nap-letters { opacity: 1; }
 .fox-effects { pointer-events: none; overflow: visible; }
-.fox-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: .45rem; margin-top: .75rem; }
-.fox-controls .btn { background: var(--surface); }
+.fox-trigger { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; border-radius: 1rem; background: transparent; cursor: pointer; }
 .fox-response { display: block; min-height: 1.5em; margin-top: .3rem; color: var(--muted); font-size: .8rem; }
 .stats { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: 1rem; font-size: .83rem; color: var(--muted); }
 .stats > span { padding: .18rem .65rem; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; }
