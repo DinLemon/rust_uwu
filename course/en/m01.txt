@@ -483,6 +483,7 @@ fn main() {
 Area: 21
 Perimeter: 20
 ```
+check: exact
 hint: The area is `width * height`. The perimeter is `2 * (width + height)`.
 hint: `println!("Area: {}", width * height);`
 

@@ -362,6 +362,7 @@ fn main() {
 7 × 4 = 28
 7 × 5 = 35
 ```
+check: exact
 hint: The loop `for i in 1..=5`.
 hint: `println!("7 × {i} = {}", 7 * i);`
 
@@ -473,6 +474,7 @@ fn main() {
 ***
 ****
 ```
+check: exact
 hint: The outer loop is `for row in 1..=4`. Inside it, print `*` with `print!` `row` times.
 hint: After the inner loop — `println!();` to move to a new line.
 

@@ -134,6 +134,7 @@ fn main() {
 ```expect
 Best: 10
 ```
+check: number
 hint: `for s in scores { ... }`
 hint: Inside: if `s > best`, then `best = s;`
 
