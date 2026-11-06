@@ -554,6 +554,49 @@
     el.appendChild(bar);
   }
 
+
+  const numericValue = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?";
+  const bareNumber = new RegExp("^(?:" + numericValue + ")$");
+  const resultNumber = new RegExp("^(?:[^:=\\n0-9]+[:=][ \\t]*)?(" + numericValue + ")$");
+  const debugResult = /^(?:\[[\s\S]*\]|\([\s\S]*\)|(?:Some|Ok|Err)\([\s\S]*\)|[A-Z]\w*\s*\{[\s\S]*\})$/;
+
+  function cleanOutput(text) {
+    return text.replace(/\r\n?/g, "\n").trim().split("\n").map((line) => line.trim()).join("\n");
+  }
+
+  function debugTokens(text) {
+    const tokens = text.match(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|[\p{L}\p{N}_]+|\S/gu) || [];
+    return tokens.filter((token, i) => token !== "," || !["]", "}"].includes(tokens[i + 1]));
+  }
+
+  function matchesOutput(card, stdout) {
+    const actual = cleanOutput(stdout);
+    if (card.expectPattern) return new RegExp("^(?:" + card.expectPattern + ")$").test(actual);
+    if (card.expect == null) return true;
+    const expected = cleanOutput(card.expect);
+    if (actual === expected) return true;
+    if (card.outputCheck === "exact") return false;
+
+    if (card.outputCheck === "number" || bareNumber.test(expected)) {
+      const wanted = expected.match(resultNumber);
+      const result = actual.match(resultNumber);
+      if (!wanted || !result) return false;
+      const a = Number(result[1]), b = Number(wanted[1]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+      return a === b || (!Number.isInteger(b) && Math.abs(a - b) <= 4 * Number.EPSILON * Math.abs(b));
+    }
+
+    const equalDebug = (a, b) => JSON.stringify(debugTokens(a)) === JSON.stringify(debugTokens(b));
+    if (!expected.includes("\n") && debugResult.test(expected)) return equalDebug(actual, expected);
+
+    const actualLines = actual.split("\n"), expectedLines = expected.split("\n");
+    if (actualLines.length !== expectedLines.length) return norm(actual) === norm(expected);
+    return expectedLines.every((line, i) => {
+      if (debugResult.test(line)) return equalDebug(actualLines[i], line);
+      return actualLines[i].replace(/[ \t]+/g, " ") === line.replace(/[ \t]+/g, " ");
+    });
+  }
+
   function cTask(c, el) {
     if (c.md) el.insertAdjacentHTML("beforeend", md(c.md));
     const holder = document.createElement("div");
@@ -589,6 +632,9 @@
     };
     bar.querySelector("[data-reset]").onclick = () => { ed.set(c.code); ed.clear(); out.replaceChildren(); fb.replaceChildren(); };
     const runBtn = bar.querySelector("[data-run]");
+    const format = c.expectFormat?.replace(/\{\{(text|int)\}\}/g, (_, field) => field === "text" ? T.formatText : T.formatInt);
+    const target = format || c.expect;
+    const targetBlock = target == null ? "" : `<pre class="code" style="margin:.4rem 0 0"><code>${esc(target)}</code></pre>`;
     runBtn.onclick = async () => {
       fb.replaceChildren();
       const code = ed.get();
@@ -596,15 +642,14 @@
       if (!res) return;
       attempt(c);
       if (res.netError) {
-        if (c.expect != null) fb.innerHTML = `<div class="feedback bad">${T.cantCheck}<pre class="code" style="margin:.4rem 0 0"><code>${esc(c.expect)}</code></pre></div>`;
+        if (target != null) fb.innerHTML = `<div class="feedback bad">${T.cantCheck}${format ? " " + T.expectedFormat : ""}${targetBlock}</div>`;
         return;
       }
-      let ok = res.ok;
-      if (ok && c.expect != null) ok = norm(res.stdout) === norm(c.expect);
-      if (ok && c.mustContain) ok = c.mustContain.every((s) => code.includes(s));
+      const outputOk = res.ok && matchesOutput(c, res.stdout);
+      const ok = outputOk && (!c.mustContain || c.mustContain.every((s) => code.includes(s)));
       stat(c.key, ok);
       if (ok) fb.innerHTML = `<div class="feedback good">${mascotBubble("success", `<b>${T.gotIt}</b> ${c.explain ? inline(c.explain) : T.taskDone}`)}</div>`;
-      else if (res.ok && c.expect != null && norm(res.stdout) !== norm(c.expect)) fb.innerHTML = `<div class="feedback bad"><b>${T.wrongOut}</b> ${T.expected}<pre class="code" style="margin:.4rem 0 0"><code>${esc(c.expect)}</code></pre></div>`;
+      else if (res.ok && !outputOk) fb.innerHTML = `<div class="feedback bad"><b>${format ? T.wrongFormat : T.wrongOut}</b> ${format ? T.expectedFormat : T.expected}${targetBlock}</div>`;
       else if (res.ok && c.mustContain) fb.innerHTML = `<div class="feedback bad"><b>${T.missing}</b> ${c.mustContain.map((s) => `<code>${esc(s)}</code>`).join(", ")}</div>`;
       else if (hasCompileError(res.stderr)) fb.innerHTML = `<div class="feedback bad"><b>${T.noCompile}</b> ${T.noCompileText}</div>`;
       else if (c.tests) fb.innerHTML = `<div class="feedback bad"><b>${T.testsFailed}</b> ${inline(T.testsFailedText)}</div>`;
