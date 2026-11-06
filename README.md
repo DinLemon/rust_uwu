@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://dinlemon.github.io/rust_uwu/">
-    <img src="assets/readme-cover.svg" alt="Лисёнок разворачивает карту Rust UwU, а крабик держит розовый флажок" width="960">
+    <img src="assets/readme-mascots.webp" alt="Лисёнок в сиреневом платке держит карту Rust UwU, а крабик поднимает розовый флажок" width="960">
   </a>
 </p>
 
