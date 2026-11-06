@@ -1,0 +1,297 @@
+# MODULE m12 | Обобщения и трейты | Один код для многих типов
+
+## LESSON m12-1 | Обобщения: <T> | 6
+:: goals
+- Писать функции для любого типа
+- Читать запись `<T>`
+
+:: text Не повторяйся
+Допустим, нужна функция «первый элемент» для списка чисел. Потом — для списка строк. Потом — для списка дробных. Три одинаковые функции?
+
+Нет. Пишем одну **обобщённую** функцию с параметром типа `T`:
+
+```rust
+fn first<T>(list: &[T]) -> &T {
+    &list[0]
+}
+```
+`<T>` читается «для любого типа T».
+
+:: code
+```rust
+fn first<T>(list: &[T]) -> &T {
+    &list[0]
+}
+
+struct Pair<T> {
+    a: T,
+    b: T,
+}
+
+fn main() {
+    println!("{}", first(&[3, 1, 2]));
+    println!("{}", first(&["кот", "пёс"]));
+    let p = Pair { a: 1.5, b: 2.5 };
+    println!("{} {}", p.a, p.b);
+}
+```
+```out
+3
+кот
+1.5 2.5
+```
+Ты уже встречал обобщения: `Vec<T>`, `Option<T>`, `Result<T, E>`.
+
+:: quiz
+Что означает `T` в `Vec<T>`?
+[ ] Тип text => Это не текст, а «какой-то тип».
+[x] Тип элементов, любой => Верно. `Vec<i32>`, `Vec<String>` — это один и тот же `Vec<T>`.
+[ ] Количество элементов => Количество — это длина, а `T` — тип.
+
+:: recap
+- `<T>` — параметр типа, «любой тип».
+- Работает для функций, структур, enum.
+- `Vec<T>`, `Option<T>` — тоже обобщения.
+
+## LESSON m12-2 | Трейты — умения типа | 7
+:: goals
+- Что такое трейт
+- Как реализовать трейт для своего типа
+
+:: text Трейт — удостоверение навыка
+**Трейт** (trait) описывает **умение**: какие методы должны быть у типа. Иногда по-русски говорят «типаж» — это то же самое.
+
+```rust
+trait Speak {
+    fn speak(&self) -> String;
+}
+```
+> Как права на вождение. Неважно, кто ты — если есть права, ты умеешь водить. Трейт `Speak` — «умеет говорить».
+
+:: code
+```rust
+trait Speak {
+    fn speak(&self) -> String;
+
+    fn greet(&self) -> String {
+        format!("Я говорю: {}", self.speak())
+    }
+}
+
+struct Dog;
+struct Cat;
+
+impl Speak for Dog {
+    fn speak(&self) -> String {
+        "Гав".to_string()
+    }
+}
+
+impl Speak for Cat {
+    fn speak(&self) -> String {
+        "Мяу".to_string()
+    }
+}
+
+fn main() {
+    println!("{}", Dog.greet());
+    println!("{}", Cat.greet());
+}
+```
+```out
+Я говорю: Гав
+Я говорю: Мяу
+```
+`greet` — метод **по умолчанию**: он написан прямо в трейте. Типам достаточно реализовать `speak`.
+
+:: fill
+Допиши реализацию трейта для типа `Robot`.
+```rust
+___ Speak ___ Robot {
+    fn speak(&self) -> String {
+        "Бип".to_string()
+    }
+}
+```
+= impl
+= for
+explain: Шаблон: `impl Трейт for Тип { ... }`.
+
+:: recap
+- `trait Имя { fn метод(&self); }` — описание умения.
+- `impl Трейт for Тип { ... }` — научить тип.
+- В трейте могут быть методы по умолчанию.
+
+## LESSON m12-3 | Трейт как требование | 7
+:: goals
+- Требовать от `T` умение: `T: Трейт`
+- Короткая запись `impl Трейт`
+
+:: text Не любой тип, а умеющий
+Обобщённой функции часто нужно, чтобы `T` что-то **умел**. Например, сравниваться.
+
+```rust
+fn largest<T: PartialOrd>(list: &[T]) -> &T { ... }
+```
+`T: PartialOrd` — «любой T, который умеет сравниваться через `<` и `>`». Это называется **ограничение трейтом**.
+
+:: code
+```rust
+fn largest<T: PartialOrd>(list: &[T]) -> &T {
+    let mut best = &list[0];
+    for item in list {
+        if item > best {
+            best = item;
+        }
+    }
+    best
+}
+
+fn main() {
+    println!("{}", largest(&[3, 9, 4]));
+    println!("{}", largest(&['я', 'б', 'ю']));
+}
+```
+```out
+9
+я
+```
+
+:: text impl Трейт — короче
+Если тип нужен один раз, есть сокращение:
+
+```rust
+fn announce(x: &impl Speak) {
+    println!("{}", x.speak());
+}
+```
+Это то же, что `fn announce<T: Speak>(x: &T)`.
+
+Длинный список требований удобно выносить в `where`:
+
+```rust
+fn show<T>(x: T) where T: std::fmt::Debug + Clone { ... }
+```
+
+:: quiz
+Что значит `T: PartialOrd`?
+[ ] T — это число => Не обязательно число. Буквы и строки тоже сравниваются.
+[x] T должен уметь сравниваться => Верно. Это требование к типу.
+[ ] T можно копировать => Копирование — это трейт `Copy` или `Clone`.
+
+:: task
+Напиши функцию `print_all`, которая печатает каждый элемент среза через `{:?}`. Подойдёт любой `T`, который умеет `Debug`.
+```rust
+use std::fmt::Debug;
+
+// напиши print_all
+
+fn main() {
+    print_all(&[1, 2]);
+    print_all(&["а", "б"]);
+}
+```
+```solution
+use std::fmt::Debug;
+
+fn print_all<T: Debug>(items: &[T]) {
+    for x in items {
+        println!("{:?}", x);
+    }
+}
+
+fn main() {
+    print_all(&[1, 2]);
+    print_all(&["а", "б"]);
+}
+```
+```expect
+1
+2
+"а"
+"б"
+```
+hint: Заголовок: `fn print_all<T: Debug>(items: &[T])`
+hint: Внутри цикл `for x in items { println!("{:?}", x); }`
+
+:: recap
+- `<T: Трейт>` — T должен уметь это.
+- `impl Трейт` — короткая запись.
+- `where` — для длинных списков требований.
+
+## LESSON m12-4 | Полезные трейты стандартной библиотеки | 7
+:: goals
+- Display: печать через `{}`
+- derive: трейты одной строчкой
+- From/Into: превращения типов
+
+:: text derive — трейты бесплатно
+Многие трейты компилятор умеет написать сам:
+
+```rust
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Point { x: i32, y: i32 }
+```
+- `Debug` — печать через `{:?}`;
+- `Clone` — метод `.clone()`;
+- `PartialEq` — сравнение `==`;
+- `Default` — значение «по умолчанию» (нули).
+
+:: code
+`Display` — печать через `{}` — пишут руками. Ты решаешь, как выглядит тип.
+```rust
+use std::fmt;
+
+struct Money {
+    rubles: u32,
+    kopecks: u32,
+}
+
+impl fmt::Display for Money {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} руб. {:02} коп.", self.rubles, self.kopecks)
+    }
+}
+
+fn main() {
+    let price = Money { rubles: 99, kopecks: 5 };
+    println!("Цена: {price}");
+}
+```
+```out
+Цена: 99 руб. 05 коп.
+```
+`{:02}` — «минимум две цифры, слева нули».
+
+:: text From и Into — превращения
+Трейт `From` описывает, как сделать один тип из другого.
+
+```rust
+let s = String::from("текст");  // String из &str
+let n: i64 = i64::from(5i32);    // i64 из i32
+let s2: String = "ещё".into();   // into — тот же From, но с другой стороны
+```
+Если ты реализовал `From<A> for B`, то `into()` у `A` появляется сам.
+
+:: text dyn Трейт — разные типы в одном списке
+Можно сложить в один вектор **разные** типы, если у них общий трейт:
+
+```rust
+let animals: Vec<Box<dyn Speak>> = vec![Box::new(Dog), Box::new(Cat)];
+for a in &animals {
+    println!("{}", a.speak());
+}
+```
+`dyn` — «какой-то тип с этим умением». `Box` разберём в модуле про умные указатели.
+
+:: quiz
+Какой трейт нужен, чтобы печатать тип через `{}`?
+[ ] `Debug` => `Debug` — для `{:?}`.
+[x] `Display` => Верно. Его реализуют вручную.
+[ ] `Clone` => `Clone` про копирование, а не про печать.
+
+:: recap
+- `#[derive(Debug, Clone, PartialEq, Default)]` — трейты одной строкой.
+- `Display` пишут вручную, чтобы печатать через `{}`.
+- `From`/`Into` — превращения типов.
+- `Box<dyn Трейт>` — разные типы с общим умением.

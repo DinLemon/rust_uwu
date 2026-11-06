@@ -1,0 +1,321 @@
+# MODULE m07 | Структуры | Свои типы данных
+
+## LESSON m07-1 | Структура — анкета | 6
+:: goals
+- Создать свой тип через `struct`
+- Читать и менять поля
+
+:: text Анкета с полями
+**Структура** (struct) — свой тип из нескольких именованных полей.
+
+```rust
+struct User {
+    name: String,
+    age: u32,
+    active: bool,
+}
+```
+> Как бланк анкеты: графы «имя», «возраст», «активен». Сам бланк — это тип. Заполненная анкета — значение.
+
+Имена структур пишут с большой буквы: `User`, `GameCharacter`.
+
+:: code
+```rust
+struct User {
+    name: String,
+    age: u32,
+}
+
+fn main() {
+    let mut user = User {
+        name: String::from("Аня"),
+        age: 25,
+    };
+    println!("{} — {} лет", user.name, user.age);
+    user.age += 1;
+    println!("С днём рождения! Теперь {}", user.age);
+}
+```
+```out
+Аня — 25 лет
+С днём рождения! Теперь 26
+```
+Поле читают через точку: `user.age`. Менять можно, только если вся переменная `mut`.
+
+:: fill
+Заполни, чтобы создать точку с координатами 3 и 4.
+```rust
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = ___ { x: 3, ___: 4 };
+    println!("{}, {}", p.x, p.y);
+}
+```
+= Point
+= y
+
+:: text Короткая запись полей
+Если переменная называется так же, как поле, можно не повторять:
+
+```rust
+fn new_user(name: String, age: u32) -> User {
+    User { name, age } // вместо name: name, age: age
+}
+```
+
+:: recap
+- `struct Имя { поле: тип, ... }` — свой тип.
+- Значение: `Имя { поле: значение, ... }`.
+- Поле: `значение.поле`.
+
+## LESSON m07-2 | Печать структуры: Debug | 5
+:: goals
+- Как напечатать структуру целиком
+- Что такое `#[derive(Debug)]`
+
+:: code
+Попробуем напечатать структуру через `{}`. Запусти.
+```rust
+struct Cat {
+    name: String,
+    lives: u8,
+}
+
+fn main() {
+    let cat = Cat { name: String::from("Мурка"), lives: 9 };
+    println!("{}", cat);
+}
+```
+fails: yes
+Ошибка `E0277`: Rust не знает, **как** красиво показать твою структуру. Это не число и не строка.
+
+:: text derive(Debug) — печать для разработчика
+Добавь над структурой строчку `#[derive(Debug)]` и печатай через `{:?}`.
+
+- `#[derive(Debug)]` — «научи этот тип печататься для отладки».
+- `{:?}` — «напечатай отладочный вид».
+- `{:#?}` — то же, но красиво, в несколько строк.
+
+:: code
+```rust
+#[derive(Debug)]
+struct Cat {
+    name: String,
+    lives: u8,
+}
+
+fn main() {
+    let cat = Cat { name: String::from("Мурка"), lives: 9 };
+    println!("{:?}", cat);
+    println!("{cat:#?}");
+}
+```
+```out
+Cat { name: "Мурка", lives: 9 }
+Cat {
+    name: "Мурка",
+    lives: 9,
+}
+```
+
+:: quiz
+Что нужно, чтобы напечатать структуру через `{:?}`?
+[ ] Ничего, работает само => Без `derive(Debug)` компилятор выдаст ошибку E0277.
+[x] Добавить `#[derive(Debug)]` над структурой => Верно.
+[ ] Написать функцию `print` => Можно, но есть способ короче.
+
+:: recap
+- `#[derive(Debug)]` + `{:?}` — быстрая печать для отладки.
+- `{:#?}` — то же самое, но в столбик.
+
+## LESSON m07-3 | Методы: impl | 7
+:: goals
+- Прикрепить функции к структуре
+- Разница между `&self`, `&mut self` и `self`
+
+:: text Метод — функция «внутри» типа
+**Метод** — функция, которая принадлежит типу. Их пишут в блоке `impl` (implementation — реализация).
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+}
+```
+`self` — «тот, у кого вызвали метод». Вызов: `rect.area()`.
+
+:: code
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn grow(&mut self, by: u32) {
+        self.width += by;
+        self.height += by;
+    }
+}
+
+fn main() {
+    let mut r = Rectangle { width: 3, height: 4 };
+    println!("Площадь: {}", r.area());
+    r.grow(1);
+    println!("После роста: {}", r.area());
+}
+```
+```out
+Площадь: 12
+После роста: 20
+```
+
+:: text Три вида self
+- `&self` — метод только **смотрит**. Самый частый.
+- `&mut self` — метод **меняет** структуру.
+- `self` — метод **забирает** структуру целиком. Бывает редко.
+
+Это те же правила владения и заимствования. Просто про саму структуру.
+
+:: quiz
+Какой `self` нужен методу `rename`, который меняет поле `name`?
+[ ] `&self` => Через `&self` можно только читать.
+[x] `&mut self` => Верно. Менять — значит нужна изменяемая ссылка.
+[ ] Никакой, методы не меняют поля => Ещё как меняют, если есть `&mut self`.
+
+:: task
+Добавь метод `can_hold`, который возвращает `true`, если прямоугольник `self` больше `other` и по ширине, и по высоте.
+```rust
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    // твой метод can_hold
+}
+
+fn main() {
+    let big = Rectangle { width: 10, height: 8 };
+    let small = Rectangle { width: 3, height: 2 };
+    println!("{}", big.can_hold(&small));
+    println!("{}", small.can_hold(&big));
+}
+```
+```solution
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+impl Rectangle {
+    fn can_hold(&self, other: &Rectangle) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+fn main() {
+    let big = Rectangle { width: 10, height: 8 };
+    let small = Rectangle { width: 3, height: 2 };
+    println!("{}", big.can_hold(&small));
+    println!("{}", small.can_hold(&big));
+}
+```
+```expect
+true
+false
+```
+hint: Заголовок: `fn can_hold(&self, other: &Rectangle) -> bool`
+hint: Тело: `self.width > other.width && self.height > other.height`
+
+:: recap
+- Методы пишут в `impl Тип { ... }`.
+- `&self` читает, `&mut self` меняет, `self` забирает.
+- Вызов: `значение.метод()`.
+
+## LESSON m07-4 | Конструктор new | 5
+:: goals
+- Функции без `self` в `impl`
+- Обычай называть конструктор `new`
+
+:: text Ассоциированные функции
+В `impl` можно писать функции **без** `self`. Их вызывают через `::`, а не через точку.
+
+Обычно так делают **конструктор** — функцию, которая создаёт новое значение. По традиции её называют `new`.
+
+```rust
+impl Counter {
+    fn new() -> Counter {
+        Counter { count: 0 }
+    }
+}
+let c = Counter::new();
+```
+Ты уже видел такое: `String::new()`, `Vec::new()`.
+
+:: text Self — короткое имя своего типа
+Внутри `impl` вместо имени типа можно писать `Self` с большой буквы:
+
+```rust
+fn new() -> Self {
+    Self { count: 0 }
+}
+```
+
+:: task
+Допиши конструктор `Player::new(name)`, который создаёт игрока с 100 очками здоровья.
+```rust
+#[derive(Debug)]
+struct Player {
+    name: String,
+    hp: u32,
+}
+
+impl Player {
+    fn new(name: &str) -> Self {
+        // твой код
+    }
+}
+
+fn main() {
+    let p = Player::new("Герой");
+    println!("{} {}", p.name, p.hp);
+}
+```
+```solution
+#[derive(Debug)]
+struct Player {
+    name: String,
+    hp: u32,
+}
+
+impl Player {
+    fn new(name: &str) -> Self {
+        Self { name: name.to_string(), hp: 100 }
+    }
+}
+
+fn main() {
+    let p = Player::new("Герой");
+    println!("{} {}", p.name, p.hp);
+}
+```
+```expect
+Герой 100
+```
+hint: Нужно вернуть `Self { name: ..., hp: 100 }`.
+hint: Из `&str` сделай `String` через `name.to_string()`.
+
+:: recap
+- Функция в `impl` без `self` вызывается через `Тип::функция()`.
+- Конструктор по традиции — `new`.
+- `Self` — короткое имя текущего типа.

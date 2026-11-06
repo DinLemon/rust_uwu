@@ -1,0 +1,239 @@
+# MODULE m09 | Коллекции | Vec, String и HashMap поближе
+
+## LESSON m09-1 | Vec подробнее | 6
+:: goals
+- Добавлять, удалять и менять элементы вектора
+- Безопасный доступ через `get`
+
+:: text Главные операции
+```rust
+let mut v = vec![10, 20, 30];
+v.push(40);          // добавить в конец
+let last = v.pop();  // забрать последний: Some(40)
+v[0] = 5;            // заменить первый
+v.remove(1);         // удалить по индексу
+v.insert(0, 1);      // вставить в начало
+v.contains(&30);     // есть ли элемент: true
+```
+
+:: text [] или get
+- `v[i]` — быстро, но если элемента нет — **паника**.
+- `v.get(i)` — возвращает `Option`. Нет элемента — `None`, без паники.
+
+> Если индекс приходит от пользователя или из файла, бери `get`.
+
+:: code
+Перебор с изменением: `&mut` даёт менять каждый элемент.
+```rust
+fn main() {
+    let mut prices = vec![100, 250, 80];
+    for p in &mut prices {
+        *p = *p * 2;
+    }
+    println!("{:?}", prices);
+    println!("{:?}", prices.get(10));
+}
+```
+```out
+[200, 500, 160]
+None
+```
+`*p` — **разыменование**: «значение, на которое смотрит ссылка». Без `*` мы бы меняли саму ссылку.
+
+:: quiz
+Что вернёт `vec![1, 2, 3].get(3)`?
+[ ] 3 => Индекс 3 — это четвёртый элемент. Его нет.
+[x] None => Верно. Элемента нет, и `get` честно говорит об этом.
+[ ] Программа запаникует => Паникует `[3]`, а `get` — нет.
+
+:: task
+Удали из вектора все нечётные числа и напечатай результат. Подсказка: у вектора есть метод `retain`.
+```rust
+fn main() {
+    let mut nums = vec![1, 2, 3, 4, 5, 6];
+    // твой код
+    println!("{:?}", nums);
+}
+```
+```solution
+fn main() {
+    let mut nums = vec![1, 2, 3, 4, 5, 6];
+    nums.retain(|n| n % 2 == 0);
+    println!("{:?}", nums);
+}
+```
+```expect
+[2, 4, 6]
+```
+hint: `retain` оставляет только элементы, для которых условие правда.
+hint: `nums.retain(|n| n % 2 == 0);` — запись `|n| ...` называется замыканием. Подробно — в модуле про итераторы.
+
+:: recap
+- `push`, `pop`, `insert`, `remove`, `contains`.
+- `v[i]` паникует за границей, `v.get(i)` возвращает `Option`.
+- `for x in &mut v` — менять элементы, `*x` — само значение.
+
+## LESSON m09-2 | String подробнее | 6
+:: goals
+- Собирать строки из кусочков
+- Перебирать слова и буквы
+
+:: text Как собрать строку
+```rust
+let mut s = String::from("Hello");
+s.push_str(", world"); // дописать текст
+s.push('!');           // дописать один символ
+let name = "Аня";
+let msg = format!("Привет, {name}!"); // как println!, но в строку
+```
+`format!` — самый удобный способ. Он ничего не печатает, а возвращает `String`.
+
+:: code
+```rust
+fn main() {
+    let text = "  Rust делает   код надёжным  ";
+    let clean = text.trim();
+    println!("[{clean}]");
+    println!("Слов: {}", clean.split_whitespace().count());
+    println!("Большими: {}", clean.to_uppercase());
+    println!("Есть «код»: {}", clean.contains("код"));
+    println!("{}", clean.replace("надёжным", "быстрым"));
+}
+```
+```out
+[Rust делает   код надёжным]
+Слов: 4
+Большими: RUST ДЕЛАЕТ   КОД НАДЁЖНЫМ
+Есть «код»: true
+Rust делает   код быстрым
+```
+- `trim` — убрать пробелы по краям.
+- `split_whitespace` — разрезать по пробелам на слова.
+
+:: quiz
+Чем `format!` отличается от `println!`?
+[x] `format!` возвращает строку, а не печатает её => Верно. Потом её можно сохранить, передать, напечатать.
+[ ] `format!` печатает без перевода строки => Так делает `print!`.
+[ ] Ничем => Отличие важное: один печатает, другой создаёт `String`.
+
+:: task
+Переверни каждое слово строки задом наперёд, сохраняя порядок слов. Для «привет мир» должно выйти «тевирп рим».
+```rust
+fn main() {
+    let text = "привет мир";
+    let mut result = Vec::new();
+    for word in text.split_whitespace() {
+        // переверни word и положи в result
+    }
+    println!("{}", result.join(" "));
+}
+```
+```solution
+fn main() {
+    let text = "привет мир";
+    let mut result = Vec::new();
+    for word in text.split_whitespace() {
+        let reversed: String = word.chars().rev().collect();
+        result.push(reversed);
+    }
+    println!("{}", result.join(" "));
+}
+```
+```expect
+тевирп рим
+```
+hint: Буквы перебирает `word.chars()`, переворачивает `.rev()`.
+hint: Собрать обратно в строку: `let r: String = word.chars().rev().collect();`
+
+:: recap
+- `push_str`, `push`, `format!` — собрать строку.
+- `trim`, `split_whitespace`, `contains`, `replace`, `to_uppercase`.
+- Буквы — через `.chars()`.
+
+## LESSON m09-3 | HashMap — словарь | 7
+:: goals
+- Хранить пары «ключ → значение»
+- Считать частоту слов
+
+:: text Словарь
+**HashMap** хранит пары «ключ → значение». По ключу быстро находится значение.
+
+> Как телефонная книга: по имени находишь номер. Не нужно листать всё подряд.
+
+HashMap нужно подключить строчкой `use std::collections::HashMap;`.
+
+:: code
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut phones = HashMap::new();
+    phones.insert("Аня", "111-22-33");
+    phones.insert("Боря", "444-55-66");
+
+    match phones.get("Аня") {
+        Some(num) => println!("Номер Ани: {num}"),
+        None => println!("Не знаю такого"),
+    }
+    println!("Есть Вася? {}", phones.contains_key("Вася"));
+    println!("Всего контактов: {}", phones.len());
+}
+```
+```out
+Номер Ани: 111-22-33
+Есть Вася? false
+Всего контактов: 2
+```
+!> Порядок элементов в HashMap не гарантирован. Если важен порядок — используй `BTreeMap`: он хранит ключи отсортированными.
+
+:: text entry — «найди или создай»
+Частая задача: увеличить счётчик, а если ключа нет — начать с нуля.
+
+```rust
+*counts.entry(word).or_insert(0) += 1;
+```
+Читается: «найди запись `word`; если нет — вставь 0; прибавь 1».
+
+:: task
+Посчитай, сколько раз встречается каждое слово. Используем `BTreeMap`, чтобы вывод шёл по алфавиту.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "кот пёс кот рыба кот пёс";
+    let mut counts = BTreeMap::new();
+    for word in text.split_whitespace() {
+        // увеличь счётчик word
+    }
+    for (word, n) in &counts {
+        println!("{word}: {n}");
+    }
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "кот пёс кот рыба кот пёс";
+    let mut counts = BTreeMap::new();
+    for word in text.split_whitespace() {
+        *counts.entry(word).or_insert(0) += 1;
+    }
+    for (word, n) in &counts {
+        println!("{word}: {n}");
+    }
+}
+```
+```expect
+кот: 3
+пёс: 2
+рыба: 1
+```
+hint: Используй `entry(word).or_insert(0)`.
+hint: Целиком: `*counts.entry(word).or_insert(0) += 1;`
+
+:: recap
+- `HashMap` — ключ → значение. Нужен `use std::collections::HashMap;`.
+- `insert`, `get` (вернёт `Option`), `contains_key`.
+- `*map.entry(k).or_insert(0) += 1;` — счётчик.
+- `BTreeMap` — то же, но ключи по порядку.

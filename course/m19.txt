@@ -1,0 +1,335 @@
+# MODULE m19 | Итоговый проект | Собираем всё вместе
+
+## LESSON m19-1 | Проект: список дел. Шаг 1 — данные | 7
+:: goals
+- Спроектировать типы для программы
+- Собрать структуру и перечисление вместе
+
+:: text Что строим
+Маленький менеджер задач. Он умеет:
+- добавлять задачи;
+- отмечать выполненные;
+- показывать список;
+- выполнять команды из текста вроде `add купить хлеб`.
+
+Пойдём по шагам. Каждый шаг — отдельная маленькая победа.
+
+:: text Типы данных
+Начнём с данных. Задача — это структура. Состояние — перечисление.
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+enum Status {
+    Todo,
+    Done,
+}
+
+#[derive(Debug, Clone)]
+struct Task {
+    id: u32,
+    title: String,
+    status: Status,
+}
+```
+
+:: task
+Создай структуру `TodoList` с полями `tasks: Vec<Task>` и `next_id: u32`, и конструктор `new()`, где список пуст, а `next_id` равен 1. Программа должна напечатать `0 1`.
+```rust
+#[derive(Debug, Clone, PartialEq)]
+enum Status {
+    Todo,
+    Done,
+}
+
+#[derive(Debug, Clone)]
+struct Task {
+    id: u32,
+    title: String,
+    status: Status,
+}
+
+// твоя структура TodoList и impl с new()
+
+fn main() {
+    let list = TodoList::new();
+    println!("{} {}", list.tasks.len(), list.next_id);
+}
+```
+```solution
+#[derive(Debug, Clone, PartialEq)]
+enum Status {
+    Todo,
+    Done,
+}
+
+#[derive(Debug, Clone)]
+struct Task {
+    id: u32,
+    title: String,
+    status: Status,
+}
+
+struct TodoList {
+    tasks: Vec<Task>,
+    next_id: u32,
+}
+
+impl TodoList {
+    fn new() -> Self {
+        TodoList { tasks: Vec::new(), next_id: 1 }
+    }
+}
+
+fn main() {
+    let list = TodoList::new();
+    println!("{} {}", list.tasks.len(), list.next_id);
+}
+```
+```expect
+0 1
+```
+hint: `struct TodoList { tasks: Vec<Task>, next_id: u32 }`
+hint: `impl TodoList { fn new() -> Self { TodoList { tasks: Vec::new(), next_id: 1 } } }`
+
+:: recap
+- Сначала думаем о данных, потом о действиях.
+- Структура — для «что это», enum — для «в каком состоянии».
+
+## LESSON m19-2 | Шаг 2 — действия | 8
+:: goals
+- Написать методы add, done и показ списка
+- Вернуть ошибку через `Result`, если задачи нет
+
+:: task
+Допиши методы `add` (возвращает id новой задачи) и `done` (отмечает задачу; если id не найден — `Err` с текстом). Метод `show` уже готов.
+```rust
+#[derive(Debug, Clone, PartialEq)]
+enum Status { Todo, Done }
+
+#[derive(Debug, Clone)]
+struct Task { id: u32, title: String, status: Status }
+
+struct TodoList { tasks: Vec<Task>, next_id: u32 }
+
+impl TodoList {
+    fn new() -> Self {
+        TodoList { tasks: Vec::new(), next_id: 1 }
+    }
+
+    fn add(&mut self, title: &str) -> u32 {
+        // создай Task, положи в tasks, увеличь next_id, верни id
+        0
+    }
+
+    fn done(&mut self, id: u32) -> Result<(), String> {
+        // найди задачу с таким id и поменяй статус
+        Err(format!("Нет задачи {id}"))
+    }
+
+    fn show(&self) {
+        for t in &self.tasks {
+            let mark = if t.status == Status::Done { "x" } else { " " };
+            println!("[{mark}] {}. {}", t.id, t.title);
+        }
+    }
+}
+
+fn main() {
+    let mut list = TodoList::new();
+    list.add("купить хлеб");
+    list.add("учить Rust");
+    list.done(2).unwrap();
+    list.show();
+    println!("{:?}", list.done(99));
+}
+```
+```solution
+#[derive(Debug, Clone, PartialEq)]
+enum Status { Todo, Done }
+
+#[derive(Debug, Clone)]
+struct Task { id: u32, title: String, status: Status }
+
+struct TodoList { tasks: Vec<Task>, next_id: u32 }
+
+impl TodoList {
+    fn new() -> Self {
+        TodoList { tasks: Vec::new(), next_id: 1 }
+    }
+
+    fn add(&mut self, title: &str) -> u32 {
+        let id = self.next_id;
+        self.tasks.push(Task { id, title: title.to_string(), status: Status::Todo });
+        self.next_id += 1;
+        id
+    }
+
+    fn done(&mut self, id: u32) -> Result<(), String> {
+        match self.tasks.iter_mut().find(|t| t.id == id) {
+            Some(task) => {
+                task.status = Status::Done;
+                Ok(())
+            }
+            None => Err(format!("Нет задачи {id}")),
+        }
+    }
+
+    fn show(&self) {
+        for t in &self.tasks {
+            let mark = if t.status == Status::Done { "x" } else { " " };
+            println!("[{mark}] {}. {}", t.id, t.title);
+        }
+    }
+}
+
+fn main() {
+    let mut list = TodoList::new();
+    list.add("купить хлеб");
+    list.add("учить Rust");
+    list.done(2).unwrap();
+    list.show();
+    println!("{:?}", list.done(99));
+}
+```
+```expect
+[ ] 1. купить хлеб
+[x] 2. учить Rust
+Err("Нет задачи 99")
+```
+hint: В `add`: запомни `let id = self.next_id;`, потом `self.tasks.push(Task { ... })`, потом `self.next_id += 1;` и верни `id`.
+hint: В `done`: `self.tasks.iter_mut().find(|t| t.id == id)` вернёт `Option<&mut Task>`. Разбери его через `match`.
+
+:: recap
+- `iter_mut().find(...)` — найти элемент, чтобы изменить.
+- Нет элемента — честный `Err`, а не паника.
+
+## LESSON m19-3 | Шаг 3 — команды | 8
+:: goals
+- Разобрать текстовую команду в enum
+- Связать всё через `match`
+
+:: text Команда как перечисление
+Пользователь пишет текст. Превратим его в понятный тип:
+
+```rust
+enum Command {
+    Add(String),
+    Done(u32),
+    List,
+}
+```
+Функция `parse` превращает строку в `Result<Command, String>`. Ошибки ввода — не паника, а `Err`.
+
+:: task
+Допиши `parse`: `add текст` → `Add`, `done число` → `Done`, `list` → `List`, остальное — `Err`. Остальная программа уже готова.
+```rust
+#[derive(Debug)]
+enum Command {
+    Add(String),
+    Done(u32),
+    List,
+}
+
+fn parse(line: &str) -> Result<Command, String> {
+    let (cmd, rest) = match line.trim().split_once(' ') {
+        Some((c, r)) => (c, r.trim()),
+        None => (line.trim(), ""),
+    };
+    match cmd {
+        // твои ветки
+        _ => Err(format!("Не знаю команду «{cmd}»")),
+    }
+}
+
+fn main() {
+    for line in ["add купить хлеб", "done 1", "list", "done abc", "jump"] {
+        println!("{line} -> {:?}", parse(line));
+    }
+}
+```
+```solution
+#[derive(Debug)]
+enum Command {
+    Add(String),
+    Done(u32),
+    List,
+}
+
+fn parse(line: &str) -> Result<Command, String> {
+    let (cmd, rest) = match line.trim().split_once(' ') {
+        Some((c, r)) => (c, r.trim()),
+        None => (line.trim(), ""),
+    };
+    match cmd {
+        "add" if !rest.is_empty() => Ok(Command::Add(rest.to_string())),
+        "done" => rest
+            .parse::<u32>()
+            .map(Command::Done)
+            .map_err(|_| format!("«{rest}» — не номер задачи")),
+        "list" => Ok(Command::List),
+        _ => Err(format!("Не знаю команду «{cmd}»")),
+    }
+}
+
+fn main() {
+    for line in ["add купить хлеб", "done 1", "list", "done abc", "jump"] {
+        println!("{line} -> {:?}", parse(line));
+    }
+}
+```
+```expect
+add купить хлеб -> Ok(Add("купить хлеб"))
+done 1 -> Ok(Done(1))
+list -> Ok(List)
+done abc -> Err("«abc» — не номер задачи")
+jump -> Err("Не знаю команду «jump»")
+```
+hint: Ветка для add: `"add" => Ok(Command::Add(rest.to_string())),`
+hint: Для done разбери число: `match rest.parse::<u32>() { Ok(n) => Ok(Command::Done(n)), Err(_) => Err(format!("«{rest}» — не номер задачи")) }`
+
+:: text Ты собрал настоящую программу
+Посмотри, что в ней есть:
+- структуры и перечисления;
+- методы и конструктор;
+- `Vec`, итераторы, замыкания;
+- `Option`, `Result`, `match`, ошибки без паник.
+
+Это и есть основа любой программы на Rust. Дальше — только больше того же.
+
+:: recap
+- Текст от пользователя → свой `enum` через `parse`.
+- Ошибки ввода → `Err`, не паника.
+- Программа = данные + действия + разбор команд.
+
+## LESSON m19-4 | Что дальше | 5
+:: goals
+- Куда идти после курса
+- Как не бросить
+
+:: text Ты прошёл курс
+Это большой путь. Ты разобрался с владением — темой, на которой спотыкаются многие опытные программисты.
+
+Не страшно, если что-то забылось. Загляни в **Шпаргалку** и **Повторение** — они для этого и есть.
+
+:: text Что почитать и порешать
+- [The Rust Book](https://doc.rust-lang.org/book/) — официальная книга. Теперь она будет понятной. Есть [русский перевод](https://doc.rust-lang.ru/book/), но он отстаёт от новых версий.
+- [Rustlings](https://rustlings.rust-lang.org/) — 95 маленьких упражнений на своём компьютере. Очень в духе этого курса.
+- [Rust by Example](https://doc.rust-lang.org/rust-by-example/) — примеры кода по темам.
+- [Exercism, трек Rust](https://exercism.org/tracks/rust) — задачи с проверкой и отзывами наставников.
+
+:: text Как не бросить
+- Пиши маленькие программы для себя: калькулятор расходов, переименователь файлов, бот.
+- 15 минут в день лучше, чем 3 часа раз в месяц.
+- Застрял на ошибке компилятора — прочитай её целиком ещё раз. Там почти всегда есть `help`.
+- Перерывы — часть обучения, а не его провал.
+
+:: quiz
+Какой путь лучше всего закрепит знания?
+[ ] Перечитать весь курс ещё раз => Перечитывание запоминается хуже, чем практика.
+[x] Писать маленькие свои программы и решать упражнения => Верно. Вспоминать и применять — лучший способ учиться.
+[ ] Сразу взяться за большой сложный проект => Можно увязнуть. Лучше много маленьких побед.
+
+:: recap
+- Дальше: Rust Book, Rustlings, Rust by Example, Exercism.
+- Маленькие проекты и регулярность.
+- Шпаргалка и Повторение всегда под рукой.
