@@ -114,6 +114,28 @@
   const freshStamps = new Set();
 
   // ---------- Главная ----------
+  function bindHeroFox(fox) {
+    const art = app.querySelector(".hero-art");
+    const wave = art.querySelector(".hero-fox-wave");
+    const response = app.querySelector(".fox-response");
+    if (wave.complete && wave.naturalWidth) art.classList.add("has-wave");
+    else wave.addEventListener("load", () => art.classList.add("has-wave"), { once: true });
+    let settle;
+    app.querySelector(".fox-controls").addEventListener("click", (event) => {
+      const action = event.target.closest("[data-fox-action]")?.dataset.foxAction;
+      if (action !== "wave" && action !== "pet") return;
+      clearTimeout(settle);
+      const animate = S.settings.motion && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+      if (animate && art.dataset.foxReaction === action) {
+        delete art.dataset.foxReaction;
+        void art.offsetWidth; // повторный клик запускает короткую реакцию заново
+      }
+      art.dataset.foxReaction = action;
+      response.textContent = action === "wave" ? fox.waved : fox.petted;
+      if (animate) settle = setTimeout(() => { delete art.dataset.foxReaction; }, 920);
+    });
+  }
+
   function viewHome() {
     setNav("home");
     document.title = T.docTitle;
@@ -121,6 +143,7 @@
     const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
     const cont = saved || n;
     const started = doneCount() > 0 || S.last;
+    const fox = T.fox;
     let html = `<div class="wrap-wide">
       <section class="hero">
         <div class="hero-grid">
@@ -139,8 +162,26 @@
               <span>${T.statHours(Math.round(totalMin / 60))}</span>
             </div>
           </div>
-          <div class="hero-art">
-            <img src="assets/fox-mascot.webp" width="1374" height="1145" alt="">
+          <div class="hero-companion">
+            <div class="hero-art" aria-hidden="true">
+              <img class="hero-fox-idle" src="assets/fox-mascot.webp" width="1374" height="1145" alt="">
+              <img class="hero-fox-wave" src="assets/fox-wave.webp" width="1374" height="1145" alt="">
+              <svg class="fox-effects" viewBox="0 0 120 100" focusable="false">
+                <g class="fox-wave-marks" fill="none" stroke="#ad70b8" stroke-width="1.8" stroke-linecap="round">
+                  <path d="M30 46q-1-4-5-6m3 10q-3-3-6-3"/>
+                  <path d="M42 43q2-3 5-4"/>
+                </g>
+                <g class="fox-hearts" fill="#f497b3" stroke="#b2587c" stroke-width=".7">
+                  <path d="M16 34c-7-4-5-9-2-9q2 0 3 2 2-3 4-2c4 2 1 6-5 9Z"/>
+                  <path d="M92 27c-6-4-4-8-1-8q1 0 2 2 1-2 3-2c3 1 2 5-4 8Z"/>
+                  <path d="M99 47c-8-4-7-10-3-10q2 0 3 2 2-3 5-2c4 2 2 6-5 10Z"/>
+                </g>
+              </svg>
+            </div>
+            ${fox ? `<div class="fox-controls" role="group" aria-label="${esc(fox.label)}">
+              <button type="button" class="btn btn-quiet btn-sm" data-fox-action="wave">${esc(fox.wave)}</button>
+              <button type="button" class="btn btn-quiet btn-sm" data-fox-action="pet">${esc(fox.pet)}</button>
+            </div><span class="fox-response" role="status"></span>` : ""}
           </div>
         </div>
       </section>
@@ -169,6 +210,7 @@
     });
     html += `<p class="muted small" style="margin-top:1.5rem">${T.storageNote}</p></div>`;
     app.innerHTML = html;
+    if (fox) bindHeroFox(fox);
     freshStamps.clear();
   }
 
