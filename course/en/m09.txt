@@ -1,0 +1,472 @@
+# MODULE m09 | Collections | A closer look at Vec, String and HashMap
+
+## LESSON m09-1 | More about Vec | 6
+:: goals
+- Add, remove and change vector elements
+- Safe access with `get`
+
+:: text The main operations
+```rust
+let mut v = vec![10, 20, 30];
+v.push(40);          // add to the end
+let last = v.pop();  // take the last one: Some(40)
+v[0] = 5;            // replace the first one
+v.remove(1);         // remove by index
+v.insert(0, 1);      // insert at the start
+v.contains(&30);     // is the element there: true
+```
+
+:: text [] or get
+- `v[i]` is fast, but if the element does not exist — **panic**.
+- `v.get(i)` returns an `Option`. No element — `None`, no panic.
+
+> If the index comes from the user or from a file, use `get`.
+
+:: code
+Going through with changes: `&mut` lets you change each element.
+```rust
+fn main() {
+    let mut prices = vec![100, 250, 80];
+    for p in &mut prices {
+        *p = *p * 2;
+    }
+    println!("{:?}", prices);
+    println!("{:?}", prices.get(10));
+}
+```
+```out
+[200, 500, 160]
+None
+```
+`*p` is **dereferencing**: "the value that the reference looks at". Without `*` we would be changing the reference itself.
+
+:: quiz
+What does `vec![1, 2, 3].get(3)` return?
+[ ] 3 => Index 3 is the fourth element. It does not exist.
+[x] None => Correct. There is no element, and `get` says so honestly.
+[ ] The program panics => `[3]` panics, but `get` does not.
+
+:: task
+Remove all odd numbers from the vector and print the result. Hint: a vector has the method `retain`.
+```rust
+fn main() {
+    let mut nums = vec![1, 2, 3, 4, 5, 6];
+    // your code
+    println!("{:?}", nums);
+}
+```
+```solution
+fn main() {
+    let mut nums = vec![1, 2, 3, 4, 5, 6];
+    nums.retain(|n| n % 2 == 0);
+    println!("{:?}", nums);
+}
+```
+```expect
+[2, 4, 6]
+```
+hint: `retain` keeps only the elements for which the condition is true.
+hint: `nums.retain(|n| n % 2 == 0);` — the form `|n| ...` is called a closure. Details are in the module about iterators.
+
+:: text Sorting and order
+- `v.sort()` sorts in ascending order.
+- `v.reverse()` reverses.
+- `v.dedup()` removes **neighboring** repeats. That is why you sort first, then `dedup`.
+- `v.len()`, `v.is_empty()` give the length and check "is it empty".
+
+```rust
+let mut v = vec![3, 1, 3, 2, 1];
+v.sort();   // [1, 1, 2, 3, 3]
+v.dedup();  // [1, 2, 3]
+```
+!> Fractional numbers `f64` cannot be sorted this way: they have a special value NaN ("not a number") that cannot be compared. For them, write `v.sort_by(|a, b| a.total_cmp(b))`.
+
+:: recap
+- `push`, `pop`, `insert`, `remove`, `contains`.
+- `v[i]` panics out of bounds, `v.get(i)` returns an `Option`.
+- `for x in &mut v` changes elements; `*x` is the value itself.
+
+## LESSON m09-2 | More about String | 6
+:: goals
+- Build strings from pieces
+- Go through words and letters
+
+:: text How to build a string
+```rust
+let mut s = String::from("Hello");
+s.push_str(", world"); // add text
+s.push('!');           // add one character
+let name = "Anna";
+let msg = format!("Hello, {name}!"); // like println!, but into a string
+```
+`format!` is the most convenient way. It prints nothing; it returns a `String`.
+
+:: code
+```rust
+fn main() {
+    let text = "  Rust makes   code reliable  ";
+    let clean = text.trim();
+    println!("[{clean}]");
+    println!("Words: {}", clean.split_whitespace().count());
+    println!("Upper case: {}", clean.to_uppercase());
+    println!("Has \"code\": {}", clean.contains("code"));
+    println!("{}", clean.replace("reliable", "fast"));
+}
+```
+```out
+[Rust makes   code reliable]
+Words: 4
+Upper case: RUST MAKES   CODE RELIABLE
+Has "code": true
+Rust makes   code fast
+```
+- `trim` removes spaces at the edges.
+- `split_whitespace` cuts the text into words at spaces.
+
+:: quiz
+How is `format!` different from `println!`?
+[x] `format!` returns a string instead of printing it => Correct. You can then store it, pass it on, print it.
+[ ] `format!` prints without a new line => That is what `print!` does.
+[ ] There is no difference => The difference is important: one prints, the other creates a `String`.
+
+:: task
+Reverse each word of the string while keeping the order of the words. For "hello world" the result is "olleh dlrow".
+```rust
+fn main() {
+    let text = "hello world";
+    let mut result = Vec::new();
+    for word in text.split_whitespace() {
+        // reverse word and put it into result
+    }
+    println!("{}", result.join(" "));
+}
+```
+```solution
+fn main() {
+    let text = "hello world";
+    let mut result = Vec::new();
+    for word in text.split_whitespace() {
+        let reversed: String = word.chars().rev().collect();
+        result.push(reversed);
+    }
+    println!("{}", result.join(" "));
+}
+```
+```expect
+olleh dlrow
+```
+hint: `word.chars()` goes through the letters, `.rev()` reverses them.
+hint: Collect them back into a string: `let r: String = word.chars().rev().collect();`
+
+:: deep Bytes, characters, and what a person sees
+A string in Rust can be read on three levels:
+- `bytes()` — the UTF-8 bytes;
+- `chars()` — the Unicode characters (`char`);
+- what a person sees as one symbol. Sometimes this is **several** `char`s in a row.
+
+```rust
+fn main() {
+    let s = "e\u{301}👍🏽"; // e + an accent mark, a thumb + a skin tone
+    println!("bytes: {}", s.len());
+    println!("chars: {}", s.chars().count());
+}
+```
+```out
+bytes: 11
+chars: 4
+```
+On screen these are 2 symbols: "é" and "👍🏽". But `é` here is written as `e` plus a separate accent mark (`\u{301}` is its Unicode number), and 👍🏽 as a thumb plus a skin tone. For working with such "visible symbols" there is a separate library, `unicode-segmentation`. It is not in the standard library.
+
+:: recap
+- `push_str`, `push`, `format!` build a string.
+- `trim`, `split_whitespace`, `contains`, `replace`, `to_uppercase`.
+- Letters — through `.chars()`.
+
+## LESSON m09-3 | HashMap — a dictionary | 7
+:: goals
+- Store "key → value" pairs
+- Count how often words appear
+
+:: text A dictionary
+A **HashMap** stores "key → value" pairs. A value is found quickly by its key.
+
+> Analogy: a phone book. You find the number by the name. You do not need to read through everything.
+
+You need to bring HashMap in with the line `use std::collections::HashMap;`.
+
+:: code
+```rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut phones = HashMap::new();
+    phones.insert("Anna", "111-22-33");
+    phones.insert("Bob", "444-55-66");
+
+    match phones.get("Anna") {
+        Some(num) => println!("Anna's number: {num}"),
+        None => println!("I do not know this person"),
+    }
+    println!("Is Vic there? {}", phones.contains_key("Vic"));
+    println!("Contacts in total: {}", phones.len());
+}
+```
+```out
+Anna's number: 111-22-33
+Is Vic there? false
+Contacts in total: 2
+```
+!> The order of elements in a HashMap is not guaranteed. If the order matters, use `BTreeMap`: it keeps the keys sorted.
+
+:: text entry — "find or create"
+A common task: increase a counter, and if the key is not there yet — start from zero.
+
+```rust
+*counts.entry(word).or_insert(0) += 1;
+```
+Read it as: "find the entry `word`; if it is not there, insert 0; add 1".
+
+:: task
+Count how many times each word appears. We use `BTreeMap` so that the output goes in alphabetical order.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "cat dog cat fish cat dog";
+    let mut counts = BTreeMap::new();
+    for word in text.split_whitespace() {
+        // increase the counter for word
+    }
+    for (word, n) in &counts {
+        println!("{word}: {n}");
+    }
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "cat dog cat fish cat dog";
+    let mut counts = BTreeMap::new();
+    for word in text.split_whitespace() {
+        *counts.entry(word).or_insert(0) += 1;
+    }
+    for (word, n) in &counts {
+        println!("{word}: {n}");
+    }
+}
+```
+```expect
+cat: 3
+dog: 2
+fish: 1
+```
+hint: Use `entry(word).or_insert(0)`.
+hint: In full: `*counts.entry(word).or_insert(0) += 1;`
+
+:: text Going through a dictionary, and HashSet
+You can go through all pairs with a loop:
+
+```rust
+for (name, phone) in &phones {
+    println!("{name}: {phone}");
+}
+```
+If you only need keys without values, there is **HashSet** — a set of unique elements:
+
+```rust
+use std::collections::HashSet;
+let mut seen = HashSet::new();
+seen.insert("cat");
+seen.insert("cat"); // a repeat is not added
+println!("{}", seen.len()); // 1
+```
+
+:: deep How HashMap finds a value so fast
+A HashMap turns a key into a number with a **hash function**. This number shows right away which "box" (bucket) to put the pair into.
+
+So a lookup does not go through all elements. It computes the hash of the key and looks into one box. This is about equally fast for 10 elements and for a million.
+
+Two rules follow from this:
+- a key must be hashable (the trait `Hash`) and comparable (`Eq`);
+- the order of elements depends on the hashes, not on the order of insertion.
+
+By default, Rust's hash function is protected against specially chosen keys that an attacker could use to slow down a server.
+
+:: recap
+- `HashMap` is key → value. It needs `use std::collections::HashMap;`.
+- `insert`, `get` (returns an `Option`), `contains_key`.
+- `*map.entry(k).or_insert(0) += 1;` is a counter.
+- `BTreeMap` is the same, but with the keys in order.
+
+## LESSON m09-p | Practice: collections | 14 | practice
+:: goals
+- Sort and clean vectors
+- Process strings by words and letters
+- Build dictionaries
+
+:: task
+Find the median: sort the numbers and take the one in the middle position. For 5 numbers it is the element with index 2.
+```rust
+fn main() {
+    let mut nums = vec![7, 1, 9, 3, 5];
+}
+```
+```solution
+fn main() {
+    let mut nums = vec![7, 1, 9, 3, 5];
+    nums.sort();
+    println!("{}", nums[nums.len() / 2]);
+}
+```
+```expect
+5
+```
+hint: First `nums.sort();`
+hint: The middle index: `nums.len() / 2`.
+
+:: task
+Remove repeats from the list and print the result in ascending order.
+```rust
+fn main() {
+    let mut tags = vec!["rust", "code", "rust", "games", "code"];
+    println!("{:?}", tags);
+}
+```
+```solution
+fn main() {
+    let mut tags = vec!["rust", "code", "rust", "games", "code"];
+    tags.sort();
+    tags.dedup();
+    println!("{:?}", tags);
+}
+```
+```expect
+["code", "games", "rust"]
+```
+hint: `dedup` removes only neighboring repeats. You need `sort` first.
+hint: `tags.sort(); tags.dedup();`
+
+:: task
+Make the first letter of each word a capital letter: `hello world` → `Hello World`.
+```rust
+fn capitalize(word: &str) -> String {
+    word.to_string()
+}
+
+fn main() {
+    let text = "hello world rust";
+    let mut words = Vec::new();
+    for w in text.split_whitespace() {
+        words.push(capitalize(w));
+    }
+    println!("{}", words.join(" "));
+}
+```
+```solution
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+fn main() {
+    let text = "hello world rust";
+    let mut words = Vec::new();
+    for w in text.split_whitespace() {
+        words.push(capitalize(w));
+    }
+    println!("{}", words.join(" "));
+}
+```
+```expect
+Hello World Rust
+```
+hint: Take the first letter: `let mut chars = word.chars(); chars.next()` — this is an `Option<char>`.
+hint: The capital letter: `first.to_uppercase().collect::<String>()`. The rest of the word: `chars.as_str()`. Join them with `+`.
+
+:: task
+A phone book. Write a function `lookup` that returns the number or the text `unknown`.
+```rust
+use std::collections::HashMap;
+
+fn lookup(book: &HashMap<&str, &str>, name: &str) -> String {
+    String::new()
+}
+
+fn main() {
+    let mut book = HashMap::new();
+    book.insert("Anna", "111");
+    book.insert("Bob", "222");
+    println!("{}", lookup(&book, "Bob"));
+    println!("{}", lookup(&book, "Vic"));
+}
+```
+```solution
+use std::collections::HashMap;
+
+fn lookup(book: &HashMap<&str, &str>, name: &str) -> String {
+    match book.get(name) {
+        Some(phone) => phone.to_string(),
+        None => String::from("unknown"),
+    }
+}
+
+fn main() {
+    let mut book = HashMap::new();
+    book.insert("Anna", "111");
+    book.insert("Bob", "222");
+    println!("{}", lookup(&book, "Bob"));
+    println!("{}", lookup(&book, "Vic"));
+}
+```
+```expect
+222
+unknown
+```
+hint: `book.get(name)` returns an `Option`.
+hint: Check it with `match`: `Some(phone) => phone.to_string()`, `None => String::from("unknown")`.
+
+:: task
+Group the words by their first letter. Use `BTreeMap<char, Vec<&str>>` so the letters go in alphabetical order.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let words = ["cat", "apple", "cake", "avocado", "banana"];
+    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();
+    // fill groups
+    for (letter, list) in &groups {
+        println!("{letter}: {}", list.join(", "));
+    }
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let words = ["cat", "apple", "cake", "avocado", "banana"];
+    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();
+    for w in words {
+        let first = w.chars().next().unwrap();
+        groups.entry(first).or_insert(Vec::new()).push(w);
+    }
+    for (letter, list) in &groups {
+        println!("{letter}: {}", list.join(", "));
+    }
+}
+```
+```expect
+a: apple, avocado
+b: banana
+c: cat, cake
+```
+hint: The first letter: `w.chars().next().unwrap()`.
+hint: `groups.entry(first).or_insert(Vec::new()).push(w);`
+
+:: recap
+- `sort` + `dedup` remove repeats.
+- `chars()` for letters, `split_whitespace()` for words.
+- `entry(k).or_insert(...)` means "find or create" in a dictionary.

@@ -68,6 +68,19 @@ fn main() {
 hint: `retain` оставляет только элементы, для которых условие правда.
 hint: `nums.retain(|n| n % 2 == 0);` — запись `|n| ...` называется замыканием. Подробно — в модуле про итераторы.
 
+:: text Сортировка и порядок
+- `v.sort()` — отсортировать по возрастанию.
+- `v.reverse()` — перевернуть.
+- `v.dedup()` — убрать **соседние** повторы. Поэтому сначала сортируют, потом `dedup`.
+- `v.len()`, `v.is_empty()` — длина и проверка «пустой ли».
+
+```rust
+let mut v = vec![3, 1, 3, 2, 1];
+v.sort();   // [1, 1, 2, 3, 3]
+v.dedup();  // [1, 2, 3]
+```
+!> Дробные числа `f64` так не сортируются: у них есть особое значение NaN («не число»), которое нельзя сравнить. Для них пишут `v.sort_by(|a, b| a.total_cmp(b))`.
+
 :: recap
 - `push`, `pop`, `insert`, `remove`, `contains`.
 - `v[i]` паникует за границей, `v.get(i)` возвращает `Option`.
@@ -144,6 +157,25 @@ fn main() {
 ```
 hint: Буквы перебирает `word.chars()`, переворачивает `.rev()`.
 hint: Собрать обратно в строку: `let r: String = word.chars().rev().collect();`
+
+:: deep Байты, буквы и то, что видит человек
+Строка в Rust можно читать на трёх уровнях:
+- `bytes()` — байты UTF-8;
+- `chars()` — символы Юникода (`char`);
+- то, что человек видит как один знак. Иногда это **несколько** `char` подряд.
+
+```rust
+fn main() {
+    let s = "e\u{301}👍🏽"; // e + знак ударения, палец + цвет кожи
+    println!("байт: {}", s.len());
+    println!("char: {}", s.chars().count());
+}
+```
+```out
+байт: 11
+char: 4
+```
+На экране это 2 знака: «é» и «👍🏽». Но `é` здесь записан как `e` плюс отдельный значок ударения (`\u{301}` — его номер в Юникоде), а 👍🏽 — как палец плюс цвет кожи. Для работы с такими «видимыми знаками» есть отдельная библиотека `unicode-segmentation`. В стандартной библиотеке её нет.
 
 :: recap
 - `push_str`, `push`, `format!` — собрать строку.
@@ -232,8 +264,209 @@ fn main() {
 hint: Используй `entry(word).or_insert(0)`.
 hint: Целиком: `*counts.entry(word).or_insert(0) += 1;`
 
+:: text Перебор словаря и HashSet
+Перебрать все пары можно циклом:
+
+```rust
+for (name, phone) in &phones {
+    println!("{name}: {phone}");
+}
+```
+Если нужны только ключи без значений, есть **HashSet** — набор уникальных элементов:
+
+```rust
+use std::collections::HashSet;
+let mut seen = HashSet::new();
+seen.insert("кот");
+seen.insert("кот"); // повтор не добавится
+println!("{}", seen.len()); // 1
+```
+
+:: deep Как HashMap находит значение так быстро
+HashMap превращает ключ в число с помощью **хеш-функции**. По этому числу сразу видно, в какой «ящик» (bucket) положить пару.
+
+Поиск поэтому не перебирает все элементы. Он считает хеш ключа и смотрит в один ящик. Это примерно одинаково быстро и для 10, и для миллиона элементов.
+
+Отсюда два правила:
+- ключ должен уметь хешироваться (трейт `Hash`) и сравниваться (`Eq`);
+- порядок элементов зависит от хешей, а не от порядка вставки.
+
+Хеш-функция в Rust по умолчанию защищена от специально подобранных ключей, которыми злоумышленник мог бы замедлить сервер.
+
 :: recap
 - `HashMap` — ключ → значение. Нужен `use std::collections::HashMap;`.
 - `insert`, `get` (вернёт `Option`), `contains_key`.
 - `*map.entry(k).or_insert(0) += 1;` — счётчик.
 - `BTreeMap` — то же, но ключи по порядку.
+
+## LESSON m09-p | Практика: коллекции | 14 | practice
+:: goals
+- Сортировать и чистить векторы
+- Обрабатывать строки по словам и буквам
+- Строить словари
+
+:: task
+Найди медиану: отсортируй числа и возьми среднее по позиции. Для 5 чисел это элемент с индексом 2.
+```rust
+fn main() {
+    let mut nums = vec![7, 1, 9, 3, 5];
+}
+```
+```solution
+fn main() {
+    let mut nums = vec![7, 1, 9, 3, 5];
+    nums.sort();
+    println!("{}", nums[nums.len() / 2]);
+}
+```
+```expect
+5
+```
+hint: Сначала `nums.sort();`
+hint: Средний индекс: `nums.len() / 2`.
+
+:: task
+Убери из списка повторы и напечатай результат по возрастанию.
+```rust
+fn main() {
+    let mut tags = vec!["rust", "код", "rust", "игры", "код"];
+    println!("{:?}", tags);
+}
+```
+```solution
+fn main() {
+    let mut tags = vec!["rust", "код", "rust", "игры", "код"];
+    tags.sort();
+    tags.dedup();
+    println!("{:?}", tags);
+}
+```
+```expect
+["rust", "игры", "код"]
+```
+hint: `dedup` убирает только соседние повторы. Сначала нужно `sort`.
+hint: `tags.sort(); tags.dedup();`
+
+:: task
+Сделай первую букву каждого слова заглавной: `привет мир` → `Привет Мир`.
+```rust
+fn capitalize(word: &str) -> String {
+    word.to_string()
+}
+
+fn main() {
+    let text = "привет мир rust";
+    let mut words = Vec::new();
+    for w in text.split_whitespace() {
+        words.push(capitalize(w));
+    }
+    println!("{}", words.join(" "));
+}
+```
+```solution
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+fn main() {
+    let text = "привет мир rust";
+    let mut words = Vec::new();
+    for w in text.split_whitespace() {
+        words.push(capitalize(w));
+    }
+    println!("{}", words.join(" "));
+}
+```
+```expect
+Привет Мир Rust
+```
+hint: Возьми первую букву: `let mut chars = word.chars(); chars.next()` — это `Option<char>`.
+hint: Заглавная: `first.to_uppercase().collect::<String>()`. Остаток слова: `chars.as_str()`. Склей их через `+`.
+
+:: task
+Телефонная книга. Напиши функцию `lookup`, которая возвращает номер или текст `неизвестно`.
+```rust
+use std::collections::HashMap;
+
+fn lookup(book: &HashMap<&str, &str>, name: &str) -> String {
+    String::new()
+}
+
+fn main() {
+    let mut book = HashMap::new();
+    book.insert("Аня", "111");
+    book.insert("Боря", "222");
+    println!("{}", lookup(&book, "Боря"));
+    println!("{}", lookup(&book, "Вася"));
+}
+```
+```solution
+use std::collections::HashMap;
+
+fn lookup(book: &HashMap<&str, &str>, name: &str) -> String {
+    match book.get(name) {
+        Some(phone) => phone.to_string(),
+        None => String::from("неизвестно"),
+    }
+}
+
+fn main() {
+    let mut book = HashMap::new();
+    book.insert("Аня", "111");
+    book.insert("Боря", "222");
+    println!("{}", lookup(&book, "Боря"));
+    println!("{}", lookup(&book, "Вася"));
+}
+```
+```expect
+222
+неизвестно
+```
+hint: `book.get(name)` возвращает `Option`.
+hint: Разбери через `match`: `Some(phone) => phone.to_string()`, `None => String::from("неизвестно")`.
+
+:: task
+Сгруппируй слова по первой букве. Используй `BTreeMap<char, Vec<&str>>`, чтобы буквы шли по алфавиту.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let words = ["кот", "арбуз", "компот", "ананас", "банан"];
+    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();
+    // заполни groups
+    for (letter, list) in &groups {
+        println!("{letter}: {}", list.join(", "));
+    }
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let words = ["кот", "арбуз", "компот", "ананас", "банан"];
+    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();
+    for w in words {
+        let first = w.chars().next().unwrap();
+        groups.entry(first).or_insert(Vec::new()).push(w);
+    }
+    for (letter, list) in &groups {
+        println!("{letter}: {}", list.join(", "));
+    }
+}
+```
+```expect
+а: арбуз, ананас
+б: банан
+к: кот, компот
+```
+hint: Первая буква: `w.chars().next().unwrap()`.
+hint: `groups.entry(first).or_insert(Vec::new()).push(w);`
+
+:: recap
+- `sort` + `dedup` — убрать повторы.
+- `chars()` для букв, `split_whitespace()` для слов.
+- `entry(k).or_insert(...)` — «найди или создай» в словаре.

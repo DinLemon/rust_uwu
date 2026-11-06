@@ -1,0 +1,595 @@
+# MODULE m08 | Enums and match | One of several options
+
+## LESSON m08-1 | An enum is one option from a list | 6
+:: goals
+- What an enum is
+- How to store data in variants
+
+:: text Choosing from a list
+An **enum** (enumeration) is a type whose value is **one** variant from a list known in advance.
+
+```rust
+enum Light {
+    Red,
+    Yellow,
+    Green,
+}
+let now = Light::Red;
+```
+> Analogy: a traffic light shows red, yellow or green. Nothing else is possible.
+
+:: text Variants can carry data
+Each variant can have its own data:
+
+```rust
+enum Message {
+    Quit,                    // no data
+    Move { x: i32, y: i32 }, // like a struct
+    Write(String),           // one value
+}
+```
+One type `Message`, but inside it there are different kinds of messages.
+
+:: quiz
+How many variants does a value of type `Light` hold at the same time?
+[x] Exactly one => Correct. That is the point of an enum.
+[ ] All three => That would be a struct with three fields.
+[ ] Zero or one => An enum value cannot be empty. But for "there may be nothing" there is Option — soon.
+
+:: text Enums can have methods too
+Like a struct, an `enum` can have an `impl` block:
+
+```rust
+impl Light {
+    fn next(&self) -> Light {
+        match self {
+            Light::Red => Light::Green,
+            Light::Green => Light::Yellow,
+            Light::Yellow => Light::Red,
+        }
+    }
+}
+```
+Here `match` checks which light is on now. The next lesson is about it.
+
+:: recap
+- `enum` is one variant from a list.
+- A variant is written with `::` — `Light::Red`.
+- Variants can hold data.
+
+## LESSON m08-2 | match — checking variants | 7
+:: goals
+- Check an enum with `match`
+- Understand why `match` requires all variants
+
+:: text match is a sorting machine
+`match` looks at a value and picks the matching branch. This is **pattern matching**.
+
+```rust
+match light {
+    Light::Red => println!("Stop"),
+    Light::Yellow => println!("Wait"),
+    Light::Green => println!("Go"),
+}
+```
+> Analogy: a parcel sorter sends each parcel to the right window by its address.
+
+:: code
+```rust
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+}
+
+fn value(c: Coin) -> u32 {
+    match c {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+    }
+}
+
+fn main() {
+    let total = value(Coin::Nickel) + value(Coin::Dime);
+    println!("Total: {total} cents");
+}
+```
+```out
+Total: 15 cents
+```
+`match` is also an expression: it returns the value of the chosen branch.
+
+:: text match checks everything
+If you forget a variant, the compiler does not allow it: error `E0004`.
+
+This is a huge help. When you add a new variant to an enum, the compiler shows **all** places that need updating.
+
+You do not want to list everything? The branch `_` catches "everything else":
+
+```rust
+match number {
+    1 => println!("one"),
+    2 => println!("two"),
+    _ => println!("many"),
+}
+```
+
+:: code
+Data from a variant is taken out right in the `match`:
+```rust
+enum Shape {
+    Circle(f64),
+    Rect(f64, f64),
+}
+
+fn area(s: &Shape) -> f64 {
+    match s {
+        Shape::Circle(r) => 3.14 * r * r,
+        Shape::Rect(w, h) => w * h,
+    }
+}
+
+fn main() {
+    println!("{}", area(&Shape::Rect(2.0, 3.0)));
+    println!("{}", area(&Shape::Circle(1.0)));
+}
+```
+```out
+6
+3.14
+```
+
+:: quiz
+What does the branch `_ =>` do in a `match`?
+[ ] It catches errors => It is not about errors, it is about the remaining variants.
+[x] It matches any value that was not matched earlier => Correct. It is "everything else".
+[ ] It skips the whole `match` => The `_` branch runs if nothing matched before it.
+
+:: task
+Write a function `describe` that for a number returns: `0` → `zero`, `1` → `one`, anything else → `other`. Use `match`.
+```rust
+fn describe(n: i32) -> &'static str {
+    // your match
+}
+
+fn main() {
+    println!("{}", describe(0));
+    println!("{}", describe(1));
+    println!("{}", describe(42));
+}
+```
+```solution
+fn describe(n: i32) -> &'static str {
+    match n {
+        0 => "zero",
+        1 => "one",
+        _ => "other",
+    }
+}
+
+fn main() {
+    println!("{}", describe(0));
+    println!("{}", describe(1));
+    println!("{}", describe(42));
+}
+```
+```expect
+zero
+one
+other
+```
+hint: `&'static str` simply means "text in quotes". The strange label `'static` is explained later.
+hint: The branches: `0 => "zero",`, `1 => "one",`, `_ => "other",`
+
+:: text More complex patterns
+In `match` branches you can write more than concrete values:
+
+- `1 | 2` means "1 or 2";
+- `3..=9` means "from 3 to 9 inclusive";
+- `n if n < 0` means "any `n`, but only if it is less than zero". Such a condition is called a **guard**.
+
+```rust
+let text = match score {
+    0 => "zero",
+    1 | 2 => "few",
+    3..=9 => "medium",
+    n if n < 0 => "below zero",
+    _ => "many",
+};
+```
+
+:: deep match on a tuple
+`match` can check several values at once if you put them into a tuple:
+
+```rust
+fn main() {
+    for (a, b) in [(true, true), (true, false), (false, false)] {
+        let text = match (a, b) {
+            (true, true) => "both",
+            (true, false) | (false, true) => "one",
+            (false, false) => "nobody",
+        };
+        println!("{text}");
+    }
+}
+```
+```out
+both
+one
+nobody
+```
+
+:: recap
+- `match` picks a branch by pattern.
+- All variants must be covered, otherwise there is an error.
+- `_` means "everything else".
+
+## LESSON m08-3 | Option: maybe there is a value, maybe not | 7
+:: goals
+- Why Rust has no `null`
+- How to work with `Option`
+
+:: text There may be no value
+Often a result may be missing. For example, we look for a user, and there is none.
+
+Many languages have `null` for this — "nothing". Its inventor called `null` his "billion-dollar mistake": programs kept crashing because someone forgot to check.
+
+Rust has no `null`. It has `Option` instead.
+
+:: text Option is a box that may be empty
+```rust
+enum Option<T> {
+    Some(T), // there is a value inside
+    None,    // empty
+}
+```
+> Analogy: a gift box. There may be a gift inside (`Some`), or it may be empty (`None`). You do not know until you open it. And Rust makes you open it.
+
+`T` means "any type". The module about generics explains it in detail.
+
+:: code
+```rust
+fn divide(a: i32, b: i32) -> Option<i32> {
+    if b == 0 {
+        None
+    } else {
+        Some(a / b)
+    }
+}
+
+fn main() {
+    for b in [2, 0] {
+        match divide(10, b) {
+            Some(result) => println!("10 / {b} = {result}"),
+            None => println!("You cannot divide by {b}"),
+        }
+    }
+}
+```
+```out
+10 / 2 = 5
+You cannot divide by 0
+```
+
+:: quiz
+Can you add `Option<i32>` and `i32` directly: `Some(5) + 3`?
+[ ] Yes, Rust takes out the 5 by itself => No. First you have to check that the box is not empty.
+[x] No, first you have to take the value out of the Option => Correct. This is what protects you from "forgot to check".
+
+:: text Handy ways to open the box
+- `if let Some(x) = value { ... }` — do something only if there is a value.
+- `value.unwrap_or(0)` — take the value, or use 0 if it is empty.
+- `value.unwrap()` — take the value, and if it is empty — **panic**. Only when you are sure.
+
+```rust
+let first = vec![3, 1, 2].first().copied().unwrap_or(0);
+```
+
+:: code
+`if let` is a short `match` for one variant:
+```rust
+fn main() {
+    let names = vec!["Anna", "Bob"];
+    if let Some(name) = names.get(1) {
+        println!("Second: {name}");
+    }
+    if let Some(name) = names.get(5) {
+        println!("Sixth: {name}");
+    } else {
+        println!("There is no sixth");
+    }
+}
+```
+```out
+Second: Bob
+There is no sixth
+```
+`get(i)` returns an `Option`: the element may not exist. It is safer than `[i]`.
+
+:: deep What Option costs
+`Option<&T>` takes **the same** amount of memory as a plain `&T`. How?
+
+A reference in Rust is never the zero address. So the compiler uses the zero address as the marker for `None`. No extra space for "there is / there is not" is needed.
+
+```rust
+fn main() {
+    println!("{}", std::mem::size_of::<&i32>());
+    println!("{}", std::mem::size_of::<Option<&i32>>());
+}
+```
+```out
+8
+8
+```
+The safety of `Option` costs nothing in memory. The same is true for `Option<Box<T>>`.
+
+:: recap
+- Rust has no `null`. It has `Option<T>`: `Some(x)` or `None`.
+- Rust makes you check whether there is a value.
+- `if let Some(x) = ...`, `unwrap_or(fallback)`, `unwrap()` — only when you are sure.
+
+## LESSON m08-4 | let else and let chains | 5
+:: goals
+- Leave early with `let ... else`
+- Several conditions with `&&` in `if let`
+
+:: text let else — "take it out or leave"
+Often you need: "take the value out, and if there is none — leave the function". For this there is `let ... else`:
+
+```rust
+fn greet_first(names: &[&str]) {
+    let Some(first) = names.first() else {
+        println!("Nobody is here");
+        return;
+    };
+    println!("Hello, {first}!");
+}
+```
+After this block, `first` is a normal value, without `Some`.
+
+:: text let chains (Rust 2024)
+In the new Rust 2024 edition you can join checks in an `if` with `&&`:
+
+```rust
+if let Some(age) = maybe_age && age >= 18 {
+    println!("Adult");
+}
+```
+Before this, you had to put an `if` inside another `if`.
+
+:: code
+```rust
+fn parse_age(text: &str) -> Option<u32> {
+    let Ok(n) = text.parse::<u32>() else {
+        return None;
+    };
+    Some(n)
+}
+
+fn main() {
+    for t in ["25", "abc", "15"] {
+        if let Some(age) = parse_age(t) && age >= 18 {
+            println!("{t}: adult");
+        } else {
+            println!("{t}: no");
+        }
+    }
+}
+```
+```out
+25: adult
+abc: no
+15: no
+```
+`Ok(n)` is a variant of the type `Result`. It is about errors; there is a separate module about it.
+
+:: quiz
+What must be in the `else` block of `let ... else`?
+[ ] Nothing, it can be empty => No: after `else` the program cannot continue without the value.
+[x] A way out: `return`, `break`, `continue` or a panic => Correct. The block must "leave", because there is no value.
+
+:: recap
+- `let Some(x) = opt else { return; };` — take it out or leave.
+- `if let Some(x) = opt && condition` — a let chain in Rust 2024.
+
+## LESSON m08-p | Practice: enum and match | 12 | practice
+:: goals
+- Describe variants with `enum`
+- Check them with `match`, `if let`, `Option`
+
+:: task
+There are directions. Complete the function `turn_right`: north → east → south → west → north.
+```rust
+#[derive(Debug)]
+enum Dir {
+    North,
+    East,
+    South,
+    West,
+}
+
+fn turn_right(d: Dir) -> Dir {
+    d
+}
+
+fn main() {
+    println!("{:?}", turn_right(Dir::North));
+    println!("{:?}", turn_right(Dir::West));
+}
+```
+```solution
+#[derive(Debug)]
+enum Dir {
+    North,
+    East,
+    South,
+    West,
+}
+
+fn turn_right(d: Dir) -> Dir {
+    match d {
+        Dir::North => Dir::East,
+        Dir::East => Dir::South,
+        Dir::South => Dir::West,
+        Dir::West => Dir::North,
+    }
+}
+
+fn main() {
+    println!("{:?}", turn_right(Dir::North));
+    println!("{:?}", turn_right(Dir::West));
+}
+```
+```expect
+East
+North
+```
+hint: You need `match d { ... }` with four branches.
+hint: The first branch: `Dir::North => Dir::East,`
+
+:: task
+Turn points into a grade with `match` and ranges: 90–100 → `excellent`, 70–89 → `good`, 50–69 → `pass`, everything else → `fail`.
+```rust
+fn grade(score: u32) -> &'static str {
+    "fail"
+}
+
+fn main() {
+    for s in [95, 75, 50, 10] {
+        println!("{}", grade(s));
+    }
+}
+```
+```solution
+fn grade(score: u32) -> &'static str {
+    match score {
+        90..=100 => "excellent",
+        70..=89 => "good",
+        50..=69 => "pass",
+        _ => "fail",
+    }
+}
+
+fn main() {
+    for s in [95, 75, 50, 10] {
+        println!("{}", grade(s));
+    }
+}
+```
+```expect
+excellent
+good
+pass
+fail
+```
+hint: A branch with a range: `90..=100 => "excellent",`
+hint: The last branch: `_ => "fail",`
+
+:: task
+Write a function `first_negative` that returns the first negative number of a slice in `Some`, or `None` if there is none.
+```rust
+fn first_negative(items: &[i32]) -> Option<i32> {
+    None
+}
+
+fn main() {
+    println!("{:?}", first_negative(&[3, -4, -1]));
+    println!("{:?}", first_negative(&[1, 2]));
+}
+```
+```solution
+fn first_negative(items: &[i32]) -> Option<i32> {
+    for &x in items {
+        if x < 0 {
+            return Some(x);
+        }
+    }
+    None
+}
+
+fn main() {
+    println!("{:?}", first_negative(&[3, -4, -1]));
+    println!("{:?}", first_negative(&[1, 2]));
+}
+```
+```expect
+Some(-4)
+None
+```
+hint: In the loop, as soon as you find `x < 0`, return `Some(x)` with `return`.
+hint: `for &x in items` takes the number out of the reference right away. After the loop return `None`.
+
+:: task
+With `if let`, print the square of a number only if it exists. For `None` print nothing.
+```rust
+fn main() {
+    let values = [Some(3), None, Some(5)];
+    for v in values {
+        // your if let
+    }
+}
+```
+```solution
+fn main() {
+    let values = [Some(3), None, Some(5)];
+    for v in values {
+        if let Some(n) = v {
+            println!("{}", n * n);
+        }
+    }
+}
+```
+```expect
+9
+25
+```
+hint: `if let Some(n) = v { ... }`
+hint: Inside: `println!("{}", n * n);`
+
+:: task
+An enum of robot commands. Calculate where the robot ends up, starting at position 0: `Forward(n)` adds `n`, `Back(n)` subtracts `n`, `Stop` stops the program.
+```rust
+enum Cmd {
+    Forward(i32),
+    Back(i32),
+    Stop,
+}
+
+fn main() {
+    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];
+    let mut pos = 0;
+    // go through program
+    println!("{pos}");
+}
+```
+```solution
+enum Cmd {
+    Forward(i32),
+    Back(i32),
+    Stop,
+}
+
+fn main() {
+    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];
+    let mut pos = 0;
+    for cmd in program {
+        match cmd {
+            Cmd::Forward(n) => pos += n,
+            Cmd::Back(n) => pos -= n,
+            Cmd::Stop => break,
+        }
+    }
+    println!("{pos}");
+}
+```
+```expect
+7
+```
+hint: `for cmd in program { match cmd { ... } }`
+hint: The branches: `Cmd::Forward(n) => pos += n,`, `Cmd::Back(n) => pos -= n,`, `Cmd::Stop => break,`
+
+:: recap
+- `match` checks all variants, `_` catches the rest.
+- Ranges `a..=b` and `|` make branches shorter.
+- `Option` means "there is a value or not", `if let` checks one variant.

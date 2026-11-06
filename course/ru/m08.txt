@@ -36,6 +36,22 @@ enum Message {
 [ ] Все три => Это была бы структура с тремя полями.
 [ ] Ноль или один => Пустым значение enum быть не может. Хотя для «может не быть» есть Option — скоро о нём.
 
+:: text У перечисления тоже бывают методы
+Как у структуры, у `enum` можно написать блок `impl`:
+
+```rust
+impl Light {
+    fn next(&self) -> Light {
+        match self {
+            Light::Red => Light::Green,
+            Light::Green => Light::Yellow,
+            Light::Yellow => Light::Red,
+        }
+    }
+}
+```
+`match` здесь разбирает, какой сейчас свет. Ему посвящён следующий урок.
+
 :: recap
 - `enum` — один вариант из списка.
 - Вариант пишется через `::` — `Light::Red`.
@@ -166,6 +182,44 @@ fn main() {
 hint: `&'static str` — это просто «текст в кавычках». Странную метку `'static` разберём позже.
 hint: Ветки: `0 => "ноль",`, `1 => "один",`, `_ => "другое",`
 
+:: text Более сложные образцы
+В ветках `match` можно писать не только конкретные значения:
+
+- `1 | 2` — «1 или 2»;
+- `3..=9` — «от 3 до 9 включительно»;
+- `n if n < 0` — «любое `n`, но только если оно меньше нуля». Такое условие называют **охранником** (guard).
+
+```rust
+let text = match score {
+    0 => "ноль",
+    1 | 2 => "мало",
+    3..=9 => "средне",
+    n if n < 0 => "меньше нуля",
+    _ => "много",
+};
+```
+
+:: deep match по кортежу
+`match` умеет разбирать сразу несколько значений, если сложить их в кортеж:
+
+```rust
+fn main() {
+    for (a, b) in [(true, true), (true, false), (false, false)] {
+        let text = match (a, b) {
+            (true, true) => "оба",
+            (true, false) | (false, true) => "один",
+            (false, false) => "никто",
+        };
+        println!("{text}");
+    }
+}
+```
+```out
+оба
+один
+никто
+```
+
 :: recap
 - `match` выбирает ветку по образцу.
 - Нужно разобрать все варианты, иначе ошибка.
@@ -253,6 +307,23 @@ fn main() {
 ```
 `get(i)` возвращает `Option`: элемента может не быть. Безопаснее, чем `[i]`.
 
+:: deep Сколько стоит Option
+`Option<&T>` занимает **столько же** памяти, сколько просто `&T`. Как так?
+
+Ссылка в Rust никогда не бывает нулевым адресом. Поэтому компилятор использует нулевой адрес как метку `None`. Отдельного места под «есть / нет» не нужно.
+
+```rust
+fn main() {
+    println!("{}", std::mem::size_of::<&i32>());
+    println!("{}", std::mem::size_of::<Option<&i32>>());
+}
+```
+```out
+8
+8
+```
+Безопасность `Option` ничего не стоит по памяти. То же верно для `Option<Box<T>>`.
+
 :: recap
 - `null` в Rust нет. Есть `Option<T>`: `Some(x)` или `None`.
 - Rust заставляет проверить, есть ли значение.
@@ -321,3 +392,204 @@ abc: нет
 :: recap
 - `let Some(x) = opt else { return; };` — достань или выйди.
 - `if let Some(x) = opt && условие` — цепочка в Rust 2024.
+
+## LESSON m08-p | Практика: enum и match | 12 | practice
+:: goals
+- Описывать варианты через `enum`
+- Разбирать их через `match`, `if let`, `Option`
+
+:: task
+Есть направления. Допиши функцию `turn_right`: север → восток → юг → запад → север.
+```rust
+#[derive(Debug)]
+enum Dir {
+    North,
+    East,
+    South,
+    West,
+}
+
+fn turn_right(d: Dir) -> Dir {
+    d
+}
+
+fn main() {
+    println!("{:?}", turn_right(Dir::North));
+    println!("{:?}", turn_right(Dir::West));
+}
+```
+```solution
+#[derive(Debug)]
+enum Dir {
+    North,
+    East,
+    South,
+    West,
+}
+
+fn turn_right(d: Dir) -> Dir {
+    match d {
+        Dir::North => Dir::East,
+        Dir::East => Dir::South,
+        Dir::South => Dir::West,
+        Dir::West => Dir::North,
+    }
+}
+
+fn main() {
+    println!("{:?}", turn_right(Dir::North));
+    println!("{:?}", turn_right(Dir::West));
+}
+```
+```expect
+East
+North
+```
+hint: Нужен `match d { ... }` с четырьмя ветками.
+hint: Первая ветка: `Dir::North => Dir::East,`
+
+:: task
+Переведи баллы в оценку через `match` с диапазонами: 90–100 → `отлично`, 70–89 → `хорошо`, 50–69 → `удовлетворительно`, остальное → `плохо`.
+```rust
+fn grade(score: u32) -> &'static str {
+    "плохо"
+}
+
+fn main() {
+    for s in [95, 75, 50, 10] {
+        println!("{}", grade(s));
+    }
+}
+```
+```solution
+fn grade(score: u32) -> &'static str {
+    match score {
+        90..=100 => "отлично",
+        70..=89 => "хорошо",
+        50..=69 => "удовлетворительно",
+        _ => "плохо",
+    }
+}
+
+fn main() {
+    for s in [95, 75, 50, 10] {
+        println!("{}", grade(s));
+    }
+}
+```
+```expect
+отлично
+хорошо
+удовлетворительно
+плохо
+```
+hint: Ветка с диапазоном: `90..=100 => "отлично",`
+hint: Последняя ветка: `_ => "плохо",`
+
+:: task
+Напиши функцию `first_negative`, которая возвращает первое отрицательное число среза в `Some`, или `None`, если таких нет.
+```rust
+fn first_negative(items: &[i32]) -> Option<i32> {
+    None
+}
+
+fn main() {
+    println!("{:?}", first_negative(&[3, -4, -1]));
+    println!("{:?}", first_negative(&[1, 2]));
+}
+```
+```solution
+fn first_negative(items: &[i32]) -> Option<i32> {
+    for &x in items {
+        if x < 0 {
+            return Some(x);
+        }
+    }
+    None
+}
+
+fn main() {
+    println!("{:?}", first_negative(&[3, -4, -1]));
+    println!("{:?}", first_negative(&[1, 2]));
+}
+```
+```expect
+Some(-4)
+None
+```
+hint: В цикле, как только нашёл `x < 0`, верни `Some(x)` через `return`.
+hint: `for &x in items` достаёт число из ссылки сразу. После цикла верни `None`.
+
+:: task
+С помощью `if let` напечатай квадрат числа, только если оно есть. Для `None` ничего не печатай.
+```rust
+fn main() {
+    let values = [Some(3), None, Some(5)];
+    for v in values {
+        // твой if let
+    }
+}
+```
+```solution
+fn main() {
+    let values = [Some(3), None, Some(5)];
+    for v in values {
+        if let Some(n) = v {
+            println!("{}", n * n);
+        }
+    }
+}
+```
+```expect
+9
+25
+```
+hint: `if let Some(n) = v { ... }`
+hint: Внутри: `println!("{}", n * n);`
+
+:: task
+Перечисление команд для робота. Посчитай, где окажется робот, начав с позиции 0: `Forward(n)` прибавляет `n`, `Back(n)` отнимает `n`, `Stop` останавливает выполнение.
+```rust
+enum Cmd {
+    Forward(i32),
+    Back(i32),
+    Stop,
+}
+
+fn main() {
+    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];
+    let mut pos = 0;
+    // пройди по program
+    println!("{pos}");
+}
+```
+```solution
+enum Cmd {
+    Forward(i32),
+    Back(i32),
+    Stop,
+}
+
+fn main() {
+    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];
+    let mut pos = 0;
+    for cmd in program {
+        match cmd {
+            Cmd::Forward(n) => pos += n,
+            Cmd::Back(n) => pos -= n,
+            Cmd::Stop => break,
+        }
+    }
+    println!("{pos}");
+}
+```
+```expect
+7
+```
+hint: `for cmd in program { match cmd { ... } }`
+hint: Ветки: `Cmd::Forward(n) => pos += n,`, `Cmd::Back(n) => pos -= n,`, `Cmd::Stop => break,`
+
+:: recap
+- `match` проверяет все варианты, `_` ловит остальное.
+- Диапазоны `a..=b` и `|` делают ветки короче.
+- `Option` — «есть значение или нет», `if let` — проверить один вариант.

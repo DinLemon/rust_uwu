@@ -1,0 +1,478 @@
+# MODULE m10 | Error handling | What to do when something goes wrong
+
+## LESSON m10-1 | panic! — an emergency stop | 5
+:: goals
+- What a panic is
+- When panicking is fine
+
+:: text Two kinds of problems
+1. **Unrecoverable.** The program is in a state where it cannot continue. For example, a bug in the logic. This is a **panic**.
+2. **Recoverable.** A file is missing, the user typed letters instead of a number. This is normal life. This is `Result`.
+
+:: code
+`panic!` stops the program with a message.
+```rust
+fn main() {
+    println!("Starting");
+    let level = 0;
+    if level == 0 {
+        panic!("The level cannot be zero!");
+    }
+    println!("We never get here");
+}
+```
+The program prints "Starting" and stops with the message `panicked at ... The level cannot be zero!`.
+
+:: quiz
+The user typed "abc" instead of an age. What is better to do?
+[ ] `panic!` => An input mistake is a normal thing. Crashing because of it is rude.
+[x] Return an error and ask again => Correct. It is a recoverable situation — `Result` is for that.
+
+:: text When a panic is appropriate
+- **An impossible situation.** If it happened, there is a bug in the program, and it is better to stop right away.
+- **Examples and drafts.** While a program is a learning exercise, `unwrap()` saves time.
+- **Tests.** A test that panics counts as failed. This is handy.
+
+In all other cases — when the problem can happen in normal life — return a `Result`.
+
+:: deep What happens during a panic
+By default a panic **unwinds the stack**: Rust leaves all functions in the call chain one by one and deletes their variables. This frees memory and files.
+
+If a panic happens in a separate thread, only that thread fails. The main thread can notice this and continue working.
+
+In `Cargo.toml` you can turn on the mode `panic = "abort"`. Then the program stops immediately, without cleanup. The program file becomes smaller. This is done, for example, on microcontrollers.
+
+:: recap
+- A panic is an emergency stop. It is for bugs and impossible situations.
+- Expected problems are handled with `Result`.
+
+## LESSON m10-2 | Result: success or error | 7
+:: goals
+- How `Result` is built
+- Check it with `match`
+
+:: text Result is a parcel with a note
+```rust
+enum Result<T, E> {
+    Ok(T),  // all good, the result is inside
+    Err(E), // an error, the description is inside
+}
+```
+> Analogy: a parcel. Inside there is either the thing you ordered (`Ok`), or a note "out of stock" (`Err`). It is like `Option`, but instead of emptiness there is an explanation.
+
+:: code
+`parse` turns text into a number and returns a `Result`:
+```rust
+fn main() {
+    for input in ["42", "forty two"] {
+        match input.parse::<i32>() {
+            Ok(n) => println!("Number: {n}"),
+            Err(e) => println!("Not a number \"{input}\": {e}"),
+        }
+    }
+}
+```
+```out
+Number: 42
+Not a number "forty two": invalid digit found in string
+```
+`::<i32>` tells `parse` which number we want.
+
+:: text Your own Result
+A function can return a `Result` itself:
+
+```rust
+fn check_age(age: i32) -> Result<i32, String> {
+    if age < 0 {
+        Err(String::from("An age cannot be negative"))
+    } else {
+        Ok(age)
+    }
+}
+```
+
+:: quiz
+What does `"7".parse::<i32>()` return?
+[x] `Ok(7)` => Correct. Parsing worked — the result is in `Ok`.
+[ ] `7` => `parse` always wraps the answer in a `Result`.
+[ ] `Some(7)` => `Some` belongs to `Option`. `parse` returns a `Result`.
+
+:: text Useful Result methods
+- `r.is_ok()`, `r.is_err()` — check what is inside;
+- `r.unwrap_or(0)` — take the value or a fallback;
+- `r.ok()` — turn it into an `Option`: an error becomes `None`.
+
+```rust
+let n = "12".parse::<i32>().unwrap_or(0);   // 12
+let m = "abc".parse::<i32>().unwrap_or(0);  // 0
+```
+
+:: recap
+- `Result<T, E>`: `Ok(value)` or `Err(error)`.
+- Check it with `match`, like Option.
+- `parse::<i32>()` returns a `Result`.
+
+## LESSON m10-3 | unwrap, expect and ? | 7
+:: goals
+- Quick ways to open a Result
+- Pass an error up with the `?` operator
+
+:: text unwrap and expect
+- `unwrap()` takes the `Ok` value, and on `Err` it panics.
+- `expect("message")` is the same, but with your own panic text. This makes it easier to find where it failed.
+
+> Use them in examples and where an error is truly impossible. In a real program, be careful.
+
+:: text The ? operator — "if it is an error, pass it up"
+The `?` sign after a `Result`:
+- if it is `Ok(x)`, gives `x` and continues;
+- if it is `Err(e)`, immediately **returns** this error from the function.
+
+```rust
+fn sum(a: &str, b: &str) -> Result<i32, std::num::ParseIntError> {
+    let x = a.parse::<i32>()?;
+    let y = b.parse::<i32>()?;
+    Ok(x + y)
+}
+```
+!> `?` works only in a function that itself returns a `Result` (or an `Option`).
+
+:: code
+```rust
+use std::num::ParseIntError;
+
+fn sum(a: &str, b: &str) -> Result<i32, ParseIntError> {
+    let x = a.parse::<i32>()?;
+    let y = b.parse::<i32>()?;
+    Ok(x + y)
+}
+
+fn main() {
+    println!("{:?}", sum("2", "3"));
+    println!("{:?}", sum("2", "three"));
+}
+```
+```out
+Ok(5)
+Err(ParseIntError { kind: InvalidDigit })
+```
+
+:: quiz
+What does `?` do if the result is `Err`?
+[ ] It panics => `unwrap` panics. `?` is gentler.
+[x] It returns the error from the current function => Correct. Let the caller deal with it.
+[ ] It skips the line => An error cannot simply be skipped: the function ends.
+
+:: task
+Complete the function with `?`: it parses two numbers from strings and returns their product.
+```rust
+use std::num::ParseIntError;
+
+fn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {
+    // your code with ?
+}
+
+fn main() {
+    println!("{:?}", multiply("6", "7"));
+    println!("{}", multiply("6", "x").is_err());
+}
+```
+```solution
+use std::num::ParseIntError;
+
+fn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {
+    let x: i32 = a.parse()?;
+    let y: i32 = b.parse()?;
+    Ok(x * y)
+}
+
+fn main() {
+    println!("{:?}", multiply("6", "7"));
+    println!("{}", multiply("6", "x").is_err());
+}
+```
+```expect
+Ok(42)
+true
+```
+hint: `let x: i32 = a.parse()?;` — the same for `b`.
+hint: At the end return `Ok(x * y)`.
+
+:: deep How ? converts errors
+The `?` operator can not only return an error, but also **convert** it into the function's error type. It uses the trait `From` for this.
+
+If a function returns `Result<T, MyError>`, and inside there is an error of type `ParseIntError`, then `?` calls `MyError::from(error)`. You only need to write once how to convert:
+
+```rust
+impl From<std::num::ParseIntError> for MyError {
+    fn from(_: std::num::ParseIntError) -> Self {
+        MyError::NotANumber
+    }
+}
+```
+After that, `let n: i32 = s.parse()?;` works inside functions with `MyError`. Traits and `From` are explained in module 12.
+
+:: recap
+- `unwrap()` / `expect("...")` — take the value or panic.
+- `?` — take the value or return the error up.
+- `?` works in functions that return `Result`/`Option`.
+
+## LESSON m10-4 | Your own errors | 6
+:: goals
+- Describe possible errors with an `enum`
+- Return a `Result` from `main`
+
+:: text Errors as an enum
+A good technique: list all errors of your function in an `enum`. Then the calling code knows exactly what can go wrong.
+
+```rust
+#[derive(Debug)]
+enum AgeError {
+    NotANumber,
+    Negative,
+    TooOld,
+}
+```
+
+:: code
+```rust
+#[derive(Debug)]
+enum AgeError {
+    NotANumber,
+    Negative,
+    TooOld,
+}
+
+fn parse_age(s: &str) -> Result<u32, AgeError> {
+    let n: i64 = s.trim().parse().map_err(|_| AgeError::NotANumber)?;
+    if n < 0 {
+        return Err(AgeError::Negative);
+    }
+    if n > 150 {
+        return Err(AgeError::TooOld);
+    }
+    Ok(n as u32)
+}
+
+fn main() {
+    for s in ["30", "-5", "hundred", "200"] {
+        println!("{s}: {:?}", parse_age(s));
+    }
+}
+```
+```out
+30: Ok(30)
+-5: Err(Negative)
+hundred: Err(NotANumber)
+200: Err(TooOld)
+```
+`map_err` turns one error into another — here the `parse` error into our `NotANumber`.
+
+:: text main can also return a Result
+Then you can use `?` inside `main`:
+
+```rust
+fn main() -> Result<(), String> {
+    let n: i32 = "5".parse().map_err(|_| "not a number".to_string())?;
+    println!("{n}");
+    Ok(())
+}
+```
+`()` is the "empty value": success without a result.
+
+:: quiz
+Why describe errors with an `enum` instead of just text?
+[x] The calling code can check each error with `match` => Correct. Text cannot be checked reliably.
+[ ] The program runs faster => It is not about speed; it is about clarity and reliability.
+[ ] The compiler does not allow text errors => It does: `Result<T, String>` is completely legal.
+
+:: deep An error "done properly"
+To make your error look like the errors of the standard library, implement two traits for it:
+- `Display` — clear text for a person;
+- `std::error::Error` — a marker "this is an error".
+
+```rust
+use std::fmt;
+
+#[derive(Debug)]
+enum AppError {
+    Empty,
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "the string is empty")
+    }
+}
+
+impl std::error::Error for AppError {}
+
+fn check(s: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if s.is_empty() {
+        return Err(Box::new(AppError::Empty));
+    }
+    let _n: i32 = s.parse()?;
+    Ok(())
+}
+
+fn main() {
+    for s in ["", "x", "5"] {
+        match check(s) {
+            Ok(()) => println!("\"{s}\": fine"),
+            Err(e) => println!("\"{s}\": {e}"),
+        }
+    }
+}
+```
+```out
+"": the string is empty
+"x": invalid digit found in string
+"5": fine
+```
+`Box<dyn std::error::Error>` means "any error". With it, `?` accepts errors of different types. In big programs the libraries `anyhow` and `thiserror` are often used for this.
+
+:: recap
+- Errors are conveniently described with your own `enum`.
+- `map_err` turns someone else's error into yours.
+- `fn main() -> Result<(), E>` allows `?` in `main`.
+
+## LESSON m10-p | Practice: errors | 14 | practice
+:: goals
+- Return `Result` from your own functions
+- Use `?` and `map_err`
+- Handle errors without panicking
+
+:: task
+Write `safe_divide`: when dividing by zero, return `Err("division by zero")`, otherwise `Ok(result)`.
+```rust
+fn safe_divide(a: i32, b: i32) -> Result<i32, String> {
+    Ok(0)
+}
+
+fn main() {
+    println!("{:?}", safe_divide(10, 2));
+    println!("{:?}", safe_divide(1, 0));
+}
+```
+```solution
+fn safe_divide(a: i32, b: i32) -> Result<i32, String> {
+    if b == 0 {
+        return Err(String::from("division by zero"));
+    }
+    Ok(a / b)
+}
+
+fn main() {
+    println!("{:?}", safe_divide(10, 2));
+    println!("{:?}", safe_divide(1, 0));
+}
+```
+```expect
+Ok(5)
+Err("division by zero")
+```
+hint: `if b == 0 { return Err(String::from("division by zero")); }`
+hint: At the end `Ok(a / b)`.
+
+:: task
+Add up only the strings that are numbers. Skip the others.
+```rust
+fn main() {
+    let items = ["10", "x", "5", "", "7"];
+    let mut sum = 0;
+    println!("{sum}");
+}
+```
+```solution
+fn main() {
+    let items = ["10", "x", "5", "", "7"];
+    let mut sum = 0;
+    for s in items {
+        if let Ok(n) = s.parse::<i32>() {
+            sum += n;
+        }
+    }
+    println!("{sum}");
+}
+```
+```expect
+22
+```
+hint: `if let Ok(n) = s.parse::<i32>() { ... }`
+hint: Inside: `sum += n;`
+
+:: task
+Parse a string like `"3,4"` into a point `(i32, i32)`. Use `?` for both parts. If there is no comma, return the error `"no comma"`.
+```rust
+fn parse_point(s: &str) -> Result<(i32, i32), String> {
+    let Some((a, b)) = s.split_once(',') else {
+        return Err(String::from("no comma"));
+    };
+    // parse a and b
+    Ok((0, 0))
+}
+
+fn main() {
+    println!("{:?}", parse_point("3,4"));
+    println!("{:?}", parse_point("3;4"));
+    println!("{:?}", parse_point("3,x"));
+}
+```
+```solution
+fn parse_point(s: &str) -> Result<(i32, i32), String> {
+    let Some((a, b)) = s.split_once(',') else {
+        return Err(String::from("no comma"));
+    };
+    let x: i32 = a.trim().parse().map_err(|_| format!("\"{a}\" is not a number"))?;
+    let y: i32 = b.trim().parse().map_err(|_| format!("\"{b}\" is not a number"))?;
+    Ok((x, y))
+}
+
+fn main() {
+    println!("{:?}", parse_point("3,4"));
+    println!("{:?}", parse_point("3;4"));
+    println!("{:?}", parse_point("3,x"));
+}
+```
+```expect
+Ok((3, 4))
+Err("no comma")
+Err("\"x\" is not a number")
+```
+hint: The `parse` error has a different type; turn it into a `String` with `map_err`.
+hint: `let x: i32 = a.trim().parse().map_err(|_| format!("\"{a}\" is not a number"))?;`
+
+:: task
+`?` also works with `Option`. Write a function that returns the first letter of the second word, or `None`.
+```rust
+fn second_word_initial(s: &str) -> Option<char> {
+    None
+}
+
+fn main() {
+    println!("{:?}", second_word_initial("learn rust"));
+    println!("{:?}", second_word_initial("single"));
+}
+```
+```solution
+fn second_word_initial(s: &str) -> Option<char> {
+    let word = s.split_whitespace().nth(1)?;
+    word.chars().next()
+}
+
+fn main() {
+    println!("{:?}", second_word_initial("learn rust"));
+    println!("{:?}", second_word_initial("single"));
+}
+```
+```expect
+Some('r')
+None
+```
+hint: `s.split_whitespace().nth(1)` gives the second word as `Option<&str>`. Put `?` after it.
+hint: The first letter: `word.chars().next()` — this is already an `Option<char>`.
+
+:: recap
+- Expected problems use `Result`, not a panic.
+- `?` passes an error up, `map_err` changes its type.
+- `if let Ok(x)` handles only success.

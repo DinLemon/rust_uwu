@@ -28,6 +28,20 @@ fn main() {
 [ ] `panic!` => Ошибка ввода — обычное дело. Падать из-за неё грубо.
 [x] Вернуть ошибку и попросить ввести снова => Верно. Это исправимая ситуация — для неё `Result`.
 
+:: text Когда паника уместна
+- **Невозможная ситуация.** Если она случилась, в программе ошибка, и лучше остановиться сразу.
+- **Примеры и черновики.** Пока программа учебная, `unwrap()` экономит время.
+- **Тесты.** Тест, который паникует, считается проваленным. Это удобно.
+
+Во всех остальных случаях — когда проблема может случиться в нормальной жизни — возвращают `Result`.
+
+:: deep Что происходит при панике
+По умолчанию паника **раскручивает стек**: Rust по очереди выходит из всех функций в цепочке вызовов и удаляет их переменные. Так освобождаются память и файлы.
+
+Если паника случилась в отдельном потоке, падает только этот поток. Главный поток может это заметить и продолжить работу.
+
+В `Cargo.toml` можно включить режим `panic = "abort"`. Тогда программа останавливается сразу, без уборки. Файл программы получается меньше. Так делают, например, на микроконтроллерах.
+
 :: recap
 - Паника — аварийная остановка. Для багов и невозможных ситуаций.
 - Ожидаемые проблемы обрабатывают через `Result`.
@@ -82,6 +96,16 @@ fn check_age(age: i32) -> Result<i32, String> {
 [x] `Ok(7)` => Верно. Разбор удался — результат в `Ok`.
 [ ] `7` => `parse` всегда заворачивает ответ в `Result`.
 [ ] `Some(7)` => `Some` — это `Option`. У `parse` тип `Result`.
+
+:: text Полезные методы Result
+- `r.is_ok()`, `r.is_err()` — проверить, что внутри;
+- `r.unwrap_or(0)` — взять значение или запасное;
+- `r.ok()` — превратить в `Option`: ошибка станет `None`.
+
+```rust
+let n = "12".parse::<i32>().unwrap_or(0);   // 12
+let m = "abc".parse::<i32>().unwrap_or(0);  // 0
+```
 
 :: recap
 - `Result<T, E>`: `Ok(значение)` или `Err(ошибка)`.
@@ -174,6 +198,20 @@ true
 hint: `let x: i32 = a.parse()?;` — то же для `b`.
 hint: В конце верни `Ok(x * y)`.
 
+:: deep Как ? превращает ошибки
+Оператор `?` умеет не только возвращать ошибку, но и **превращать** её в тип ошибки функции. Для этого он использует трейт `From`.
+
+Если функция возвращает `Result<T, MyError>`, а внутри ошибка типа `ParseIntError`, то `?` вызовет `MyError::from(ошибка)`. Нужно только один раз написать, как превращать:
+
+```rust
+impl From<std::num::ParseIntError> for MyError {
+    fn from(_: std::num::ParseIntError) -> Self {
+        MyError::NotANumber
+    }
+}
+```
+После этого `let n: i32 = s.parse()?;` работает внутри функций с `MyError`. Трейты и `From` подробно — в модуле 12.
+
 :: recap
 - `unwrap()` / `expect("...")` — достать или запаниковать.
 - `?` — достать или вернуть ошибку наверх.
@@ -248,7 +286,193 @@ fn main() -> Result<(), String> {
 [ ] Так программа работает быстрее => Дело не в скорости, а в понятности и надёжности.
 [ ] Компилятор не разрешает текстовые ошибки => Разрешает: `Result<T, String>` вполне законен.
 
+:: deep Ошибка «по всем правилам»
+Чтобы своя ошибка выглядела как ошибки стандартной библиотеки, ей реализуют два трейта:
+- `Display` — понятный текст для человека;
+- `std::error::Error` — метка «это ошибка».
+
+```rust
+use std::fmt;
+
+#[derive(Debug)]
+enum AppError {
+    Empty,
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "строка пустая")
+    }
+}
+
+impl std::error::Error for AppError {}
+
+fn check(s: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if s.is_empty() {
+        return Err(Box::new(AppError::Empty));
+    }
+    let _n: i32 = s.parse()?;
+    Ok(())
+}
+
+fn main() {
+    for s in ["", "x", "5"] {
+        match check(s) {
+            Ok(()) => println!("«{s}»: в порядке"),
+            Err(e) => println!("«{s}»: {e}"),
+        }
+    }
+}
+```
+```out
+«»: строка пустая
+«x»: invalid digit found in string
+«5»: в порядке
+```
+`Box<dyn std::error::Error>` — «любая ошибка». С ним `?` принимает ошибки разных типов. В больших программах для этого часто берут библиотеки `anyhow` и `thiserror`.
+
 :: recap
 - Ошибки удобно описывать своим `enum`.
 - `map_err` превращает чужую ошибку в свою.
 - `fn main() -> Result<(), E>` разрешает `?` в `main`.
+
+## LESSON m10-p | Практика: ошибки | 14 | practice
+:: goals
+- Возвращать `Result` из своих функций
+- Использовать `?` и `map_err`
+- Обрабатывать ошибки без паники
+
+:: task
+Напиши `safe_divide`: при делении на ноль верни `Err("деление на ноль")`, иначе `Ok(результат)`.
+```rust
+fn safe_divide(a: i32, b: i32) -> Result<i32, String> {
+    Ok(0)
+}
+
+fn main() {
+    println!("{:?}", safe_divide(10, 2));
+    println!("{:?}", safe_divide(1, 0));
+}
+```
+```solution
+fn safe_divide(a: i32, b: i32) -> Result<i32, String> {
+    if b == 0 {
+        return Err(String::from("деление на ноль"));
+    }
+    Ok(a / b)
+}
+
+fn main() {
+    println!("{:?}", safe_divide(10, 2));
+    println!("{:?}", safe_divide(1, 0));
+}
+```
+```expect
+Ok(5)
+Err("деление на ноль")
+```
+hint: `if b == 0 { return Err(String::from("деление на ноль")); }`
+hint: В конце `Ok(a / b)`.
+
+:: task
+Сложи только те строки, которые являются числами. Остальные пропусти.
+```rust
+fn main() {
+    let items = ["10", "x", "5", "", "7"];
+    let mut sum = 0;
+    println!("{sum}");
+}
+```
+```solution
+fn main() {
+    let items = ["10", "x", "5", "", "7"];
+    let mut sum = 0;
+    for s in items {
+        if let Ok(n) = s.parse::<i32>() {
+            sum += n;
+        }
+    }
+    println!("{sum}");
+}
+```
+```expect
+22
+```
+hint: `if let Ok(n) = s.parse::<i32>() { ... }`
+hint: Внутри: `sum += n;`
+
+:: task
+Разбери строку вида `"3,4"` в точку `(i32, i32)`. Используй `?` для обеих частей. Если запятой нет, верни ошибку `"нет запятой"`.
+```rust
+fn parse_point(s: &str) -> Result<(i32, i32), String> {
+    let Some((a, b)) = s.split_once(',') else {
+        return Err(String::from("нет запятой"));
+    };
+    // разбери a и b
+    Ok((0, 0))
+}
+
+fn main() {
+    println!("{:?}", parse_point("3,4"));
+    println!("{:?}", parse_point("3;4"));
+    println!("{:?}", parse_point("3,x"));
+}
+```
+```solution
+fn parse_point(s: &str) -> Result<(i32, i32), String> {
+    let Some((a, b)) = s.split_once(',') else {
+        return Err(String::from("нет запятой"));
+    };
+    let x: i32 = a.trim().parse().map_err(|_| format!("«{a}» не число"))?;
+    let y: i32 = b.trim().parse().map_err(|_| format!("«{b}» не число"))?;
+    Ok((x, y))
+}
+
+fn main() {
+    println!("{:?}", parse_point("3,4"));
+    println!("{:?}", parse_point("3;4"));
+    println!("{:?}", parse_point("3,x"));
+}
+```
+```expect
+Ok((3, 4))
+Err("нет запятой")
+Err("«x» не число")
+```
+hint: Ошибка `parse` — другого типа, её надо превратить в `String` через `map_err`.
+hint: `let x: i32 = a.trim().parse().map_err(|_| format!("«{a}» не число"))?;`
+
+:: task
+`?` работает и с `Option`. Напиши функцию, которая возвращает первую букву второго слова, или `None`.
+```rust
+fn second_word_initial(s: &str) -> Option<char> {
+    None
+}
+
+fn main() {
+    println!("{:?}", second_word_initial("язык rust"));
+    println!("{:?}", second_word_initial("одно"));
+}
+```
+```solution
+fn second_word_initial(s: &str) -> Option<char> {
+    let word = s.split_whitespace().nth(1)?;
+    word.chars().next()
+}
+
+fn main() {
+    println!("{:?}", second_word_initial("язык rust"));
+    println!("{:?}", second_word_initial("одно"));
+}
+```
+```expect
+Some('r')
+None
+```
+hint: `s.split_whitespace().nth(1)` — второе слово как `Option<&str>`. Поставь после него `?`.
+hint: Первая буква: `word.chars().next()` — это уже `Option<char>`.
+
+:: recap
+- Ожидаемые проблемы — `Result`, а не паника.
+- `?` пробрасывает ошибку наверх, `map_err` меняет её тип.
+- `if let Ok(x)` — обработать только успех.

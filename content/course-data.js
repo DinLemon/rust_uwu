@@ -2868,6 +2868,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "У перечисления тоже бывают методы",
+"md": "Как у структуры, у `enum` можно написать блок `impl`:\n\n```\nimpl Light {\n    fn next(&self) -> Light {\n        match self {\n            Light::Red => Light::Green,\n            Light::Green => Light::Yellow,\n            Light::Yellow => Light::Red,\n        }\n    }\n}\n```\n`match` здесь разбирает, какой сейчас свет. Ему посвящён следующий урок."
+},
+{
 "t": "recap",
 "items": [
 "`enum` — один вариант из списка.",
@@ -2935,6 +2940,18 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Более сложные образцы",
+"md": "В ветках `match` можно писать не только конкретные значения:\n\n- `1 | 2` — «1 или 2»;\n- `3..=9` — «от 3 до 9 включительно»;\n- `n if n < 0` — «любое `n`, но только если оно меньше нуля». Такое условие называют **охранником** (guard).\n\n```\nlet text = match score {\n    0 => \"ноль\",\n    1 | 2 => \"мало\",\n    3..=9 => \"средне\",\n    n if n < 0 => \"меньше нуля\",\n    _ => \"много\",\n};\n```"
+},
+{
+"t": "deep",
+"title": "match по кортежу",
+"md": "`match` умеет разбирать сразу несколько значений, если сложить их в кортеж:",
+"code": "fn main() {\n    for (a, b) in [(true, true), (true, false), (false, false)] {\n        let text = match (a, b) {\n            (true, true) => \"оба\",\n            (true, false) | (false, true) => \"один\",\n            (false, false) => \"никто\",\n        };\n        println!(\"{text}\");\n    }\n}",
+"out": "оба\nодин\nникто"
+},
+{
 "t": "recap",
 "items": [
 "`match` выбирает ветку по образцу.",
@@ -2992,6 +3009,13 @@ window.COURSES = {
 "code": "fn main() {\n    let names = vec![\"Аня\", \"Боря\"];\n    if let Some(name) = names.get(1) {\n        println!(\"Второй: {name}\");\n    }\n    if let Some(name) = names.get(5) {\n        println!(\"Шестой: {name}\");\n    } else {\n        println!(\"Шестого нет\");\n    }\n}",
 "out": "Второй: Боря\nШестого нет",
 "after": "`get(i)` возвращает `Option`: элемента может не быть. Безопаснее, чем `[i]`."
+},
+{
+"t": "deep",
+"title": "Сколько стоит Option",
+"md": "`Option<&T>` занимает **столько же** памяти, сколько просто `&T`. Как так?\n\nСсылка в Rust никогда не бывает нулевым адресом. Поэтому компилятор использует нулевой адрес как метку `None`. Отдельного места под «есть / нет» не нужно.\n\nБезопасность `Option` ничего не стоит по памяти. То же верно для `Option<Box<T>>`.",
+"code": "fn main() {\n    println!(\"{}\", std::mem::size_of::<&i32>());\n    println!(\"{}\", std::mem::size_of::<Option<&i32>>());\n}",
+"out": "8\n8"
 },
 {
 "t": "recap",
@@ -3053,6 +3077,81 @@ window.COURSES = {
 "Ранний выход через `let ... else`",
 "Несколько условий через `&&` в `if let`"
 ]
+},
+{
+"id": "m08-p",
+"title": "Практика: enum и match",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "Есть направления. Допиши функцию `turn_right`: север → восток → юг → запад → север.",
+"code": "#[derive(Debug)]\nenum Dir {\n    North,\n    East,\n    South,\n    West,\n}\n\nfn turn_right(d: Dir) -> Dir {\n    d\n}\n\nfn main() {\n    println!(\"{:?}\", turn_right(Dir::North));\n    println!(\"{:?}\", turn_right(Dir::West));\n}",
+"solution": "#[derive(Debug)]\nenum Dir {\n    North,\n    East,\n    South,\n    West,\n}\n\nfn turn_right(d: Dir) -> Dir {\n    match d {\n        Dir::North => Dir::East,\n        Dir::East => Dir::South,\n        Dir::South => Dir::West,\n        Dir::West => Dir::North,\n    }\n}\n\nfn main() {\n    println!(\"{:?}\", turn_right(Dir::North));\n    println!(\"{:?}\", turn_right(Dir::West));\n}",
+"expect": "East\nNorth",
+"hints": [
+"Нужен `match d { ... }` с четырьмя ветками.",
+"Первая ветка: `Dir::North => Dir::East,`"
+]
+},
+{
+"t": "task",
+"md": "Переведи баллы в оценку через `match` с диапазонами: 90–100 → `отлично`, 70–89 → `хорошо`, 50–69 → `удовлетворительно`, остальное → `плохо`.",
+"code": "fn grade(score: u32) -> &'static str {\n    \"плохо\"\n}\n\nfn main() {\n    for s in [95, 75, 50, 10] {\n        println!(\"{}\", grade(s));\n    }\n}",
+"solution": "fn grade(score: u32) -> &'static str {\n    match score {\n        90..=100 => \"отлично\",\n        70..=89 => \"хорошо\",\n        50..=69 => \"удовлетворительно\",\n        _ => \"плохо\",\n    }\n}\n\nfn main() {\n    for s in [95, 75, 50, 10] {\n        println!(\"{}\", grade(s));\n    }\n}",
+"expect": "отлично\nхорошо\nудовлетворительно\nплохо",
+"hints": [
+"Ветка с диапазоном: `90..=100 => \"отлично\",`",
+"Последняя ветка: `_ => \"плохо\",`"
+]
+},
+{
+"t": "task",
+"md": "Напиши функцию `first_negative`, которая возвращает первое отрицательное число среза в `Some`, или `None`, если таких нет.",
+"code": "fn first_negative(items: &[i32]) -> Option<i32> {\n    None\n}\n\nfn main() {\n    println!(\"{:?}\", first_negative(&[3, -4, -1]));\n    println!(\"{:?}\", first_negative(&[1, 2]));\n}",
+"solution": "fn first_negative(items: &[i32]) -> Option<i32> {\n    for &x in items {\n        if x < 0 {\n            return Some(x);\n        }\n    }\n    None\n}\n\nfn main() {\n    println!(\"{:?}\", first_negative(&[3, -4, -1]));\n    println!(\"{:?}\", first_negative(&[1, 2]));\n}",
+"expect": "Some(-4)\nNone",
+"hints": [
+"В цикле, как только нашёл `x < 0`, верни `Some(x)` через `return`.",
+"`for &x in items` достаёт число из ссылки сразу. После цикла верни `None`."
+]
+},
+{
+"t": "task",
+"md": "С помощью `if let` напечатай квадрат числа, только если оно есть. Для `None` ничего не печатай.",
+"code": "fn main() {\n    let values = [Some(3), None, Some(5)];\n    for v in values {\n        // твой if let\n    }\n}",
+"solution": "fn main() {\n    let values = [Some(3), None, Some(5)];\n    for v in values {\n        if let Some(n) = v {\n            println!(\"{}\", n * n);\n        }\n    }\n}",
+"expect": "9\n25",
+"hints": [
+"`if let Some(n) = v { ... }`",
+"Внутри: `println!(\"{}\", n * n);`"
+]
+},
+{
+"t": "task",
+"md": "Перечисление команд для робота. Посчитай, где окажется робот, начав с позиции 0: `Forward(n)` прибавляет `n`, `Back(n)` отнимает `n`, `Stop` останавливает выполнение.",
+"code": "enum Cmd {\n    Forward(i32),\n    Back(i32),\n    Stop,\n}\n\nfn main() {\n    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];\n    let mut pos = 0;\n    // пройди по program\n    println!(\"{pos}\");\n}",
+"solution": "enum Cmd {\n    Forward(i32),\n    Back(i32),\n    Stop,\n}\n\nfn main() {\n    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];\n    let mut pos = 0;\n    for cmd in program {\n        match cmd {\n            Cmd::Forward(n) => pos += n,\n            Cmd::Back(n) => pos -= n,\n            Cmd::Stop => break,\n        }\n    }\n    println!(\"{pos}\");\n}",
+"expect": "7",
+"hints": [
+"`for cmd in program { match cmd { ... } }`",
+"Ветки: `Cmd::Forward(n) => pos += n,`, `Cmd::Back(n) => pos -= n,`, `Cmd::Stop => break,`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`match` проверяет все варианты, `_` ловит остальное.",
+"Диапазоны `a..=b` и `|` делают ветки короче.",
+"`Option` — «есть значение или нет», `if let` — проверить один вариант."
+]
+}
+],
+"practice": true,
+"goals": [
+"Описывать варианты через `enum`",
+"Разбирать их через `match`, `if let`, `Option`"
+]
 }
 ]
 },
@@ -3108,6 +3207,11 @@ window.COURSES = {
 "`retain` оставляет только элементы, для которых условие правда.",
 "`nums.retain(|n| n % 2 == 0);` — запись `|n| ...` называется замыканием. Подробно — в модуле про итераторы."
 ]
+},
+{
+"t": "text",
+"title": "Сортировка и порядок",
+"md": "- `v.sort()` — отсортировать по возрастанию.\n- `v.reverse()` — перевернуть.\n- `v.dedup()` — убрать **соседние** повторы. Поэтому сначала сортируют, потом `dedup`.\n- `v.len()`, `v.is_empty()` — длина и проверка «пустой ли».\n\n```\nlet mut v = vec![3, 1, 3, 2, 1];\nv.sort();   // [1, 1, 2, 3, 3]\nv.dedup();  // [1, 2, 3]\n```\n!> Дробные числа `f64` так не сортируются: у них есть особое значение NaN («не число»), которое нельзя сравнить. Для них пишут `v.sort_by(|a, b| a.total_cmp(b))`."
 },
 {
 "t": "recap",
@@ -3166,6 +3270,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Байты, буквы и то, что видит человек",
+"md": "Строка в Rust можно читать на трёх уровнях:\n- `bytes()` — байты UTF-8;\n- `chars()` — символы Юникода (`char`);\n- то, что человек видит как один знак. Иногда это **несколько** `char` подряд.\n\nНа экране это 2 знака: «é» и «👍🏽». Но `é` здесь записан как `e` плюс отдельный значок ударения (`\\u{301}` — его номер в Юникоде), а 👍🏽 — как палец плюс цвет кожи. Для работы с такими «видимыми знаками» есть отдельная библиотека `unicode-segmentation`. В стандартной библиотеке её нет.",
+"code": "fn main() {\n    let s = \"e\\u{301}👍🏽\"; // e + знак ударения, палец + цвет кожи\n    println!(\"байт: {}\", s.len());\n    println!(\"char: {}\", s.chars().count());\n}",
+"out": "байт: 11\nchar: 4"
+},
+{
 "t": "recap",
 "items": [
 "`push_str`, `push`, `format!` — собрать строку.",
@@ -3212,6 +3323,16 @@ window.COURSES = {
 ]
 },
 {
+"t": "text",
+"title": "Перебор словаря и HashSet",
+"md": "Перебрать все пары можно циклом:\n\n```\nfor (name, phone) in &phones {\n    println!(\"{name}: {phone}\");\n}\n```\nЕсли нужны только ключи без значений, есть **HashSet** — набор уникальных элементов:\n\n```\nuse std::collections::HashSet;\nlet mut seen = HashSet::new();\nseen.insert(\"кот\");\nseen.insert(\"кот\"); // повтор не добавится\nprintln!(\"{}\", seen.len()); // 1\n```"
+},
+{
+"t": "deep",
+"title": "Как HashMap находит значение так быстро",
+"md": "HashMap превращает ключ в число с помощью **хеш-функции**. По этому числу сразу видно, в какой «ящик» (bucket) положить пару.\n\nПоиск поэтому не перебирает все элементы. Он считает хеш ключа и смотрит в один ящик. Это примерно одинаково быстро и для 10, и для миллиона элементов.\n\nОтсюда два правила:\n- ключ должен уметь хешироваться (трейт `Hash`) и сравниваться (`Eq`);\n- порядок элементов зависит от хешей, а не от порядка вставки.\n\nХеш-функция в Rust по умолчанию защищена от специально подобранных ключей, которыми злоумышленник мог бы замедлить сервер."
+},
+{
 "t": "recap",
 "items": [
 "`HashMap` — ключ → значение. Нужен `use std::collections::HashMap;`.",
@@ -3224,6 +3345,82 @@ window.COURSES = {
 "goals": [
 "Хранить пары «ключ → значение»",
 "Считать частоту слов"
+]
+},
+{
+"id": "m09-p",
+"title": "Практика: коллекции",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Найди медиану: отсортируй числа и возьми среднее по позиции. Для 5 чисел это элемент с индексом 2.",
+"code": "fn main() {\n    let mut nums = vec![7, 1, 9, 3, 5];\n}",
+"solution": "fn main() {\n    let mut nums = vec![7, 1, 9, 3, 5];\n    nums.sort();\n    println!(\"{}\", nums[nums.len() / 2]);\n}",
+"expect": "5",
+"hints": [
+"Сначала `nums.sort();`",
+"Средний индекс: `nums.len() / 2`."
+]
+},
+{
+"t": "task",
+"md": "Убери из списка повторы и напечатай результат по возрастанию.",
+"code": "fn main() {\n    let mut tags = vec![\"rust\", \"код\", \"rust\", \"игры\", \"код\"];\n    println!(\"{:?}\", tags);\n}",
+"solution": "fn main() {\n    let mut tags = vec![\"rust\", \"код\", \"rust\", \"игры\", \"код\"];\n    tags.sort();\n    tags.dedup();\n    println!(\"{:?}\", tags);\n}",
+"expect": "[\"rust\", \"игры\", \"код\"]",
+"hints": [
+"`dedup` убирает только соседние повторы. Сначала нужно `sort`.",
+"`tags.sort(); tags.dedup();`"
+]
+},
+{
+"t": "task",
+"md": "Сделай первую букву каждого слова заглавной: `привет мир` → `Привет Мир`.",
+"code": "fn capitalize(word: &str) -> String {\n    word.to_string()\n}\n\nfn main() {\n    let text = \"привет мир rust\";\n    let mut words = Vec::new();\n    for w in text.split_whitespace() {\n        words.push(capitalize(w));\n    }\n    println!(\"{}\", words.join(\" \"));\n}",
+"solution": "fn capitalize(word: &str) -> String {\n    let mut chars = word.chars();\n    match chars.next() {\n        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),\n        None => String::new(),\n    }\n}\n\nfn main() {\n    let text = \"привет мир rust\";\n    let mut words = Vec::new();\n    for w in text.split_whitespace() {\n        words.push(capitalize(w));\n    }\n    println!(\"{}\", words.join(\" \"));\n}",
+"expect": "Привет Мир Rust",
+"hints": [
+"Возьми первую букву: `let mut chars = word.chars(); chars.next()` — это `Option<char>`.",
+"Заглавная: `first.to_uppercase().collect::<String>()`. Остаток слова: `chars.as_str()`. Склей их через `+`."
+]
+},
+{
+"t": "task",
+"md": "Телефонная книга. Напиши функцию `lookup`, которая возвращает номер или текст `неизвестно`.",
+"code": "use std::collections::HashMap;\n\nfn lookup(book: &HashMap<&str, &str>, name: &str) -> String {\n    String::new()\n}\n\nfn main() {\n    let mut book = HashMap::new();\n    book.insert(\"Аня\", \"111\");\n    book.insert(\"Боря\", \"222\");\n    println!(\"{}\", lookup(&book, \"Боря\"));\n    println!(\"{}\", lookup(&book, \"Вася\"));\n}",
+"solution": "use std::collections::HashMap;\n\nfn lookup(book: &HashMap<&str, &str>, name: &str) -> String {\n    match book.get(name) {\n        Some(phone) => phone.to_string(),\n        None => String::from(\"неизвестно\"),\n    }\n}\n\nfn main() {\n    let mut book = HashMap::new();\n    book.insert(\"Аня\", \"111\");\n    book.insert(\"Боря\", \"222\");\n    println!(\"{}\", lookup(&book, \"Боря\"));\n    println!(\"{}\", lookup(&book, \"Вася\"));\n}",
+"expect": "222\nнеизвестно",
+"hints": [
+"`book.get(name)` возвращает `Option`.",
+"Разбери через `match`: `Some(phone) => phone.to_string()`, `None => String::from(\"неизвестно\")`."
+]
+},
+{
+"t": "task",
+"md": "Сгруппируй слова по первой букве. Используй `BTreeMap<char, Vec<&str>>`, чтобы буквы шли по алфавиту.",
+"code": "use std::collections::BTreeMap;\n\nfn main() {\n    let words = [\"кот\", \"арбуз\", \"компот\", \"ананас\", \"банан\"];\n    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();\n    // заполни groups\n    for (letter, list) in &groups {\n        println!(\"{letter}: {}\", list.join(\", \"));\n    }\n}",
+"solution": "use std::collections::BTreeMap;\n\nfn main() {\n    let words = [\"кот\", \"арбуз\", \"компот\", \"ананас\", \"банан\"];\n    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();\n    for w in words {\n        let first = w.chars().next().unwrap();\n        groups.entry(first).or_insert(Vec::new()).push(w);\n    }\n    for (letter, list) in &groups {\n        println!(\"{letter}: {}\", list.join(\", \"));\n    }\n}",
+"expect": "а: арбуз, ананас\nб: банан\nк: кот, компот",
+"hints": [
+"Первая буква: `w.chars().next().unwrap()`.",
+"`groups.entry(first).or_insert(Vec::new()).push(w);`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`sort` + `dedup` — убрать повторы.",
+"`chars()` для букв, `split_whitespace()` для слов.",
+"`entry(k).or_insert(...)` — «найди или создай» в словаре."
+]
+}
+],
+"practice": true,
+"goals": [
+"Сортировать и чистить векторы",
+"Обрабатывать строки по словам и буквам",
+"Строить словари"
 ]
 }
 ]
@@ -3261,6 +3458,16 @@ window.COURSES = {
 "Ошибка ввода — обычное дело. Падать из-за неё грубо.",
 "Верно. Это исправимая ситуация — для неё `Result`."
 ]
+},
+{
+"t": "text",
+"title": "Когда паника уместна",
+"md": "- **Невозможная ситуация.** Если она случилась, в программе ошибка, и лучше остановиться сразу.\n- **Примеры и черновики.** Пока программа учебная, `unwrap()` экономит время.\n- **Тесты.** Тест, который паникует, считается проваленным. Это удобно.\n\nВо всех остальных случаях — когда проблема может случиться в нормальной жизни — возвращают `Result`."
+},
+{
+"t": "deep",
+"title": "Что происходит при панике",
+"md": "По умолчанию паника **раскручивает стек**: Rust по очереди выходит из всех функций в цепочке вызовов и удаляет их переменные. Так освобождаются память и файлы.\n\nЕсли паника случилась в отдельном потоке, падает только этот поток. Главный поток может это заметить и продолжить работу.\n\nВ `Cargo.toml` можно включить режим `panic = \"abort\"`. Тогда программа останавливается сразу, без уборки. Файл программы получается меньше. Так делают, например, на микроконтроллерах."
 },
 {
 "t": "recap",
@@ -3311,6 +3518,11 @@ window.COURSES = {
 "`parse` всегда заворачивает ответ в `Result`.",
 "`Some` — это `Option`. У `parse` тип `Result`."
 ]
+},
+{
+"t": "text",
+"title": "Полезные методы Result",
+"md": "- `r.is_ok()`, `r.is_err()` — проверить, что внутри;\n- `r.unwrap_or(0)` — взять значение или запасное;\n- `r.ok()` — превратить в `Option`: ошибка станет `None`.\n\n```\nlet n = \"12\".parse::<i32>().unwrap_or(0);   // 12\nlet m = \"abc\".parse::<i32>().unwrap_or(0);  // 0\n```"
 },
 {
 "t": "recap",
@@ -3373,6 +3585,11 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Как ? превращает ошибки",
+"md": "Оператор `?` умеет не только возвращать ошибку, но и **превращать** её в тип ошибки функции. Для этого он использует трейт `From`.\n\nЕсли функция возвращает `Result<T, MyError>`, а внутри ошибка типа `ParseIntError`, то `?` вызовет `MyError::from(ошибка)`. Нужно только один раз написать, как превращать:\n\n```\nimpl From<std::num::ParseIntError> for MyError {\n    fn from(_: std::num::ParseIntError) -> Self {\n        MyError::NotANumber\n    }\n}\n```\nПосле этого `let n: i32 = s.parse()?;` работает внутри функций с `MyError`. Трейты и `From` подробно — в модуле 12."
+},
+{
 "t": "recap",
 "items": [
 "`unwrap()` / `expect(\"...\")` — достать или запаниковать.",
@@ -3423,6 +3640,13 @@ window.COURSES = {
 ]
 },
 {
+"t": "deep",
+"title": "Ошибка «по всем правилам»",
+"md": "Чтобы своя ошибка выглядела как ошибки стандартной библиотеки, ей реализуют два трейта:\n- `Display` — понятный текст для человека;\n- `std::error::Error` — метка «это ошибка».\n\n`Box<dyn std::error::Error>` — «любая ошибка». С ним `?` принимает ошибки разных типов. В больших программах для этого часто берут библиотеки `anyhow` и `thiserror`.",
+"code": "use std::fmt;\n\n#[derive(Debug)]\nenum AppError {\n    Empty,\n}\n\nimpl fmt::Display for AppError {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"строка пустая\")\n    }\n}\n\nimpl std::error::Error for AppError {}\n\nfn check(s: &str) -> Result<(), Box<dyn std::error::Error>> {\n    if s.is_empty() {\n        return Err(Box::new(AppError::Empty));\n    }\n    let _n: i32 = s.parse()?;\n    Ok(())\n}\n\nfn main() {\n    for s in [\"\", \"x\", \"5\"] {\n        match check(s) {\n            Ok(()) => println!(\"«{s}»: в порядке\"),\n            Err(e) => println!(\"«{s}»: {e}\"),\n        }\n    }\n}",
+"out": "«»: строка пустая\n«x»: invalid digit found in string\n«5»: в порядке"
+},
+{
 "t": "recap",
 "items": [
 "Ошибки удобно описывать своим `enum`.",
@@ -3434,6 +3658,71 @@ window.COURSES = {
 "goals": [
 "Описать возможные ошибки через `enum`",
 "Вернуть `Result` из `main`"
+]
+},
+{
+"id": "m10-p",
+"title": "Практика: ошибки",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Напиши `safe_divide`: при делении на ноль верни `Err(\"деление на ноль\")`, иначе `Ok(результат)`.",
+"code": "fn safe_divide(a: i32, b: i32) -> Result<i32, String> {\n    Ok(0)\n}\n\nfn main() {\n    println!(\"{:?}\", safe_divide(10, 2));\n    println!(\"{:?}\", safe_divide(1, 0));\n}",
+"solution": "fn safe_divide(a: i32, b: i32) -> Result<i32, String> {\n    if b == 0 {\n        return Err(String::from(\"деление на ноль\"));\n    }\n    Ok(a / b)\n}\n\nfn main() {\n    println!(\"{:?}\", safe_divide(10, 2));\n    println!(\"{:?}\", safe_divide(1, 0));\n}",
+"expect": "Ok(5)\nErr(\"деление на ноль\")",
+"hints": [
+"`if b == 0 { return Err(String::from(\"деление на ноль\")); }`",
+"В конце `Ok(a / b)`."
+]
+},
+{
+"t": "task",
+"md": "Сложи только те строки, которые являются числами. Остальные пропусти.",
+"code": "fn main() {\n    let items = [\"10\", \"x\", \"5\", \"\", \"7\"];\n    let mut sum = 0;\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let items = [\"10\", \"x\", \"5\", \"\", \"7\"];\n    let mut sum = 0;\n    for s in items {\n        if let Ok(n) = s.parse::<i32>() {\n            sum += n;\n        }\n    }\n    println!(\"{sum}\");\n}",
+"expect": "22",
+"hints": [
+"`if let Ok(n) = s.parse::<i32>() { ... }`",
+"Внутри: `sum += n;`"
+]
+},
+{
+"t": "task",
+"md": "Разбери строку вида `\"3,4\"` в точку `(i32, i32)`. Используй `?` для обеих частей. Если запятой нет, верни ошибку `\"нет запятой\"`.",
+"code": "fn parse_point(s: &str) -> Result<(i32, i32), String> {\n    let Some((a, b)) = s.split_once(',') else {\n        return Err(String::from(\"нет запятой\"));\n    };\n    // разбери a и b\n    Ok((0, 0))\n}\n\nfn main() {\n    println!(\"{:?}\", parse_point(\"3,4\"));\n    println!(\"{:?}\", parse_point(\"3;4\"));\n    println!(\"{:?}\", parse_point(\"3,x\"));\n}",
+"solution": "fn parse_point(s: &str) -> Result<(i32, i32), String> {\n    let Some((a, b)) = s.split_once(',') else {\n        return Err(String::from(\"нет запятой\"));\n    };\n    let x: i32 = a.trim().parse().map_err(|_| format!(\"«{a}» не число\"))?;\n    let y: i32 = b.trim().parse().map_err(|_| format!(\"«{b}» не число\"))?;\n    Ok((x, y))\n}\n\nfn main() {\n    println!(\"{:?}\", parse_point(\"3,4\"));\n    println!(\"{:?}\", parse_point(\"3;4\"));\n    println!(\"{:?}\", parse_point(\"3,x\"));\n}",
+"expect": "Ok((3, 4))\nErr(\"нет запятой\")\nErr(\"«x» не число\")",
+"hints": [
+"Ошибка `parse` — другого типа, её надо превратить в `String` через `map_err`.",
+"`let x: i32 = a.trim().parse().map_err(|_| format!(\"«{a}» не число\"))?;`"
+]
+},
+{
+"t": "task",
+"md": "`?` работает и с `Option`. Напиши функцию, которая возвращает первую букву второго слова, или `None`.",
+"code": "fn second_word_initial(s: &str) -> Option<char> {\n    None\n}\n\nfn main() {\n    println!(\"{:?}\", second_word_initial(\"язык rust\"));\n    println!(\"{:?}\", second_word_initial(\"одно\"));\n}",
+"solution": "fn second_word_initial(s: &str) -> Option<char> {\n    let word = s.split_whitespace().nth(1)?;\n    word.chars().next()\n}\n\nfn main() {\n    println!(\"{:?}\", second_word_initial(\"язык rust\"));\n    println!(\"{:?}\", second_word_initial(\"одно\"));\n}",
+"expect": "Some('r')\nNone",
+"hints": [
+"`s.split_whitespace().nth(1)` — второе слово как `Option<&str>`. Поставь после него `?`.",
+"Первая буква: `word.chars().next()` — это уже `Option<char>`."
+]
+},
+{
+"t": "recap",
+"items": [
+"Ожидаемые проблемы — `Result`, а не паника.",
+"`?` пробрасывает ошибку наверх, `map_err` меняет её тип.",
+"`if let Ok(x)` — обработать только успех."
+]
+}
+],
+"practice": true,
+"goals": [
+"Возвращать `Result` из своих функций",
+"Использовать `?` и `map_err`",
+"Обрабатывать ошибки без паники"
 ]
 }
 ]
@@ -7718,472 +8007,679 @@ window.COURSES = {
 },
 {
 "id": "m08",
-"title": "Перечисления и match",
-"sub": "Один из нескольких вариантов",
+"title": "Enums and match",
+"sub": "One of several options",
 "lessons": [
 {
 "id": "m08-1",
-"title": "enum — один вариант из списка",
+"title": "An enum is one option from a list",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Выбор из списка",
-"md": "**Перечисление** (enum) — тип, значение которого — **один** вариант из заранее известного списка.\n\n```\nenum Light {\n    Red,\n    Yellow,\n    Green,\n}\nlet now = Light::Red;\n```\n> Как светофор. Он горит красным, жёлтым или зелёным. Ничего другого быть не может."
+"title": "Choosing from a list",
+"md": "An **enum** (enumeration) is a type whose value is **one** variant from a list known in advance.\n\n```\nenum Light {\n    Red,\n    Yellow,\n    Green,\n}\nlet now = Light::Red;\n```\n> Analogy: a traffic light shows red, yellow or green. Nothing else is possible."
 },
 {
 "t": "text",
-"title": "Варианты могут нести данные",
-"md": "У каждого варианта могут быть свои данные:\n\n```\nenum Message {\n    Quit,                    // без данных\n    Move { x: i32, y: i32 }, // как структура\n    Write(String),           // одно значение\n}\n```\nОдин тип `Message`, но внутри — разные виды сообщений."
+"title": "Variants can carry data",
+"md": "Each variant can have its own data:\n\n```\nenum Message {\n    Quit,                    // no data\n    Move { x: i32, y: i32 }, // like a struct\n    Write(String),           // one value\n}\n```\nOne type `Message`, but inside it there are different kinds of messages."
 },
 {
 "t": "quiz",
-"md": "Сколько вариантов одновременно хранит значение типа `Light`?",
+"md": "How many variants does a value of type `Light` hold at the same time?",
 "options": [
-"Ровно один",
-"Все три",
-"Ноль или один"
+"Exactly one",
+"All three",
+"Zero or one"
 ],
 "answer": 0,
 "why": [
-"Верно. В этом и смысл enum.",
-"Это была бы структура с тремя полями.",
-"Пустым значение enum быть не может. Хотя для «может не быть» есть Option — скоро о нём."
+"Correct. That is the point of an enum.",
+"That would be a struct with three fields.",
+"An enum value cannot be empty. But for \"there may be nothing\" there is Option — soon."
 ]
+},
+{
+"t": "text",
+"title": "Enums can have methods too",
+"md": "Like a struct, an `enum` can have an `impl` block:\n\n```\nimpl Light {\n    fn next(&self) -> Light {\n        match self {\n            Light::Red => Light::Green,\n            Light::Green => Light::Yellow,\n            Light::Yellow => Light::Red,\n        }\n    }\n}\n```\nHere `match` checks which light is on now. The next lesson is about it."
 },
 {
 "t": "recap",
 "items": [
-"`enum` — один вариант из списка.",
-"Вариант пишется через `::` — `Light::Red`.",
-"Варианты могут хранить данные."
+"`enum` is one variant from a list.",
+"A variant is written with `::` — `Light::Red`.",
+"Variants can hold data."
 ]
 }
 ],
 "goals": [
-"Что такое перечисление `enum`",
-"Как хранить в вариантах данные"
+"What an enum is",
+"How to store data in variants"
 ]
 },
 {
 "id": "m08-2",
-"title": "match — разбор вариантов",
+"title": "match — checking variants",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "match — сортировочная машина",
-"md": "`match` смотрит на значение и выбирает подходящую ветку. Это **сопоставление с образцом**.\n\n```\nmatch light {\n    Light::Red => println!(\"Стой\"),\n    Light::Yellow => println!(\"Жди\"),\n    Light::Green => println!(\"Иди\"),\n}\n```\n> Как сортировщик посылок: по адресу отправляет в нужное окно."
+"title": "match is a sorting machine",
+"md": "`match` looks at a value and picks the matching branch. This is **pattern matching**.\n\n```\nmatch light {\n    Light::Red => println!(\"Stop\"),\n    Light::Yellow => println!(\"Wait\"),\n    Light::Green => println!(\"Go\"),\n}\n```\n> Analogy: a parcel sorter sends each parcel to the right window by its address."
 },
 {
 "t": "code",
-"code": "enum Coin {\n    Ruble1,\n    Ruble5,\n    Ruble10,\n}\n\nfn value(c: Coin) -> u32 {\n    match c {\n        Coin::Ruble1 => 1,\n        Coin::Ruble5 => 5,\n        Coin::Ruble10 => 10,\n    }\n}\n\nfn main() {\n    let total = value(Coin::Ruble5) + value(Coin::Ruble10);\n    println!(\"Всего: {total} руб.\");\n}",
-"out": "Всего: 15 руб.",
-"after": "`match` тоже выражение: возвращает значение выбранной ветки."
+"code": "enum Coin {\n    Penny,\n    Nickel,\n    Dime,\n}\n\nfn value(c: Coin) -> u32 {\n    match c {\n        Coin::Penny => 1,\n        Coin::Nickel => 5,\n        Coin::Dime => 10,\n    }\n}\n\nfn main() {\n    let total = value(Coin::Nickel) + value(Coin::Dime);\n    println!(\"Total: {total} cents\");\n}",
+"out": "Total: 15 cents",
+"after": "`match` is also an expression: it returns the value of the chosen branch."
 },
 {
 "t": "text",
-"title": "match проверяет всё",
-"md": "Если забыть вариант, компилятор не пропустит: ошибка `E0004`.\n\nЭто огромная помощь. Добавил новый вариант в enum — компилятор покажет **все** места, которые надо обновить.\n\nНе хочешь перечислять всё? Ветка `_` ловит «всё остальное»:\n\n```\nmatch number {\n    1 => println!(\"один\"),\n    2 => println!(\"два\"),\n    _ => println!(\"много\"),\n}\n```"
+"title": "match checks everything",
+"md": "If you forget a variant, the compiler does not allow it: error `E0004`.\n\nThis is a huge help. When you add a new variant to an enum, the compiler shows **all** places that need updating.\n\nYou do not want to list everything? The branch `_` catches \"everything else\":\n\n```\nmatch number {\n    1 => println!(\"one\"),\n    2 => println!(\"two\"),\n    _ => println!(\"many\"),\n}\n```"
 },
 {
 "t": "code",
-"md": "Данные из варианта достаются прямо в `match`:",
+"md": "Data from a variant is taken out right in the `match`:",
 "code": "enum Shape {\n    Circle(f64),\n    Rect(f64, f64),\n}\n\nfn area(s: &Shape) -> f64 {\n    match s {\n        Shape::Circle(r) => 3.14 * r * r,\n        Shape::Rect(w, h) => w * h,\n    }\n}\n\nfn main() {\n    println!(\"{}\", area(&Shape::Rect(2.0, 3.0)));\n    println!(\"{}\", area(&Shape::Circle(1.0)));\n}",
 "out": "6\n3.14"
 },
 {
 "t": "quiz",
-"md": "Что делает ветка `_ =>` в `match`?",
+"md": "What does the branch `_ =>` do in a `match`?",
 "options": [
-"Ловит ошибки",
-"Подходит под любое значение, которое не поймали раньше",
-"Пропускает `match` целиком"
+"It catches errors",
+"It matches any value that was not matched earlier",
+"It skips the whole `match`"
 ],
 "answer": 1,
 "why": [
-"Это не про ошибки, а про оставшиеся варианты.",
-"Верно. Это «всё остальное».",
-"Ветка `_` выполняется, если до неё ничего не подошло."
+"It is not about errors, it is about the remaining variants.",
+"Correct. It is \"everything else\".",
+"The `_` branch runs if nothing matched before it."
 ]
 },
 {
 "t": "task",
-"md": "Напиши функцию `describe`, которая для числа печатает: `0` → `ноль`, `1` → `один`, любое другое → `другое`. Используй `match`.",
-"code": "fn describe(n: i32) -> &'static str {\n    // твой match\n}\n\nfn main() {\n    println!(\"{}\", describe(0));\n    println!(\"{}\", describe(1));\n    println!(\"{}\", describe(42));\n}",
-"solution": "fn describe(n: i32) -> &'static str {\n    match n {\n        0 => \"ноль\",\n        1 => \"один\",\n        _ => \"другое\",\n    }\n}\n\nfn main() {\n    println!(\"{}\", describe(0));\n    println!(\"{}\", describe(1));\n    println!(\"{}\", describe(42));\n}",
-"expect": "ноль\nодин\nдругое",
+"md": "Write a function `describe` that for a number returns: `0` → `zero`, `1` → `one`, anything else → `other`. Use `match`.",
+"code": "fn describe(n: i32) -> &'static str {\n    // your match\n}\n\nfn main() {\n    println!(\"{}\", describe(0));\n    println!(\"{}\", describe(1));\n    println!(\"{}\", describe(42));\n}",
+"solution": "fn describe(n: i32) -> &'static str {\n    match n {\n        0 => \"zero\",\n        1 => \"one\",\n        _ => \"other\",\n    }\n}\n\nfn main() {\n    println!(\"{}\", describe(0));\n    println!(\"{}\", describe(1));\n    println!(\"{}\", describe(42));\n}",
+"expect": "zero\none\nother",
 "hints": [
-"`&'static str` — это просто «текст в кавычках». Странную метку `'static` разберём позже.",
-"Ветки: `0 => \"ноль\",`, `1 => \"один\",`, `_ => \"другое\",`"
+"`&'static str` simply means \"text in quotes\". The strange label `'static` is explained later.",
+"The branches: `0 => \"zero\",`, `1 => \"one\",`, `_ => \"other\",`"
 ]
+},
+{
+"t": "text",
+"title": "More complex patterns",
+"md": "In `match` branches you can write more than concrete values:\n\n- `1 | 2` means \"1 or 2\";\n- `3..=9` means \"from 3 to 9 inclusive\";\n- `n if n < 0` means \"any `n`, but only if it is less than zero\". Such a condition is called a **guard**.\n\n```\nlet text = match score {\n    0 => \"zero\",\n    1 | 2 => \"few\",\n    3..=9 => \"medium\",\n    n if n < 0 => \"below zero\",\n    _ => \"many\",\n};\n```"
+},
+{
+"t": "deep",
+"title": "match on a tuple",
+"md": "`match` can check several values at once if you put them into a tuple:",
+"code": "fn main() {\n    for (a, b) in [(true, true), (true, false), (false, false)] {\n        let text = match (a, b) {\n            (true, true) => \"both\",\n            (true, false) | (false, true) => \"one\",\n            (false, false) => \"nobody\",\n        };\n        println!(\"{text}\");\n    }\n}",
+"out": "both\none\nnobody"
 },
 {
 "t": "recap",
 "items": [
-"`match` выбирает ветку по образцу.",
-"Нужно разобрать все варианты, иначе ошибка.",
-"`_` — «всё остальное»."
+"`match` picks a branch by pattern.",
+"All variants must be covered, otherwise there is an error.",
+"`_` means \"everything else\"."
 ]
 }
 ],
 "goals": [
-"Разобрать enum через `match`",
-"Понять, почему `match` требует все варианты"
+"Check an enum with `match`",
+"Understand why `match` requires all variants"
 ]
 },
 {
 "id": "m08-3",
-"title": "Option: может быть, а может нет",
+"title": "Option: maybe there is a value, maybe not",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Значения может не быть",
-"md": "Часто результата может не оказаться. Например, ищем пользователя, а его нет.\n\nВо многих языках для этого есть `null` — «ничего». Его изобретатель назвал `null` своей «ошибкой на миллиард долларов»: программы постоянно падали, забыв проверить.\n\nВ Rust `null` нет. Вместо него — `Option`."
+"title": "There may be no value",
+"md": "Often a result may be missing. For example, we look for a user, and there is none.\n\nMany languages have `null` for this — \"nothing\". Its inventor called `null` his \"billion-dollar mistake\": programs kept crashing because someone forgot to check.\n\nRust has no `null`. It has `Option` instead."
 },
 {
 "t": "text",
-"title": "Option — коробка, которая может быть пустой",
-"md": "```\nenum Option<T> {\n    Some(T), // внутри есть значение\n    None,    // пусто\n}\n```\n> Подарочная коробка. Внутри может лежать подарок (`Some`), а может быть пусто (`None`). Пока не откроешь — не знаешь. И Rust заставит открыть.\n\n`T` — «любой тип». Об этом подробно в модуле про обобщения."
+"title": "Option is a box that may be empty",
+"md": "```\nenum Option<T> {\n    Some(T), // there is a value inside\n    None,    // empty\n}\n```\n> Analogy: a gift box. There may be a gift inside (`Some`), or it may be empty (`None`). You do not know until you open it. And Rust makes you open it.\n\n`T` means \"any type\". The module about generics explains it in detail."
 },
 {
 "t": "code",
-"code": "fn divide(a: i32, b: i32) -> Option<i32> {\n    if b == 0 {\n        None\n    } else {\n        Some(a / b)\n    }\n}\n\nfn main() {\n    for b in [2, 0] {\n        match divide(10, b) {\n            Some(result) => println!(\"10 / {b} = {result}\"),\n            None => println!(\"На {b} делить нельзя\"),\n        }\n    }\n}",
-"out": "10 / 2 = 5\nНа 0 делить нельзя"
+"code": "fn divide(a: i32, b: i32) -> Option<i32> {\n    if b == 0 {\n        None\n    } else {\n        Some(a / b)\n    }\n}\n\nfn main() {\n    for b in [2, 0] {\n        match divide(10, b) {\n            Some(result) => println!(\"10 / {b} = {result}\"),\n            None => println!(\"You cannot divide by {b}\"),\n        }\n    }\n}",
+"out": "10 / 2 = 5\nYou cannot divide by 0"
 },
 {
 "t": "quiz",
-"md": "Можно ли сложить `Option<i32>` и `i32` напрямую: `Some(5) + 3`?",
+"md": "Can you add `Option<i32>` and `i32` directly: `Some(5) + 3`?",
 "options": [
-"Да, Rust сам достанет 5",
-"Нет, сначала нужно достать значение из Option"
+"Yes, Rust takes out the 5 by itself",
+"No, first you have to take the value out of the Option"
 ],
 "answer": 1,
 "why": [
-"Нет. Сначала надо проверить, что коробка не пустая.",
-"Верно. Это и защищает от «забыл проверить»."
+"No. First you have to check that the box is not empty.",
+"Correct. This is what protects you from \"forgot to check\"."
 ]
 },
 {
 "t": "text",
-"title": "Удобные способы открыть коробку",
-"md": "- `if let Some(x) = value { ... }` — сделать что-то, только если есть значение.\n- `value.unwrap_or(0)` — достать значение или взять 0, если пусто.\n- `value.unwrap()` — достать, а если пусто — **паника**. Только когда уверен.\n\n```\nlet first = vec![3, 1, 2].first().copied().unwrap_or(0);\n```"
+"title": "Handy ways to open the box",
+"md": "- `if let Some(x) = value { ... }` — do something only if there is a value.\n- `value.unwrap_or(0)` — take the value, or use 0 if it is empty.\n- `value.unwrap()` — take the value, and if it is empty — **panic**. Only when you are sure.\n\n```\nlet first = vec![3, 1, 2].first().copied().unwrap_or(0);\n```"
 },
 {
 "t": "code",
-"md": "`if let` — короткий `match` на один вариант:",
-"code": "fn main() {\n    let names = vec![\"Аня\", \"Боря\"];\n    if let Some(name) = names.get(1) {\n        println!(\"Второй: {name}\");\n    }\n    if let Some(name) = names.get(5) {\n        println!(\"Шестой: {name}\");\n    } else {\n        println!(\"Шестого нет\");\n    }\n}",
-"out": "Второй: Боря\nШестого нет",
-"after": "`get(i)` возвращает `Option`: элемента может не быть. Безопаснее, чем `[i]`."
+"md": "`if let` is a short `match` for one variant:",
+"code": "fn main() {\n    let names = vec![\"Anna\", \"Bob\"];\n    if let Some(name) = names.get(1) {\n        println!(\"Second: {name}\");\n    }\n    if let Some(name) = names.get(5) {\n        println!(\"Sixth: {name}\");\n    } else {\n        println!(\"There is no sixth\");\n    }\n}",
+"out": "Second: Bob\nThere is no sixth",
+"after": "`get(i)` returns an `Option`: the element may not exist. It is safer than `[i]`."
+},
+{
+"t": "deep",
+"title": "What Option costs",
+"md": "`Option<&T>` takes **the same** amount of memory as a plain `&T`. How?\n\nA reference in Rust is never the zero address. So the compiler uses the zero address as the marker for `None`. No extra space for \"there is / there is not\" is needed.\n\nThe safety of `Option` costs nothing in memory. The same is true for `Option<Box<T>>`.",
+"code": "fn main() {\n    println!(\"{}\", std::mem::size_of::<&i32>());\n    println!(\"{}\", std::mem::size_of::<Option<&i32>>());\n}",
+"out": "8\n8"
 },
 {
 "t": "recap",
 "items": [
-"`null` в Rust нет. Есть `Option<T>`: `Some(x)` или `None`.",
-"Rust заставляет проверить, есть ли значение.",
-"`if let Some(x) = ...`, `unwrap_or(запасное)`, `unwrap()` — только когда уверен."
+"Rust has no `null`. It has `Option<T>`: `Some(x)` or `None`.",
+"Rust makes you check whether there is a value.",
+"`if let Some(x) = ...`, `unwrap_or(fallback)`, `unwrap()` — only when you are sure."
 ]
 }
 ],
 "goals": [
-"Почему в Rust нет `null`",
-"Как работать с `Option`"
+"Why Rust has no `null`",
+"How to work with `Option`"
 ]
 },
 {
 "id": "m08-4",
-"title": "let else и цепочки let",
+"title": "let else and let chains",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "let else — «достань или уходи»",
-"md": "Часто нужно: «достань значение, а если его нет — выйди из функции». Для этого есть `let ... else`:\n\n```\nfn greet_first(names: &[&str]) {\n    let Some(first) = names.first() else {\n        println!(\"Никого нет\");\n        return;\n    };\n    println!(\"Привет, {first}!\");\n}\n```\nПосле этого блока `first` — уже обычное значение, без `Some`."
+"title": "let else — \"take it out or leave\"",
+"md": "Often you need: \"take the value out, and if there is none — leave the function\". For this there is `let ... else`:\n\n```\nfn greet_first(names: &[&str]) {\n    let Some(first) = names.first() else {\n        println!(\"Nobody is here\");\n        return;\n    };\n    println!(\"Hello, {first}!\");\n}\n```\nAfter this block, `first` is a normal value, without `Some`."
 },
 {
 "t": "text",
-"title": "Цепочки let (Rust 2024)",
-"md": "В новой редакции Rust 2024 в `if` можно склеивать проверки через `&&`:\n\n```\nif let Some(age) = maybe_age && age >= 18 {\n    println!(\"Взрослый\");\n}\n```\nРаньше для этого приходилось вкладывать `if` в `if`."
+"title": "let chains (Rust 2024)",
+"md": "In the new Rust 2024 edition you can join checks in an `if` with `&&`:\n\n```\nif let Some(age) = maybe_age && age >= 18 {\n    println!(\"Adult\");\n}\n```\nBefore this, you had to put an `if` inside another `if`."
 },
 {
 "t": "code",
-"code": "fn parse_age(text: &str) -> Option<u32> {\n    let Ok(n) = text.parse::<u32>() else {\n        return None;\n    };\n    Some(n)\n}\n\nfn main() {\n    for t in [\"25\", \"abc\", \"15\"] {\n        if let Some(age) = parse_age(t) && age >= 18 {\n            println!(\"{t}: взрослый\");\n        } else {\n            println!(\"{t}: нет\");\n        }\n    }\n}",
-"out": "25: взрослый\nabc: нет\n15: нет",
-"after": "`Ok(n)` — вариант из типа `Result`. Он про ошибки, мы разберём его в отдельном модуле."
+"code": "fn parse_age(text: &str) -> Option<u32> {\n    let Ok(n) = text.parse::<u32>() else {\n        return None;\n    };\n    Some(n)\n}\n\nfn main() {\n    for t in [\"25\", \"abc\", \"15\"] {\n        if let Some(age) = parse_age(t) && age >= 18 {\n            println!(\"{t}: adult\");\n        } else {\n            println!(\"{t}: no\");\n        }\n    }\n}",
+"out": "25: adult\nabc: no\n15: no",
+"after": "`Ok(n)` is a variant of the type `Result`. It is about errors; there is a separate module about it."
 },
 {
 "t": "quiz",
-"md": "Что обязательно должно быть в блоке `else` у `let ... else`?",
+"md": "What must be in the `else` block of `let ... else`?",
 "options": [
-"Ничего, можно оставить пустым",
-"Выход: `return`, `break`, `continue` или паника"
+"Nothing, it can be empty",
+"A way out: `return`, `break`, `continue` or a panic"
 ],
 "answer": 1,
 "why": [
-"Нет: после `else` программа не может идти дальше без значения.",
-"Верно. Блок обязан «уйти», ведь значения нет."
+"No: after `else` the program cannot continue without the value.",
+"Correct. The block must \"leave\", because there is no value."
 ]
 },
 {
 "t": "recap",
 "items": [
-"`let Some(x) = opt else { return; };` — достань или выйди.",
-"`if let Some(x) = opt && условие` — цепочка в Rust 2024."
+"`let Some(x) = opt else { return; };` — take it out or leave.",
+"`if let Some(x) = opt && condition` — a let chain in Rust 2024."
 ]
 }
 ],
 "goals": [
-"Ранний выход через `let ... else`",
-"Несколько условий через `&&` в `if let`"
+"Leave early with `let ... else`",
+"Several conditions with `&&` in `if let`"
+]
+},
+{
+"id": "m08-p",
+"title": "Practice: enum and match",
+"min": 12,
+"cards": [
+{
+"t": "task",
+"md": "There are directions. Complete the function `turn_right`: north → east → south → west → north.",
+"code": "#[derive(Debug)]\nenum Dir {\n    North,\n    East,\n    South,\n    West,\n}\n\nfn turn_right(d: Dir) -> Dir {\n    d\n}\n\nfn main() {\n    println!(\"{:?}\", turn_right(Dir::North));\n    println!(\"{:?}\", turn_right(Dir::West));\n}",
+"solution": "#[derive(Debug)]\nenum Dir {\n    North,\n    East,\n    South,\n    West,\n}\n\nfn turn_right(d: Dir) -> Dir {\n    match d {\n        Dir::North => Dir::East,\n        Dir::East => Dir::South,\n        Dir::South => Dir::West,\n        Dir::West => Dir::North,\n    }\n}\n\nfn main() {\n    println!(\"{:?}\", turn_right(Dir::North));\n    println!(\"{:?}\", turn_right(Dir::West));\n}",
+"expect": "East\nNorth",
+"hints": [
+"You need `match d { ... }` with four branches.",
+"The first branch: `Dir::North => Dir::East,`"
+]
+},
+{
+"t": "task",
+"md": "Turn points into a grade with `match` and ranges: 90–100 → `excellent`, 70–89 → `good`, 50–69 → `pass`, everything else → `fail`.",
+"code": "fn grade(score: u32) -> &'static str {\n    \"fail\"\n}\n\nfn main() {\n    for s in [95, 75, 50, 10] {\n        println!(\"{}\", grade(s));\n    }\n}",
+"solution": "fn grade(score: u32) -> &'static str {\n    match score {\n        90..=100 => \"excellent\",\n        70..=89 => \"good\",\n        50..=69 => \"pass\",\n        _ => \"fail\",\n    }\n}\n\nfn main() {\n    for s in [95, 75, 50, 10] {\n        println!(\"{}\", grade(s));\n    }\n}",
+"expect": "excellent\ngood\npass\nfail",
+"hints": [
+"A branch with a range: `90..=100 => \"excellent\",`",
+"The last branch: `_ => \"fail\",`"
+]
+},
+{
+"t": "task",
+"md": "Write a function `first_negative` that returns the first negative number of a slice in `Some`, or `None` if there is none.",
+"code": "fn first_negative(items: &[i32]) -> Option<i32> {\n    None\n}\n\nfn main() {\n    println!(\"{:?}\", first_negative(&[3, -4, -1]));\n    println!(\"{:?}\", first_negative(&[1, 2]));\n}",
+"solution": "fn first_negative(items: &[i32]) -> Option<i32> {\n    for &x in items {\n        if x < 0 {\n            return Some(x);\n        }\n    }\n    None\n}\n\nfn main() {\n    println!(\"{:?}\", first_negative(&[3, -4, -1]));\n    println!(\"{:?}\", first_negative(&[1, 2]));\n}",
+"expect": "Some(-4)\nNone",
+"hints": [
+"In the loop, as soon as you find `x < 0`, return `Some(x)` with `return`.",
+"`for &x in items` takes the number out of the reference right away. After the loop return `None`."
+]
+},
+{
+"t": "task",
+"md": "With `if let`, print the square of a number only if it exists. For `None` print nothing.",
+"code": "fn main() {\n    let values = [Some(3), None, Some(5)];\n    for v in values {\n        // your if let\n    }\n}",
+"solution": "fn main() {\n    let values = [Some(3), None, Some(5)];\n    for v in values {\n        if let Some(n) = v {\n            println!(\"{}\", n * n);\n        }\n    }\n}",
+"expect": "9\n25",
+"hints": [
+"`if let Some(n) = v { ... }`",
+"Inside: `println!(\"{}\", n * n);`"
+]
+},
+{
+"t": "task",
+"md": "An enum of robot commands. Calculate where the robot ends up, starting at position 0: `Forward(n)` adds `n`, `Back(n)` subtracts `n`, `Stop` stops the program.",
+"code": "enum Cmd {\n    Forward(i32),\n    Back(i32),\n    Stop,\n}\n\nfn main() {\n    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];\n    let mut pos = 0;\n    // go through program\n    println!(\"{pos}\");\n}",
+"solution": "enum Cmd {\n    Forward(i32),\n    Back(i32),\n    Stop,\n}\n\nfn main() {\n    let program = [Cmd::Forward(5), Cmd::Back(2), Cmd::Forward(4), Cmd::Stop, Cmd::Forward(100)];\n    let mut pos = 0;\n    for cmd in program {\n        match cmd {\n            Cmd::Forward(n) => pos += n,\n            Cmd::Back(n) => pos -= n,\n            Cmd::Stop => break,\n        }\n    }\n    println!(\"{pos}\");\n}",
+"expect": "7",
+"hints": [
+"`for cmd in program { match cmd { ... } }`",
+"The branches: `Cmd::Forward(n) => pos += n,`, `Cmd::Back(n) => pos -= n,`, `Cmd::Stop => break,`"
+]
+},
+{
+"t": "recap",
+"items": [
+"`match` checks all variants, `_` catches the rest.",
+"Ranges `a..=b` and `|` make branches shorter.",
+"`Option` means \"there is a value or not\", `if let` checks one variant."
+]
+}
+],
+"practice": true,
+"goals": [
+"Describe variants with `enum`",
+"Check them with `match`, `if let`, `Option`"
 ]
 }
 ]
 },
 {
 "id": "m09",
-"title": "Коллекции",
-"sub": "Vec, String и HashMap поближе",
+"title": "Collections",
+"sub": "A closer look at Vec, String and HashMap",
 "lessons": [
 {
 "id": "m09-1",
-"title": "Vec подробнее",
+"title": "More about Vec",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Главные операции",
-"md": "```\nlet mut v = vec![10, 20, 30];\nv.push(40);          // добавить в конец\nlet last = v.pop();  // забрать последний: Some(40)\nv[0] = 5;            // заменить первый\nv.remove(1);         // удалить по индексу\nv.insert(0, 1);      // вставить в начало\nv.contains(&30);     // есть ли элемент: true\n```"
+"title": "The main operations",
+"md": "```\nlet mut v = vec![10, 20, 30];\nv.push(40);          // add to the end\nlet last = v.pop();  // take the last one: Some(40)\nv[0] = 5;            // replace the first one\nv.remove(1);         // remove by index\nv.insert(0, 1);      // insert at the start\nv.contains(&30);     // is the element there: true\n```"
 },
 {
 "t": "text",
-"title": "[] или get",
-"md": "- `v[i]` — быстро, но если элемента нет — **паника**.\n- `v.get(i)` — возвращает `Option`. Нет элемента — `None`, без паники.\n\n> Если индекс приходит от пользователя или из файла, бери `get`."
+"title": "[] or get",
+"md": "- `v[i]` is fast, but if the element does not exist — **panic**.\n- `v.get(i)` returns an `Option`. No element — `None`, no panic.\n\n> If the index comes from the user or from a file, use `get`."
 },
 {
 "t": "code",
-"md": "Перебор с изменением: `&mut` даёт менять каждый элемент.",
+"md": "Going through with changes: `&mut` lets you change each element.",
 "code": "fn main() {\n    let mut prices = vec![100, 250, 80];\n    for p in &mut prices {\n        *p = *p * 2;\n    }\n    println!(\"{:?}\", prices);\n    println!(\"{:?}\", prices.get(10));\n}",
 "out": "[200, 500, 160]\nNone",
-"after": "`*p` — **разыменование**: «значение, на которое смотрит ссылка». Без `*` мы бы меняли саму ссылку."
+"after": "`*p` is **dereferencing**: \"the value that the reference looks at\". Without `*` we would be changing the reference itself."
 },
 {
 "t": "quiz",
-"md": "Что вернёт `vec![1, 2, 3].get(3)`?",
+"md": "What does `vec![1, 2, 3].get(3)` return?",
 "options": [
 "3",
 "None",
-"Программа запаникует"
+"The program panics"
 ],
 "answer": 1,
 "why": [
-"Индекс 3 — это четвёртый элемент. Его нет.",
-"Верно. Элемента нет, и `get` честно говорит об этом.",
-"Паникует `[3]`, а `get` — нет."
+"Index 3 is the fourth element. It does not exist.",
+"Correct. There is no element, and `get` says so honestly.",
+"`[3]` panics, but `get` does not."
 ]
 },
 {
 "t": "task",
-"md": "Удали из вектора все нечётные числа и напечатай результат. Подсказка: у вектора есть метод `retain`.",
-"code": "fn main() {\n    let mut nums = vec![1, 2, 3, 4, 5, 6];\n    // твой код\n    println!(\"{:?}\", nums);\n}",
+"md": "Remove all odd numbers from the vector and print the result. Hint: a vector has the method `retain`.",
+"code": "fn main() {\n    let mut nums = vec![1, 2, 3, 4, 5, 6];\n    // your code\n    println!(\"{:?}\", nums);\n}",
 "solution": "fn main() {\n    let mut nums = vec![1, 2, 3, 4, 5, 6];\n    nums.retain(|n| n % 2 == 0);\n    println!(\"{:?}\", nums);\n}",
 "expect": "[2, 4, 6]",
 "hints": [
-"`retain` оставляет только элементы, для которых условие правда.",
-"`nums.retain(|n| n % 2 == 0);` — запись `|n| ...` называется замыканием. Подробно — в модуле про итераторы."
+"`retain` keeps only the elements for which the condition is true.",
+"`nums.retain(|n| n % 2 == 0);` — the form `|n| ...` is called a closure. Details are in the module about iterators."
 ]
+},
+{
+"t": "text",
+"title": "Sorting and order",
+"md": "- `v.sort()` sorts in ascending order.\n- `v.reverse()` reverses.\n- `v.dedup()` removes **neighboring** repeats. That is why you sort first, then `dedup`.\n- `v.len()`, `v.is_empty()` give the length and check \"is it empty\".\n\n```\nlet mut v = vec![3, 1, 3, 2, 1];\nv.sort();   // [1, 1, 2, 3, 3]\nv.dedup();  // [1, 2, 3]\n```\n!> Fractional numbers `f64` cannot be sorted this way: they have a special value NaN (\"not a number\") that cannot be compared. For them, write `v.sort_by(|a, b| a.total_cmp(b))`."
 },
 {
 "t": "recap",
 "items": [
 "`push`, `pop`, `insert`, `remove`, `contains`.",
-"`v[i]` паникует за границей, `v.get(i)` возвращает `Option`.",
-"`for x in &mut v` — менять элементы, `*x` — само значение."
+"`v[i]` panics out of bounds, `v.get(i)` returns an `Option`.",
+"`for x in &mut v` changes elements; `*x` is the value itself."
 ]
 }
 ],
 "goals": [
-"Добавлять, удалять и менять элементы вектора",
-"Безопасный доступ через `get`"
+"Add, remove and change vector elements",
+"Safe access with `get`"
 ]
 },
 {
 "id": "m09-2",
-"title": "String подробнее",
+"title": "More about String",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Как собрать строку",
-"md": "```\nlet mut s = String::from(\"Hello\");\ns.push_str(\", world\"); // дописать текст\ns.push('!');           // дописать один символ\nlet name = \"Аня\";\nlet msg = format!(\"Привет, {name}!\"); // как println!, но в строку\n```\n`format!` — самый удобный способ. Он ничего не печатает, а возвращает `String`."
+"title": "How to build a string",
+"md": "```\nlet mut s = String::from(\"Hello\");\ns.push_str(\", world\"); // add text\ns.push('!');           // add one character\nlet name = \"Anna\";\nlet msg = format!(\"Hello, {name}!\"); // like println!, but into a string\n```\n`format!` is the most convenient way. It prints nothing; it returns a `String`."
 },
 {
 "t": "code",
-"code": "fn main() {\n    let text = \"  Rust делает   код надёжным  \";\n    let clean = text.trim();\n    println!(\"[{clean}]\");\n    println!(\"Слов: {}\", clean.split_whitespace().count());\n    println!(\"Большими: {}\", clean.to_uppercase());\n    println!(\"Есть «код»: {}\", clean.contains(\"код\"));\n    println!(\"{}\", clean.replace(\"надёжным\", \"быстрым\"));\n}",
-"out": "[Rust делает   код надёжным]\nСлов: 4\nБольшими: RUST ДЕЛАЕТ   КОД НАДЁЖНЫМ\nЕсть «код»: true\nRust делает   код быстрым",
-"after": "- `trim` — убрать пробелы по краям.\n- `split_whitespace` — разрезать по пробелам на слова."
+"code": "fn main() {\n    let text = \"  Rust makes   code reliable  \";\n    let clean = text.trim();\n    println!(\"[{clean}]\");\n    println!(\"Words: {}\", clean.split_whitespace().count());\n    println!(\"Upper case: {}\", clean.to_uppercase());\n    println!(\"Has \\\"code\\\": {}\", clean.contains(\"code\"));\n    println!(\"{}\", clean.replace(\"reliable\", \"fast\"));\n}",
+"out": "[Rust makes   code reliable]\nWords: 4\nUpper case: RUST MAKES   CODE RELIABLE\nHas \"code\": true\nRust makes   code fast",
+"after": "- `trim` removes spaces at the edges.\n- `split_whitespace` cuts the text into words at spaces."
 },
 {
 "t": "quiz",
-"md": "Чем `format!` отличается от `println!`?",
+"md": "How is `format!` different from `println!`?",
 "options": [
-"`format!` возвращает строку, а не печатает её",
-"`format!` печатает без перевода строки",
-"Ничем"
+"`format!` returns a string instead of printing it",
+"`format!` prints without a new line",
+"There is no difference"
 ],
 "answer": 0,
 "why": [
-"Верно. Потом её можно сохранить, передать, напечатать.",
-"Так делает `print!`.",
-"Отличие важное: один печатает, другой создаёт `String`."
+"Correct. You can then store it, pass it on, print it.",
+"That is what `print!` does.",
+"The difference is important: one prints, the other creates a `String`."
 ]
 },
 {
 "t": "task",
-"md": "Переверни каждое слово строки задом наперёд, сохраняя порядок слов. Для «привет мир» должно выйти «тевирп рим».",
-"code": "fn main() {\n    let text = \"привет мир\";\n    let mut result = Vec::new();\n    for word in text.split_whitespace() {\n        // переверни word и положи в result\n    }\n    println!(\"{}\", result.join(\" \"));\n}",
-"solution": "fn main() {\n    let text = \"привет мир\";\n    let mut result = Vec::new();\n    for word in text.split_whitespace() {\n        let reversed: String = word.chars().rev().collect();\n        result.push(reversed);\n    }\n    println!(\"{}\", result.join(\" \"));\n}",
-"expect": "тевирп рим",
+"md": "Reverse each word of the string while keeping the order of the words. For \"hello world\" the result is \"olleh dlrow\".",
+"code": "fn main() {\n    let text = \"hello world\";\n    let mut result = Vec::new();\n    for word in text.split_whitespace() {\n        // reverse word and put it into result\n    }\n    println!(\"{}\", result.join(\" \"));\n}",
+"solution": "fn main() {\n    let text = \"hello world\";\n    let mut result = Vec::new();\n    for word in text.split_whitespace() {\n        let reversed: String = word.chars().rev().collect();\n        result.push(reversed);\n    }\n    println!(\"{}\", result.join(\" \"));\n}",
+"expect": "olleh dlrow",
 "hints": [
-"Буквы перебирает `word.chars()`, переворачивает `.rev()`.",
-"Собрать обратно в строку: `let r: String = word.chars().rev().collect();`"
+"`word.chars()` goes through the letters, `.rev()` reverses them.",
+"Collect them back into a string: `let r: String = word.chars().rev().collect();`"
 ]
+},
+{
+"t": "deep",
+"title": "Bytes, characters, and what a person sees",
+"md": "A string in Rust can be read on three levels:\n- `bytes()` — the UTF-8 bytes;\n- `chars()` — the Unicode characters (`char`);\n- what a person sees as one symbol. Sometimes this is **several** `char`s in a row.\n\nOn screen these are 2 symbols: \"é\" and \"👍🏽\". But `é` here is written as `e` plus a separate accent mark (`\\u{301}` is its Unicode number), and 👍🏽 as a thumb plus a skin tone. For working with such \"visible symbols\" there is a separate library, `unicode-segmentation`. It is not in the standard library.",
+"code": "fn main() {\n    let s = \"e\\u{301}👍🏽\"; // e + an accent mark, a thumb + a skin tone\n    println!(\"bytes: {}\", s.len());\n    println!(\"chars: {}\", s.chars().count());\n}",
+"out": "bytes: 11\nchars: 4"
 },
 {
 "t": "recap",
 "items": [
-"`push_str`, `push`, `format!` — собрать строку.",
+"`push_str`, `push`, `format!` build a string.",
 "`trim`, `split_whitespace`, `contains`, `replace`, `to_uppercase`.",
-"Буквы — через `.chars()`."
+"Letters — through `.chars()`."
 ]
 }
 ],
 "goals": [
-"Собирать строки из кусочков",
-"Перебирать слова и буквы"
+"Build strings from pieces",
+"Go through words and letters"
 ]
 },
 {
 "id": "m09-3",
-"title": "HashMap — словарь",
+"title": "HashMap — a dictionary",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Словарь",
-"md": "**HashMap** хранит пары «ключ → значение». По ключу быстро находится значение.\n\n> Как телефонная книга: по имени находишь номер. Не нужно листать всё подряд.\n\nHashMap нужно подключить строчкой `use std::collections::HashMap;`."
+"title": "A dictionary",
+"md": "A **HashMap** stores \"key → value\" pairs. A value is found quickly by its key.\n\n> Analogy: a phone book. You find the number by the name. You do not need to read through everything.\n\nYou need to bring HashMap in with the line `use std::collections::HashMap;`."
 },
 {
 "t": "code",
-"code": "use std::collections::HashMap;\n\nfn main() {\n    let mut phones = HashMap::new();\n    phones.insert(\"Аня\", \"111-22-33\");\n    phones.insert(\"Боря\", \"444-55-66\");\n\n    match phones.get(\"Аня\") {\n        Some(num) => println!(\"Номер Ани: {num}\"),\n        None => println!(\"Не знаю такого\"),\n    }\n    println!(\"Есть Вася? {}\", phones.contains_key(\"Вася\"));\n    println!(\"Всего контактов: {}\", phones.len());\n}",
-"out": "Номер Ани: 111-22-33\nЕсть Вася? false\nВсего контактов: 2",
-"after": "!> Порядок элементов в HashMap не гарантирован. Если важен порядок — используй `BTreeMap`: он хранит ключи отсортированными."
+"code": "use std::collections::HashMap;\n\nfn main() {\n    let mut phones = HashMap::new();\n    phones.insert(\"Anna\", \"111-22-33\");\n    phones.insert(\"Bob\", \"444-55-66\");\n\n    match phones.get(\"Anna\") {\n        Some(num) => println!(\"Anna's number: {num}\"),\n        None => println!(\"I do not know this person\"),\n    }\n    println!(\"Is Vic there? {}\", phones.contains_key(\"Vic\"));\n    println!(\"Contacts in total: {}\", phones.len());\n}",
+"out": "Anna's number: 111-22-33\nIs Vic there? false\nContacts in total: 2",
+"after": "!> The order of elements in a HashMap is not guaranteed. If the order matters, use `BTreeMap`: it keeps the keys sorted."
 },
 {
 "t": "text",
-"title": "entry — «найди или создай»",
-"md": "Частая задача: увеличить счётчик, а если ключа нет — начать с нуля.\n\n```\n*counts.entry(word).or_insert(0) += 1;\n```\nЧитается: «найди запись `word`; если нет — вставь 0; прибавь 1»."
+"title": "entry — \"find or create\"",
+"md": "A common task: increase a counter, and if the key is not there yet — start from zero.\n\n```\n*counts.entry(word).or_insert(0) += 1;\n```\nRead it as: \"find the entry `word`; if it is not there, insert 0; add 1\"."
 },
 {
 "t": "task",
-"md": "Посчитай, сколько раз встречается каждое слово. Используем `BTreeMap`, чтобы вывод шёл по алфавиту.",
-"code": "use std::collections::BTreeMap;\n\nfn main() {\n    let text = \"кот пёс кот рыба кот пёс\";\n    let mut counts = BTreeMap::new();\n    for word in text.split_whitespace() {\n        // увеличь счётчик word\n    }\n    for (word, n) in &counts {\n        println!(\"{word}: {n}\");\n    }\n}",
-"solution": "use std::collections::BTreeMap;\n\nfn main() {\n    let text = \"кот пёс кот рыба кот пёс\";\n    let mut counts = BTreeMap::new();\n    for word in text.split_whitespace() {\n        *counts.entry(word).or_insert(0) += 1;\n    }\n    for (word, n) in &counts {\n        println!(\"{word}: {n}\");\n    }\n}",
-"expect": "кот: 3\nпёс: 2\nрыба: 1",
+"md": "Count how many times each word appears. We use `BTreeMap` so that the output goes in alphabetical order.",
+"code": "use std::collections::BTreeMap;\n\nfn main() {\n    let text = \"cat dog cat fish cat dog\";\n    let mut counts = BTreeMap::new();\n    for word in text.split_whitespace() {\n        // increase the counter for word\n    }\n    for (word, n) in &counts {\n        println!(\"{word}: {n}\");\n    }\n}",
+"solution": "use std::collections::BTreeMap;\n\nfn main() {\n    let text = \"cat dog cat fish cat dog\";\n    let mut counts = BTreeMap::new();\n    for word in text.split_whitespace() {\n        *counts.entry(word).or_insert(0) += 1;\n    }\n    for (word, n) in &counts {\n        println!(\"{word}: {n}\");\n    }\n}",
+"expect": "cat: 3\ndog: 2\nfish: 1",
 "hints": [
-"Используй `entry(word).or_insert(0)`.",
-"Целиком: `*counts.entry(word).or_insert(0) += 1;`"
+"Use `entry(word).or_insert(0)`.",
+"In full: `*counts.entry(word).or_insert(0) += 1;`"
+]
+},
+{
+"t": "text",
+"title": "Going through a dictionary, and HashSet",
+"md": "You can go through all pairs with a loop:\n\n```\nfor (name, phone) in &phones {\n    println!(\"{name}: {phone}\");\n}\n```\nIf you only need keys without values, there is **HashSet** — a set of unique elements:\n\n```\nuse std::collections::HashSet;\nlet mut seen = HashSet::new();\nseen.insert(\"cat\");\nseen.insert(\"cat\"); // a repeat is not added\nprintln!(\"{}\", seen.len()); // 1\n```"
+},
+{
+"t": "deep",
+"title": "How HashMap finds a value so fast",
+"md": "A HashMap turns a key into a number with a **hash function**. This number shows right away which \"box\" (bucket) to put the pair into.\n\nSo a lookup does not go through all elements. It computes the hash of the key and looks into one box. This is about equally fast for 10 elements and for a million.\n\nTwo rules follow from this:\n- a key must be hashable (the trait `Hash`) and comparable (`Eq`);\n- the order of elements depends on the hashes, not on the order of insertion.\n\nBy default, Rust's hash function is protected against specially chosen keys that an attacker could use to slow down a server."
+},
+{
+"t": "recap",
+"items": [
+"`HashMap` is key → value. It needs `use std::collections::HashMap;`.",
+"`insert`, `get` (returns an `Option`), `contains_key`.",
+"`*map.entry(k).or_insert(0) += 1;` is a counter.",
+"`BTreeMap` is the same, but with the keys in order."
+]
+}
+],
+"goals": [
+"Store \"key → value\" pairs",
+"Count how often words appear"
+]
+},
+{
+"id": "m09-p",
+"title": "Practice: collections",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Find the median: sort the numbers and take the one in the middle position. For 5 numbers it is the element with index 2.",
+"code": "fn main() {\n    let mut nums = vec![7, 1, 9, 3, 5];\n}",
+"solution": "fn main() {\n    let mut nums = vec![7, 1, 9, 3, 5];\n    nums.sort();\n    println!(\"{}\", nums[nums.len() / 2]);\n}",
+"expect": "5",
+"hints": [
+"First `nums.sort();`",
+"The middle index: `nums.len() / 2`."
+]
+},
+{
+"t": "task",
+"md": "Remove repeats from the list and print the result in ascending order.",
+"code": "fn main() {\n    let mut tags = vec![\"rust\", \"code\", \"rust\", \"games\", \"code\"];\n    println!(\"{:?}\", tags);\n}",
+"solution": "fn main() {\n    let mut tags = vec![\"rust\", \"code\", \"rust\", \"games\", \"code\"];\n    tags.sort();\n    tags.dedup();\n    println!(\"{:?}\", tags);\n}",
+"expect": "[\"code\", \"games\", \"rust\"]",
+"hints": [
+"`dedup` removes only neighboring repeats. You need `sort` first.",
+"`tags.sort(); tags.dedup();`"
+]
+},
+{
+"t": "task",
+"md": "Make the first letter of each word a capital letter: `hello world` → `Hello World`.",
+"code": "fn capitalize(word: &str) -> String {\n    word.to_string()\n}\n\nfn main() {\n    let text = \"hello world rust\";\n    let mut words = Vec::new();\n    for w in text.split_whitespace() {\n        words.push(capitalize(w));\n    }\n    println!(\"{}\", words.join(\" \"));\n}",
+"solution": "fn capitalize(word: &str) -> String {\n    let mut chars = word.chars();\n    match chars.next() {\n        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),\n        None => String::new(),\n    }\n}\n\nfn main() {\n    let text = \"hello world rust\";\n    let mut words = Vec::new();\n    for w in text.split_whitespace() {\n        words.push(capitalize(w));\n    }\n    println!(\"{}\", words.join(\" \"));\n}",
+"expect": "Hello World Rust",
+"hints": [
+"Take the first letter: `let mut chars = word.chars(); chars.next()` — this is an `Option<char>`.",
+"The capital letter: `first.to_uppercase().collect::<String>()`. The rest of the word: `chars.as_str()`. Join them with `+`."
+]
+},
+{
+"t": "task",
+"md": "A phone book. Write a function `lookup` that returns the number or the text `unknown`.",
+"code": "use std::collections::HashMap;\n\nfn lookup(book: &HashMap<&str, &str>, name: &str) -> String {\n    String::new()\n}\n\nfn main() {\n    let mut book = HashMap::new();\n    book.insert(\"Anna\", \"111\");\n    book.insert(\"Bob\", \"222\");\n    println!(\"{}\", lookup(&book, \"Bob\"));\n    println!(\"{}\", lookup(&book, \"Vic\"));\n}",
+"solution": "use std::collections::HashMap;\n\nfn lookup(book: &HashMap<&str, &str>, name: &str) -> String {\n    match book.get(name) {\n        Some(phone) => phone.to_string(),\n        None => String::from(\"unknown\"),\n    }\n}\n\nfn main() {\n    let mut book = HashMap::new();\n    book.insert(\"Anna\", \"111\");\n    book.insert(\"Bob\", \"222\");\n    println!(\"{}\", lookup(&book, \"Bob\"));\n    println!(\"{}\", lookup(&book, \"Vic\"));\n}",
+"expect": "222\nunknown",
+"hints": [
+"`book.get(name)` returns an `Option`.",
+"Check it with `match`: `Some(phone) => phone.to_string()`, `None => String::from(\"unknown\")`."
+]
+},
+{
+"t": "task",
+"md": "Group the words by their first letter. Use `BTreeMap<char, Vec<&str>>` so the letters go in alphabetical order.",
+"code": "use std::collections::BTreeMap;\n\nfn main() {\n    let words = [\"cat\", \"apple\", \"cake\", \"avocado\", \"banana\"];\n    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();\n    // fill groups\n    for (letter, list) in &groups {\n        println!(\"{letter}: {}\", list.join(\", \"));\n    }\n}",
+"solution": "use std::collections::BTreeMap;\n\nfn main() {\n    let words = [\"cat\", \"apple\", \"cake\", \"avocado\", \"banana\"];\n    let mut groups: BTreeMap<char, Vec<&str>> = BTreeMap::new();\n    for w in words {\n        let first = w.chars().next().unwrap();\n        groups.entry(first).or_insert(Vec::new()).push(w);\n    }\n    for (letter, list) in &groups {\n        println!(\"{letter}: {}\", list.join(\", \"));\n    }\n}",
+"expect": "a: apple, avocado\nb: banana\nc: cat, cake",
+"hints": [
+"The first letter: `w.chars().next().unwrap()`.",
+"`groups.entry(first).or_insert(Vec::new()).push(w);`"
 ]
 },
 {
 "t": "recap",
 "items": [
-"`HashMap` — ключ → значение. Нужен `use std::collections::HashMap;`.",
-"`insert`, `get` (вернёт `Option`), `contains_key`.",
-"`*map.entry(k).or_insert(0) += 1;` — счётчик.",
-"`BTreeMap` — то же, но ключи по порядку."
+"`sort` + `dedup` remove repeats.",
+"`chars()` for letters, `split_whitespace()` for words.",
+"`entry(k).or_insert(...)` means \"find or create\" in a dictionary."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Хранить пары «ключ → значение»",
-"Считать частоту слов"
+"Sort and clean vectors",
+"Process strings by words and letters",
+"Build dictionaries"
 ]
 }
 ]
 },
 {
 "id": "m10",
-"title": "Обработка ошибок",
-"sub": "Что делать, когда что-то пошло не так",
+"title": "Error handling",
+"sub": "What to do when something goes wrong",
 "lessons": [
 {
 "id": "m10-1",
-"title": "panic! — аварийная остановка",
+"title": "panic! — an emergency stop",
 "min": 5,
 "cards": [
 {
 "t": "text",
-"title": "Два вида проблем",
-"md": "1. **Неисправимые.** Программа в состоянии, где дальше идти нельзя. Например, баг в логике. Тут — **паника**.\n2. **Исправимые.** Файла нет, пользователь ввёл буквы вместо числа. Это нормальная жизнь. Тут — `Result`."
+"title": "Two kinds of problems",
+"md": "1. **Unrecoverable.** The program is in a state where it cannot continue. For example, a bug in the logic. This is a **panic**.\n2. **Recoverable.** A file is missing, the user typed letters instead of a number. This is normal life. This is `Result`."
 },
 {
 "t": "code",
-"md": "`panic!` останавливает программу с сообщением.",
-"code": "fn main() {\n    println!(\"Начинаю\");\n    let level = 0;\n    if level == 0 {\n        panic!(\"Уровень не может быть нулём!\");\n    }\n    println!(\"Сюда не дойдём\");\n}",
-"after": "Программа напечатает «Начинаю» и остановится с сообщением `panicked at ... Уровень не может быть нулём!`."
+"md": "`panic!` stops the program with a message.",
+"code": "fn main() {\n    println!(\"Starting\");\n    let level = 0;\n    if level == 0 {\n        panic!(\"The level cannot be zero!\");\n    }\n    println!(\"We never get here\");\n}",
+"after": "The program prints \"Starting\" and stops with the message `panicked at ... The level cannot be zero!`."
 },
 {
 "t": "quiz",
-"md": "Пользователь ввёл «abc» вместо возраста. Что лучше сделать?",
+"md": "The user typed \"abc\" instead of an age. What is better to do?",
 "options": [
 "`panic!`",
-"Вернуть ошибку и попросить ввести снова"
+"Return an error and ask again"
 ],
 "answer": 1,
 "why": [
-"Ошибка ввода — обычное дело. Падать из-за неё грубо.",
-"Верно. Это исправимая ситуация — для неё `Result`."
+"An input mistake is a normal thing. Crashing because of it is rude.",
+"Correct. It is a recoverable situation — `Result` is for that."
 ]
+},
+{
+"t": "text",
+"title": "When a panic is appropriate",
+"md": "- **An impossible situation.** If it happened, there is a bug in the program, and it is better to stop right away.\n- **Examples and drafts.** While a program is a learning exercise, `unwrap()` saves time.\n- **Tests.** A test that panics counts as failed. This is handy.\n\nIn all other cases — when the problem can happen in normal life — return a `Result`."
+},
+{
+"t": "deep",
+"title": "What happens during a panic",
+"md": "By default a panic **unwinds the stack**: Rust leaves all functions in the call chain one by one and deletes their variables. This frees memory and files.\n\nIf a panic happens in a separate thread, only that thread fails. The main thread can notice this and continue working.\n\nIn `Cargo.toml` you can turn on the mode `panic = \"abort\"`. Then the program stops immediately, without cleanup. The program file becomes smaller. This is done, for example, on microcontrollers."
 },
 {
 "t": "recap",
 "items": [
-"Паника — аварийная остановка. Для багов и невозможных ситуаций.",
-"Ожидаемые проблемы обрабатывают через `Result`."
+"A panic is an emergency stop. It is for bugs and impossible situations.",
+"Expected problems are handled with `Result`."
 ]
 }
 ],
 "goals": [
-"Что такое паника",
-"Когда паниковать нормально"
+"What a panic is",
+"When panicking is fine"
 ]
 },
 {
 "id": "m10-2",
-"title": "Result: успех или ошибка",
+"title": "Result: success or error",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "Result — посылка с запиской",
-"md": "```\nenum Result<T, E> {\n    Ok(T),  // всё хорошо, внутри результат\n    Err(E), // ошибка, внутри описание\n}\n```\n> Посылка. Внутри либо заказанная вещь (`Ok`), либо записка «товар закончился» (`Err`). Похоже на `Option`, только вместо пустоты — объяснение."
+"title": "Result is a parcel with a note",
+"md": "```\nenum Result<T, E> {\n    Ok(T),  // all good, the result is inside\n    Err(E), // an error, the description is inside\n}\n```\n> Analogy: a parcel. Inside there is either the thing you ordered (`Ok`), or a note \"out of stock\" (`Err`). It is like `Option`, but instead of emptiness there is an explanation."
 },
 {
 "t": "code",
-"md": "`parse` превращает текст в число и возвращает `Result`:",
-"code": "fn main() {\n    for input in [\"42\", \"сорок два\"] {\n        match input.parse::<i32>() {\n            Ok(n) => println!(\"Число: {n}\"),\n            Err(e) => println!(\"Не число «{input}»: {e}\"),\n        }\n    }\n}",
-"out": "Число: 42\nНе число «сорок два»: invalid digit found in string",
-"after": "`::<i32>` говорит `parse`, какое число мы хотим."
+"md": "`parse` turns text into a number and returns a `Result`:",
+"code": "fn main() {\n    for input in [\"42\", \"forty two\"] {\n        match input.parse::<i32>() {\n            Ok(n) => println!(\"Number: {n}\"),\n            Err(e) => println!(\"Not a number \\\"{input}\\\": {e}\"),\n        }\n    }\n}",
+"out": "Number: 42\nNot a number \"forty two\": invalid digit found in string",
+"after": "`::<i32>` tells `parse` which number we want."
 },
 {
 "t": "text",
-"title": "Свой Result",
-"md": "Функция сама может вернуть `Result`:\n\n```\nfn check_age(age: i32) -> Result<i32, String> {\n    if age < 0 {\n        Err(String::from(\"Возраст не бывает отрицательным\"))\n    } else {\n        Ok(age)\n    }\n}\n```"
+"title": "Your own Result",
+"md": "A function can return a `Result` itself:\n\n```\nfn check_age(age: i32) -> Result<i32, String> {\n    if age < 0 {\n        Err(String::from(\"An age cannot be negative\"))\n    } else {\n        Ok(age)\n    }\n}\n```"
 },
 {
 "t": "quiz",
-"md": "Что вернёт `\"7\".parse::<i32>()`?",
+"md": "What does `\"7\".parse::<i32>()` return?",
 "options": [
 "`Ok(7)`",
 "`7`",
@@ -8191,133 +8687,215 @@ window.COURSES = {
 ],
 "answer": 0,
 "why": [
-"Верно. Разбор удался — результат в `Ok`.",
-"`parse` всегда заворачивает ответ в `Result`.",
-"`Some` — это `Option`. У `parse` тип `Result`."
+"Correct. Parsing worked — the result is in `Ok`.",
+"`parse` always wraps the answer in a `Result`.",
+"`Some` belongs to `Option`. `parse` returns a `Result`."
 ]
+},
+{
+"t": "text",
+"title": "Useful Result methods",
+"md": "- `r.is_ok()`, `r.is_err()` — check what is inside;\n- `r.unwrap_or(0)` — take the value or a fallback;\n- `r.ok()` — turn it into an `Option`: an error becomes `None`.\n\n```\nlet n = \"12\".parse::<i32>().unwrap_or(0);   // 12\nlet m = \"abc\".parse::<i32>().unwrap_or(0);  // 0\n```"
 },
 {
 "t": "recap",
 "items": [
-"`Result<T, E>`: `Ok(значение)` или `Err(ошибка)`.",
-"Разбирать через `match`, как Option.",
-"`parse::<i32>()` возвращает `Result`."
+"`Result<T, E>`: `Ok(value)` or `Err(error)`.",
+"Check it with `match`, like Option.",
+"`parse::<i32>()` returns a `Result`."
 ]
 }
 ],
 "goals": [
-"Как устроен `Result`",
-"Разбирать его через `match`"
+"How `Result` is built",
+"Check it with `match`"
 ]
 },
 {
 "id": "m10-3",
-"title": "unwrap, expect и ?",
+"title": "unwrap, expect and ?",
 "min": 7,
 "cards": [
 {
 "t": "text",
-"title": "unwrap и expect",
-"md": "- `unwrap()` — достать `Ok`, а при `Err` — паника.\n- `expect(\"сообщение\")` — то же, но со своим текстом паники. Удобнее искать, где упало.\n\n> Используй их в примерах и там, где ошибка правда невозможна. В настоящей программе — осторожно."
+"title": "unwrap and expect",
+"md": "- `unwrap()` takes the `Ok` value, and on `Err` it panics.\n- `expect(\"message\")` is the same, but with your own panic text. This makes it easier to find where it failed.\n\n> Use them in examples and where an error is truly impossible. In a real program, be careful."
 },
 {
 "t": "text",
-"title": "Оператор ? — «если ошибка, отдай её наверх»",
-"md": "Знак `?` после `Result`:\n- если `Ok(x)` — даёт `x` и идёт дальше;\n- если `Err(e)` — сразу **возвращает** эту ошибку из функции.\n\n```\nfn sum(a: &str, b: &str) -> Result<i32, std::num::ParseIntError> {\n    let x = a.parse::<i32>()?;\n    let y = b.parse::<i32>()?;\n    Ok(x + y)\n}\n```\n!> `?` работает только в функции, которая сама возвращает `Result` (или `Option`)."
+"title": "The ? operator — \"if it is an error, pass it up\"",
+"md": "The `?` sign after a `Result`:\n- if it is `Ok(x)`, gives `x` and continues;\n- if it is `Err(e)`, immediately **returns** this error from the function.\n\n```\nfn sum(a: &str, b: &str) -> Result<i32, std::num::ParseIntError> {\n    let x = a.parse::<i32>()?;\n    let y = b.parse::<i32>()?;\n    Ok(x + y)\n}\n```\n!> `?` works only in a function that itself returns a `Result` (or an `Option`)."
 },
 {
 "t": "code",
-"code": "use std::num::ParseIntError;\n\nfn sum(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    let x = a.parse::<i32>()?;\n    let y = b.parse::<i32>()?;\n    Ok(x + y)\n}\n\nfn main() {\n    println!(\"{:?}\", sum(\"2\", \"3\"));\n    println!(\"{:?}\", sum(\"2\", \"три\"));\n}",
+"code": "use std::num::ParseIntError;\n\nfn sum(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    let x = a.parse::<i32>()?;\n    let y = b.parse::<i32>()?;\n    Ok(x + y)\n}\n\nfn main() {\n    println!(\"{:?}\", sum(\"2\", \"3\"));\n    println!(\"{:?}\", sum(\"2\", \"three\"));\n}",
 "out": "Ok(5)\nErr(ParseIntError { kind: InvalidDigit })"
 },
 {
 "t": "quiz",
-"md": "Что делает `?`, если результат — `Err`?",
+"md": "What does `?` do if the result is `Err`?",
 "options": [
-"Паникует",
-"Возвращает ошибку из текущей функции",
-"Пропускает строку"
+"It panics",
+"It returns the error from the current function",
+"It skips the line"
 ],
 "answer": 1,
 "why": [
-"Паникует `unwrap`. А `?` мягче.",
-"Верно. Пусть разбирается тот, кто вызвал.",
-"Ошибку нельзя просто пропустить: функция заканчивается."
+"`unwrap` panics. `?` is gentler.",
+"Correct. Let the caller deal with it.",
+"An error cannot simply be skipped: the function ends."
 ]
 },
 {
 "t": "task",
-"md": "Допиши функцию с `?`: она разбирает два числа из строк и возвращает их произведение.",
-"code": "use std::num::ParseIntError;\n\nfn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    // твой код с ?\n}\n\nfn main() {\n    println!(\"{:?}\", multiply(\"6\", \"7\"));\n    println!(\"{}\", multiply(\"6\", \"x\").is_err());\n}",
+"md": "Complete the function with `?`: it parses two numbers from strings and returns their product.",
+"code": "use std::num::ParseIntError;\n\nfn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    // your code with ?\n}\n\nfn main() {\n    println!(\"{:?}\", multiply(\"6\", \"7\"));\n    println!(\"{}\", multiply(\"6\", \"x\").is_err());\n}",
 "solution": "use std::num::ParseIntError;\n\nfn multiply(a: &str, b: &str) -> Result<i32, ParseIntError> {\n    let x: i32 = a.parse()?;\n    let y: i32 = b.parse()?;\n    Ok(x * y)\n}\n\nfn main() {\n    println!(\"{:?}\", multiply(\"6\", \"7\"));\n    println!(\"{}\", multiply(\"6\", \"x\").is_err());\n}",
 "expect": "Ok(42)\ntrue",
 "hints": [
-"`let x: i32 = a.parse()?;` — то же для `b`.",
-"В конце верни `Ok(x * y)`."
+"`let x: i32 = a.parse()?;` — the same for `b`.",
+"At the end return `Ok(x * y)`."
 ]
+},
+{
+"t": "deep",
+"title": "How ? converts errors",
+"md": "The `?` operator can not only return an error, but also **convert** it into the function's error type. It uses the trait `From` for this.\n\nIf a function returns `Result<T, MyError>`, and inside there is an error of type `ParseIntError`, then `?` calls `MyError::from(error)`. You only need to write once how to convert:\n\n```\nimpl From<std::num::ParseIntError> for MyError {\n    fn from(_: std::num::ParseIntError) -> Self {\n        MyError::NotANumber\n    }\n}\n```\nAfter that, `let n: i32 = s.parse()?;` works inside functions with `MyError`. Traits and `From` are explained in module 12."
 },
 {
 "t": "recap",
 "items": [
-"`unwrap()` / `expect(\"...\")` — достать или запаниковать.",
-"`?` — достать или вернуть ошибку наверх.",
-"`?` работает в функциях, которые возвращают `Result`/`Option`."
+"`unwrap()` / `expect(\"...\")` — take the value or panic.",
+"`?` — take the value or return the error up.",
+"`?` works in functions that return `Result`/`Option`."
 ]
 }
 ],
 "goals": [
-"Быстрые способы открыть Result",
-"Передавать ошибку наверх оператором `?`"
+"Quick ways to open a Result",
+"Pass an error up with the `?` operator"
 ]
 },
 {
 "id": "m10-4",
-"title": "Свои ошибки",
+"title": "Your own errors",
 "min": 6,
 "cards": [
 {
 "t": "text",
-"title": "Ошибки как перечисление",
-"md": "Хороший приём: перечислить все ошибки своей функции в `enum`. Тогда вызывающий код точно знает, что может пойти не так.\n\n```\n#[derive(Debug)]\nenum AgeError {\n    NotANumber,\n    Negative,\n    TooOld,\n}\n```"
+"title": "Errors as an enum",
+"md": "A good technique: list all errors of your function in an `enum`. Then the calling code knows exactly what can go wrong.\n\n```\n#[derive(Debug)]\nenum AgeError {\n    NotANumber,\n    Negative,\n    TooOld,\n}\n```"
 },
 {
 "t": "code",
-"code": "#[derive(Debug)]\nenum AgeError {\n    NotANumber,\n    Negative,\n    TooOld,\n}\n\nfn parse_age(s: &str) -> Result<u32, AgeError> {\n    let n: i64 = s.trim().parse().map_err(|_| AgeError::NotANumber)?;\n    if n < 0 {\n        return Err(AgeError::Negative);\n    }\n    if n > 150 {\n        return Err(AgeError::TooOld);\n    }\n    Ok(n as u32)\n}\n\nfn main() {\n    for s in [\"30\", \"-5\", \"сто\", \"200\"] {\n        println!(\"{s}: {:?}\", parse_age(s));\n    }\n}",
-"out": "30: Ok(30)\n-5: Err(Negative)\nсто: Err(NotANumber)\n200: Err(TooOld)",
-"after": "`map_err` превращает одну ошибку в другую — здесь ошибку `parse` в нашу `NotANumber`."
+"code": "#[derive(Debug)]\nenum AgeError {\n    NotANumber,\n    Negative,\n    TooOld,\n}\n\nfn parse_age(s: &str) -> Result<u32, AgeError> {\n    let n: i64 = s.trim().parse().map_err(|_| AgeError::NotANumber)?;\n    if n < 0 {\n        return Err(AgeError::Negative);\n    }\n    if n > 150 {\n        return Err(AgeError::TooOld);\n    }\n    Ok(n as u32)\n}\n\nfn main() {\n    for s in [\"30\", \"-5\", \"hundred\", \"200\"] {\n        println!(\"{s}: {:?}\", parse_age(s));\n    }\n}",
+"out": "30: Ok(30)\n-5: Err(Negative)\nhundred: Err(NotANumber)\n200: Err(TooOld)",
+"after": "`map_err` turns one error into another — here the `parse` error into our `NotANumber`."
 },
 {
 "t": "text",
-"title": "main тоже может вернуть Result",
-"md": "Тогда внутри `main` можно использовать `?`:\n\n```\nfn main() -> Result<(), String> {\n    let n: i32 = \"5\".parse().map_err(|_| \"не число\".to_string())?;\n    println!(\"{n}\");\n    Ok(())\n}\n```\n`()` — «пустое значение»: успех без результата."
+"title": "main can also return a Result",
+"md": "Then you can use `?` inside `main`:\n\n```\nfn main() -> Result<(), String> {\n    let n: i32 = \"5\".parse().map_err(|_| \"not a number\".to_string())?;\n    println!(\"{n}\");\n    Ok(())\n}\n```\n`()` is the \"empty value\": success without a result."
 },
 {
 "t": "quiz",
-"md": "Зачем описывать ошибки через `enum`, а не просто текстом?",
+"md": "Why describe errors with an `enum` instead of just text?",
 "options": [
-"Вызывающий код может разобрать каждую ошибку через `match`",
-"Так программа работает быстрее",
-"Компилятор не разрешает текстовые ошибки"
+"The calling code can check each error with `match`",
+"The program runs faster",
+"The compiler does not allow text errors"
 ],
 "answer": 0,
 "why": [
-"Верно. А по тексту надёжно разобрать нельзя.",
-"Дело не в скорости, а в понятности и надёжности.",
-"Разрешает: `Result<T, String>` вполне законен."
+"Correct. Text cannot be checked reliably.",
+"It is not about speed; it is about clarity and reliability.",
+"It does: `Result<T, String>` is completely legal."
+]
+},
+{
+"t": "deep",
+"title": "An error \"done properly\"",
+"md": "To make your error look like the errors of the standard library, implement two traits for it:\n- `Display` — clear text for a person;\n- `std::error::Error` — a marker \"this is an error\".\n\n`Box<dyn std::error::Error>` means \"any error\". With it, `?` accepts errors of different types. In big programs the libraries `anyhow` and `thiserror` are often used for this.",
+"code": "use std::fmt;\n\n#[derive(Debug)]\nenum AppError {\n    Empty,\n}\n\nimpl fmt::Display for AppError {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"the string is empty\")\n    }\n}\n\nimpl std::error::Error for AppError {}\n\nfn check(s: &str) -> Result<(), Box<dyn std::error::Error>> {\n    if s.is_empty() {\n        return Err(Box::new(AppError::Empty));\n    }\n    let _n: i32 = s.parse()?;\n    Ok(())\n}\n\nfn main() {\n    for s in [\"\", \"x\", \"5\"] {\n        match check(s) {\n            Ok(()) => println!(\"\\\"{s}\\\": fine\"),\n            Err(e) => println!(\"\\\"{s}\\\": {e}\"),\n        }\n    }\n}",
+"out": "\"\": the string is empty\n\"x\": invalid digit found in string\n\"5\": fine"
+},
+{
+"t": "recap",
+"items": [
+"Errors are conveniently described with your own `enum`.",
+"`map_err` turns someone else's error into yours.",
+"`fn main() -> Result<(), E>` allows `?` in `main`."
+]
+}
+],
+"goals": [
+"Describe possible errors with an `enum`",
+"Return a `Result` from `main`"
+]
+},
+{
+"id": "m10-p",
+"title": "Practice: errors",
+"min": 14,
+"cards": [
+{
+"t": "task",
+"md": "Write `safe_divide`: when dividing by zero, return `Err(\"division by zero\")`, otherwise `Ok(result)`.",
+"code": "fn safe_divide(a: i32, b: i32) -> Result<i32, String> {\n    Ok(0)\n}\n\nfn main() {\n    println!(\"{:?}\", safe_divide(10, 2));\n    println!(\"{:?}\", safe_divide(1, 0));\n}",
+"solution": "fn safe_divide(a: i32, b: i32) -> Result<i32, String> {\n    if b == 0 {\n        return Err(String::from(\"division by zero\"));\n    }\n    Ok(a / b)\n}\n\nfn main() {\n    println!(\"{:?}\", safe_divide(10, 2));\n    println!(\"{:?}\", safe_divide(1, 0));\n}",
+"expect": "Ok(5)\nErr(\"division by zero\")",
+"hints": [
+"`if b == 0 { return Err(String::from(\"division by zero\")); }`",
+"At the end `Ok(a / b)`."
+]
+},
+{
+"t": "task",
+"md": "Add up only the strings that are numbers. Skip the others.",
+"code": "fn main() {\n    let items = [\"10\", \"x\", \"5\", \"\", \"7\"];\n    let mut sum = 0;\n    println!(\"{sum}\");\n}",
+"solution": "fn main() {\n    let items = [\"10\", \"x\", \"5\", \"\", \"7\"];\n    let mut sum = 0;\n    for s in items {\n        if let Ok(n) = s.parse::<i32>() {\n            sum += n;\n        }\n    }\n    println!(\"{sum}\");\n}",
+"expect": "22",
+"hints": [
+"`if let Ok(n) = s.parse::<i32>() { ... }`",
+"Inside: `sum += n;`"
+]
+},
+{
+"t": "task",
+"md": "Parse a string like `\"3,4\"` into a point `(i32, i32)`. Use `?` for both parts. If there is no comma, return the error `\"no comma\"`.",
+"code": "fn parse_point(s: &str) -> Result<(i32, i32), String> {\n    let Some((a, b)) = s.split_once(',') else {\n        return Err(String::from(\"no comma\"));\n    };\n    // parse a and b\n    Ok((0, 0))\n}\n\nfn main() {\n    println!(\"{:?}\", parse_point(\"3,4\"));\n    println!(\"{:?}\", parse_point(\"3;4\"));\n    println!(\"{:?}\", parse_point(\"3,x\"));\n}",
+"solution": "fn parse_point(s: &str) -> Result<(i32, i32), String> {\n    let Some((a, b)) = s.split_once(',') else {\n        return Err(String::from(\"no comma\"));\n    };\n    let x: i32 = a.trim().parse().map_err(|_| format!(\"\\\"{a}\\\" is not a number\"))?;\n    let y: i32 = b.trim().parse().map_err(|_| format!(\"\\\"{b}\\\" is not a number\"))?;\n    Ok((x, y))\n}\n\nfn main() {\n    println!(\"{:?}\", parse_point(\"3,4\"));\n    println!(\"{:?}\", parse_point(\"3;4\"));\n    println!(\"{:?}\", parse_point(\"3,x\"));\n}",
+"expect": "Ok((3, 4))\nErr(\"no comma\")\nErr(\"\\\"x\\\" is not a number\")",
+"hints": [
+"The `parse` error has a different type; turn it into a `String` with `map_err`.",
+"`let x: i32 = a.trim().parse().map_err(|_| format!(\"\\\"{a}\\\" is not a number\"))?;`"
+]
+},
+{
+"t": "task",
+"md": "`?` also works with `Option`. Write a function that returns the first letter of the second word, or `None`.",
+"code": "fn second_word_initial(s: &str) -> Option<char> {\n    None\n}\n\nfn main() {\n    println!(\"{:?}\", second_word_initial(\"learn rust\"));\n    println!(\"{:?}\", second_word_initial(\"single\"));\n}",
+"solution": "fn second_word_initial(s: &str) -> Option<char> {\n    let word = s.split_whitespace().nth(1)?;\n    word.chars().next()\n}\n\nfn main() {\n    println!(\"{:?}\", second_word_initial(\"learn rust\"));\n    println!(\"{:?}\", second_word_initial(\"single\"));\n}",
+"expect": "Some('r')\nNone",
+"hints": [
+"`s.split_whitespace().nth(1)` gives the second word as `Option<&str>`. Put `?` after it.",
+"The first letter: `word.chars().next()` — this is already an `Option<char>`."
 ]
 },
 {
 "t": "recap",
 "items": [
-"Ошибки удобно описывать своим `enum`.",
-"`map_err` превращает чужую ошибку в свою.",
-"`fn main() -> Result<(), E>` разрешает `?` в `main`."
+"Expected problems use `Result`, not a panic.",
+"`?` passes an error up, `map_err` changes its type.",
+"`if let Ok(x)` handles only success."
 ]
 }
 ],
+"practice": true,
 "goals": [
-"Описать возможные ошибки через `enum`",
-"Вернуть `Result` из `main`"
+"Return `Result` from your own functions",
+"Use `?` and `map_err`",
+"Handle errors without panicking"
 ]
 }
 ]
