@@ -127,7 +127,8 @@
     const slot = art.querySelector(".fox-pose-slot");
     const response = app.querySelector(".fox-response");
     const poses = new Map();
-    let settle, revision = 0;
+    const actions = Object.keys(foxReactions);
+    let settle, revision = 0, next = 0;
 
     function loadPose(src) {
       if (!poses.has(src)) {
@@ -144,19 +145,17 @@
     }
 
     loadPose(foxReactions.wave.pose);
-    app.querySelector(".fox-controls").addEventListener("click", async (event) => {
-      const action = event.target.closest("[data-fox-action]")?.dataset.foxAction;
+    art.querySelector(".fox-trigger").addEventListener("click", async () => {
+      const action = actions[next];
+      next = (next + 1) % actions.length;
       const reaction = foxReactions[action];
-      if (!reaction) return;
       const selected = ++revision;
-      const previous = art.dataset.foxReaction;
       clearTimeout(settle);
       delete art.dataset.foxReaction;
       art.classList.remove("has-pose");
       slot.replaceChildren();
 
       const animate = S.settings.motion && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
-      if (animate && previous === action) void art.offsetWidth; // повторно запускаем реакцию
       if (reaction.pose) {
         response.textContent = fox.loading;
         const pose = await loadPose(reaction.pose);
@@ -168,7 +167,7 @@
       }
 
       art.dataset.foxReaction = action;
-      response.textContent = fox.actions[action][1];
+      response.textContent = fox.actions[action];
       if (animate) settle = setTimeout(() => {
         delete art.dataset.foxReaction;
         art.classList.remove("has-pose");
@@ -184,7 +183,7 @@
     const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
     const cont = saved || n;
     const started = doneCount() > 0 || S.last;
-    const fox = T.fox?.actions && T.fox;
+    const fox = T.fox?.prompt && T.fox;
     let html = `<div class="wrap-wide">
       <section class="hero">
         <div class="hero-grid">
@@ -204,10 +203,10 @@
             </div>
           </div>
           <div class="hero-companion">
-            <div class="hero-art" aria-hidden="true">
+            <div class="hero-art">
               <img class="hero-fox-idle" src="assets/fox-mascot.webp" width="1374" height="1145" alt="">
-              <div class="fox-pose-slot"></div>
-              <svg class="fox-effects" viewBox="0 0 120 100" focusable="false">
+              <div class="fox-pose-slot" aria-hidden="true"></div>
+              <svg class="fox-effects" viewBox="0 0 120 100" aria-hidden="true" focusable="false">
                 <g class="fox-wave-marks" fill="none" stroke="#ad70b8" stroke-width="1.8" stroke-linecap="round">
                   <path d="M30 46q-1-4-5-6m3 10q-3-3-6-3"/>
                   <path d="M42 43q2-3 5-4"/>
@@ -228,10 +227,9 @@
                   <path d="M92 32h5l-5 5h5"/><path d="M100 20h7l-7 7h7"/><path d="M109 7h8l-8 8h8"/>
                 </g>
               </svg>
+              ${fox ? `<button type="button" class="fox-trigger" aria-label="${esc(fox.prompt)}"></button>` : ""}
             </div>
-            ${fox ? `<div class="fox-controls" role="group" aria-label="${esc(fox.label)}">
-              ${Object.entries(fox.actions).map(([action, [label]]) => `<button type="button" class="btn btn-quiet btn-sm" data-fox-action="${action}">${esc(label)}</button>`).join("")}
-            </div><span class="fox-response" role="status"></span>` : ""}
+            ${fox ? `<span class="fox-response" role="status">${esc(fox.prompt)}</span>` : ""}
           </div>
         </div>
       </section>
