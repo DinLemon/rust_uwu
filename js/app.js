@@ -112,6 +112,46 @@
   };
   const mascot = (kind) => `<svg class="mascot mascot-${kind}" viewBox="0 0 96 64" aria-hidden="true" focusable="false">${mascotArt[kind]}</svg>`;
   const mascotBubble = (kind, content) => `<div class="mascot-bubble">${mascot(kind)}<div>${content}</div></div>`;
+  const mapFlag = `<path d="M5 21V3m0 1c5-4 10 4 15 0v9c-5 4-10-4-15 0" fill="#efa4c8" stroke="#713924" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  function mapGuide(lesson) {
+    return `<div class="map-guide">
+      <svg class="map-scene" viewBox="0 0 256 113" width="256" height="113" aria-hidden="true" focusable="false">
+        <ellipse cx="128" cy="98" rx="113" ry="10" fill="currentColor" opacity=".09"/>
+        <g stroke="#713924" stroke-width="2" stroke-linejoin="round">
+          <path d="M53 92C28 99 11 86 13 65q7 9 19 5c14-2 24 7 21 22Z" fill="#f99754"/>
+          <path d="M14 69q5 7 16 4l-5 6 4 1-5 4q-8-5-10-15Z" fill="#ffe8cd" stroke="none"/>
+          <path d="M43 63q14-10 29 0l5 25q-2 13-18 13t-21-12Z" fill="#f99754"/>
+          <path d="M52 72q8-7 16-1l4 17q-10 12-24 2Z" fill="#ffe8cd" stroke="none"/>
+        </g>
+        <g transform="translate(27 12)">${foxHead}</g>
+        <g class="map-paper" stroke="#713924" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m76 57 31 5 30-6 36 5-7 34-35-4-27 5-35-6Z" fill="#ffe8be"/>
+          <path d="m107 64-3 29m33-35-6 31" stroke="#d2a477" fill="none"/>
+          <path d="M85 82c13-13 24 7 37-5 12-10 22 4 35-5" stroke="#a36aad" stroke-dasharray="2 4" fill="none"/>
+          <path d="m154 69 6 6m0-6-6 6" stroke="#ad515f" fill="none"/>
+        </g>
+        <path class="map-paw" d="M65 63q7-5 14-2 6 2 3 8-4 5-10 1l-7-2Z" fill="#f99754" stroke="#713924" stroke-width="2"/>
+        <g class="map-crab"><g transform="translate(157 29) scale(1.28)">${crabArt}</g></g>
+        <g class="map-scene-flag"><g transform="translate(220 42) scale(1.55)">${mapFlag}</g></g>
+        <path class="map-spark" d="M215 35v-7m-7 11-5-4m22-1 4-5" fill="none" stroke="#b579bf" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <div class="map-guide-copy"><span>${T.mapNext}</span><a href="#/l/${lesson.id}">${esc(lesson.title)}</a></div>
+    </div>`;
+  }
+
+  let mapObserver;
+  function observeMap() {
+    if (!S.settings.motion || !window.IntersectionObserver || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    mapObserver = new window.IntersectionObserver((entries, observer) => {
+      entries.forEach(({ target, isIntersecting }) => {
+        if (!isIntersecting) return;
+        target.classList.add("is-in-view");
+        observer.unobserve(target);
+      });
+    }, { threshold: .4 });
+    app.querySelectorAll(".map-scene, .map-next-flag").forEach((el) => mapObserver.observe(el));
+  }
   const freshStamps = new Set();
 
   // ---------- Главная ----------
@@ -240,7 +280,7 @@
         <div><b>${T.how3t}</b>${T.how3}</div>
         <div><b>${T.how4t}</b>${T.how4}</div>
       </div>
-      <h2>${T.mapTitle}</h2>`;
+      <h2>${T.mapTitle}</h2>${cont ? mapGuide(cont) : ""}`;
     COURSE.modules.forEach((m, mi) => {
       const ls = m.lessons;
       const d = ls.filter((l) => S.done[l.id]).length;
@@ -253,13 +293,14 @@
           <span><span class="mod-title">${esc(m.title)}</span><br><span class="mod-sub">${esc(m.sub || "")}</span></span>
           <span class="mod-meter">${d}/${ls.length}<span class="bar"><i style="width:${pct}%"></i></span></span>
         </summary>
-        <ul class="lessons">${ls.map((l) => `<li class="${S.done[l.id] ? "is-done" : ""}"><a href="#/l/${l.id}">
-          <span class="tick">${S.done[l.id] ? "✓" : "○"}</span><span>${esc(l.title)}${l.practice ? ` <span class="tag">${T.practiceTag}</span>` : ""}</span><span class="mins">${l.min || 5} ${T.min}</span></a></li>`).join("")}</ul>
+        <ul class="lessons">${ls.map((l) => `<li class="${S.done[l.id] ? "is-done" : l === cont ? "is-next" : ""}"><a href="#/l/${l.id}"${l === cont ? ' aria-current="step"' : ""}>
+          <span class="tick">${l === cont ? `<svg class="map-next-flag" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${mapFlag}</svg>` : S.done[l.id] ? "✓" : "○"}</span><span>${esc(l.title)}${l.practice ? ` <span class="tag">${T.practiceTag}</span>` : ""}</span><span class="mins">${l.min || 5} ${T.min}</span></a></li>`).join("")}</ul>
       </details>`;
     });
     html += `<p class="muted small" style="margin-top:1.5rem">${T.storageNote}</p></div>`;
     app.innerHTML = html;
     if (fox) bindHeroFox(fox);
+    if (cont) observeMap();
     freshStamps.clear();
   }
 
@@ -1010,6 +1051,8 @@
 
   // ---------- Роутер ----------
   function route() {
+    mapObserver?.disconnect();
+    mapObserver = null;
     const p = location.hash.replace(/^#\/?/, "").split("/");
     const inLesson = p[0] === "l";
     document.body.classList.toggle("focus", inLesson && S.settings.focus);
