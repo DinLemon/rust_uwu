@@ -175,6 +175,44 @@ li { margin: .2rem 0; }
 .how div:nth-child(3)::before { background: var(--sticker-mint); }
 .how b { display: block; margin-bottom: .15rem; }
 
+.map-guide {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1.4rem;
+  margin-bottom: .8rem; padding: .45rem 1rem .7rem; border: 1px solid var(--line);
+  border-radius: var(--radius); background: linear-gradient(120deg, var(--hero-warm), var(--hero-cool));
+}
+.map-scene { display: block; width: min(100%, 14rem); height: auto; }
+.map-guide-copy { min-width: 0; }
+.map-guide-copy span { display: block; color: var(--muted); font-size: .85rem; }
+.map-guide-copy a { font-weight: 700; overflow-wrap: anywhere; }
+.map-next-flag { display: block; width: 1.1rem; height: 1.1rem; }
+.lessons .is-next a { background: var(--hero-cool); }
+.lessons .is-next a:hover { background: var(--sticker-lilac); }
+.map-spark { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .anim .map-scene.is-in-view .map-paper {
+    transform-box: fill-box; transform-origin: left center; animation: map-unfold .52s ease-out both;
+  }
+  .anim .map-scene.is-in-view .map-paw { animation: map-paw .52s ease-out; }
+  .anim .map-scene.is-in-view .map-crab { animation: map-sidestep .45s .38s ease-out both; }
+  .anim .map-scene.is-in-view .map-scene-flag { animation: map-plant .35s .77s ease-out both; }
+  .anim .map-scene.is-in-view .map-spark { animation: map-spark .36s 1.04s ease-out; }
+  .anim .map-next-flag.is-in-view { animation: map-plant .32s ease-out; }
+}
+@keyframes map-unfold { from { transform: scaleX(.15); } }
+@keyframes map-paw { 50% { transform: translate(3px, -3px); } }
+@keyframes map-sidestep {
+  from { transform: translateX(-24px); }
+  30% { transform: translate(-16px, -3px); }
+  65% { transform: translate(-7px, 0); }
+  85% { transform: translate(-3px, -2px); }
+}
+@keyframes map-plant {
+  from { opacity: 0; transform: translateY(-9px); }
+  75% { opacity: 1; transform: translateY(1px); }
+}
+@keyframes map-spark { 35% { opacity: 1; } to { opacity: 0; transform: translateY(-4px); } }
+
 .module {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   margin-bottom: .8rem; overflow: hidden; box-shadow: var(--shadow);
