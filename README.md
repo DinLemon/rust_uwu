@@ -1,19 +1,21 @@
 <p align="center">
   <a href="https://dinlemon.github.io/rust_uwu/">
-    <img src="assets/rust-uwu.webp" alt="Rust UwU — румяный крабик обнимает сиреневый ноутбук" width="960">
+    <img src="assets/readme-cover.svg" alt="Лисёнок разворачивает карту Rust UwU, а крабик держит розовый флажок" width="960">
   </a>
 </p>
 
 <h1 align="center">Rust UwU</h1>
 
 <p align="center">
-  <strong>Учимся программировать на Rust с нуля, по одной карточке за раз.</strong>
+  <strong>Путь от первой строчки Rust до своего проекта. Лисёнок и крабик идут рядом.</strong>
 </p>
 
 <p align="center">
   <a href="https://dinlemon.github.io/rust_uwu/"><strong>Начать учиться →</strong></a>
   &nbsp;·&nbsp;
   <a href="#что-внутри">Что внутри</a>
+  &nbsp;·&nbsp;
+  <a href="#лисёнок-и-крабик">Лисёнок и крабик</a>
   &nbsp;·&nbsp;
   <a href="#english">English</a>
 </p>
@@ -33,11 +35,15 @@
 ## Как проходят уроки
 
 - **Одна карточка — одна мысль.** В начале урока есть план и примерное время. Таймеров нет, а дополнительные объяснения можно свернуть или пропустить.
-- **Пиши и запускай код на странице.** В задачах есть автопроверка, подсказки по шагам, пропуски в коде и упражнения на порядок строк. Для знакомых ошибок компилятора курс показывает простое объяснение рядом с оригиналом.
+- **Пиши и запускай код на странице.** В задачах есть автопроверка, подсказки по шагам, пропуски в коде и упражнения на порядок строк. В задачах с открытым ответом проверка принимает свои значения по формату задания. Для знакомых ошибок компилятора курс показывает простое объяснение рядом с оригиналом.
 - **Возвращайся в своём темпе.** Повторение чаще предлагает вопросы, где была ошибка. Под рукой есть словарь и шпаргалка. Прогресс хранится в браузере, его можно выгрузить в файл и восстановить.
 - **Настрой чтение под себя.** Есть светлая и тёмная темы, размер шрифта, фокус-режим и выключатель анимаций. План урока, простой буквальный язык и явно подписанные аналогии помогают сделать курс предсказуемым для людей с СДВГ и аутичных читателей.
 
 > Компилятор сердится? Загляни в объяснение, поправь одну строчку и попробуй снова. UwU
+
+## Лисёнок и крабик
+
+На карте курса лисёнок разворачивает свиток, а крабик ставит флажок у следующего урока. В практических заданиях лисёнок приносит подсказки, а после зачёта всех уроков вместе с крабиком вручает именной диплом. Его можно открыть с главной, распечатать на альбомном A4 или сохранить в PDF через окно печати.
 
 ## Как открыть
 
@@ -56,7 +62,7 @@ cd rust_uwu
 
 **Rust UwU** is an interactive course for first-time programmers. It takes you from your first line of code to a small to-do app in Rust. The course has 20 modules and 92 lessons, with 116 auto-checked tasks in each language.
 
-[Open the course](https://dinlemon.github.io/rust_uwu/) and choose **EN** in the top bar. Run code in the browser, take hints one at a time, and come back whenever you like. The browser saves your progress.
+[Open the course](https://dinlemon.github.io/rust_uwu/) and choose **EN** in the top bar. Run code in the browser, take hints one at a time, and come back whenever you like. The browser saves your progress. The fox and crab mark your next lesson on the course map and award a printable diploma when you finish.
 
 ## Для авторов курса
 
