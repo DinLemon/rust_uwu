@@ -11,9 +11,17 @@
 </p>
 
 <p align="center">
+  <a href="#что-внутри"><img src="https://img.shields.io/badge/Rust-2024-b7410e?style=flat-square" alt="Rust 2024"></a>
+  <a href="#english"><img src="https://img.shields.io/badge/Languages-RU%20%2F%20EN-9c74b8?style=flat-square" alt="На русском и английском"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-62957d?style=flat-square" alt="Лицензия MIT"></a>
+</p>
+
+<p align="center">
   <a href="https://dinlemon.github.io/rust_uwu/"><strong>Начать учиться →</strong></a>
   &nbsp;·&nbsp;
   <a href="#что-внутри">Что внутри</a>
+  &nbsp;·&nbsp;
+  <a href="#как-выглядит-курс">Как выглядит курс</a>
   &nbsp;·&nbsp;
   <a href="#лисёнок-и-крабик">Лисёнок и крабик</a>
   &nbsp;·&nbsp;
@@ -28,9 +36,52 @@
 
 **Rust UwU** — интерактивный курс на русском и английском для тех, кто никогда не программировал. Сначала разберёмся, как компьютер выполняет команды, а в конце соберём свой список дел на Rust.
 
-1. **Первые шаги.** Переменные, условия, циклы, функции и коллекции.
-2. **Как Rust работает с данными.** Владение, заимствование, структуры, перечисления и обработка ошибок.
-3. **Темы посложнее.** Итераторы, умные указатели, потоки, знакомство с `async` и макросами.
+<details>
+<summary><strong>Посмотреть программу курса</strong></summary>
+
+1. **Первые шаги.** Знакомство с программированием, переменные, типы, функции, условия, циклы и коллекции.
+2. **Данные в Rust.** Владение, заимствование, срезы, структуры, перечисления, `match` и обработка ошибок.
+3. **Свой проект.** Модули, Cargo, обобщения, трейты, времена жизни, замыкания, итераторы и тесты.
+4. **Темы посложнее.** Умные указатели, потоки, знакомство с `async` и макросами. В финале — приложение со списком дел.
+
+</details>
+
+## Как выглядит курс
+
+### Карта твоего пути
+
+Лисёнок разворачивает карту, крабик отмечает следующий урок. Пройденные модули получают отпечаток лапки.
+
+<p align="center">
+  <a href="assets/screenshot-map.jpg"><img src="assets/screenshot-map.jpg" alt="Карта курса с зачтённым модулем и флажком у следующего урока" width="800"></a>
+</p>
+
+### Практика с подсказками
+
+Пиши код, запускай его на странице и открывай подсказки по одной. В визитке можно указать своё имя и любимое занятие.
+
+<p align="center">
+  <a href="assets/screenshot-practice.jpg"><img src="assets/screenshot-practice.jpg" alt="Задача на Rust с редактором, подсказкой лисёнка и успешной проверкой программы" width="720"></a>
+</p>
+
+### Диплом на память
+
+После всех 92 уроков лисёнок и крабик вручат именной диплом. Введи имя, распечатай его или сохрани в PDF через окно печати.
+
+<p align="center">
+  <a href="assets/screenshot-diploma.jpg"><img src="assets/screenshot-diploma.jpg" alt="Образец диплома Rust UwU с демонстрационным именем, лисёнком и крабиком" width="800"></a>
+</p>
+
+<p align="center"><em>На скриншотах показаны демонстрационный прогресс и пример имени.</em></p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="assets/readme-companions.svg">
+    <img src="assets/readme-companions.gif" alt="Лисёнок машет лапкой, а крабик поднимает розовый флажок" width="360">
+  </picture>
+</p>
+
+<p align="center"><a href="https://dinlemon.github.io/rust_uwu/"><strong>Начать свой путь →</strong></a></p>
 
 ## Как проходят уроки
 
@@ -65,6 +116,9 @@ cd rust_uwu
 [Open the course](https://dinlemon.github.io/rust_uwu/) and choose **EN** in the top bar. Run code in the browser, take hints one at a time, and come back whenever you like. The browser saves your progress. The fox and crab mark your next lesson on the course map and award a printable diploma when you finish.
 
 ## Для авторов курса
+
+<details>
+<summary><strong>Исходники, сборка и формат уроков</strong></summary>
 
 - [`course/ru/`](course/ru/) и [`course/en/`](course/en/) — исходники уроков и словарей. Порядок и типы карточек, ответы и число пропусков должны совпадать между языками. Так прогресс остаётся общим.
 - [`tools/build.py`](tools/build.py) проверяет структуру и пересобирает [`content/course-data.js`](content/course-data.js). Правки вноси в исходники уроков.
@@ -149,6 +203,8 @@ tests: yes                     ← запускать как тесты (cargo t
 Для задачи с произвольными значениями добавь блок `format` после `expect`. В шаблоне `{{text}}` означает непустой текст в одной строке, а `{{int}}` — целое неотрицательное число. Блок `expect` хранит пример вывода решения.
 
 Одиночные числовые результаты можно печатать с подписью. Укажи `check: number`, если подпись есть в примере `expect` и тоже необязательна. Для заданий, где важен буквальный вывод и переносы строк, укажи `check: exact`.
+
+</details>
 
 ## Лицензия
 
