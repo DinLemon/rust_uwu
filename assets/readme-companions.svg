@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="168" viewBox="0 0 300 105">
+      <title>Лисёнок машет лапкой, крабик поднимает флажок</title>
+      <rect x="1" y="1" width="298" height="103" rx="30" fill="#f4e7f3"/>
+      <ellipse cx="150" cy="91" rx="114" ry="7" fill="#713924" opacity=".08"/>
+      <g transform="translate(52 4)">
+        <g stroke="#713924" stroke-width="2" stroke-linejoin="round">
+          <path d="M31 79C7 86-4 72 0 54q6 8 15 6c13-2 24 8 16 19Z" fill="#f99754"/>
+          <path d="M1 58q5 7 12 5l-5 8q-6-3-7-13Z" fill="#ffe8cd" stroke="none"/>
+          <path d="M23 49q14-5 24 4l3 24q-2 10-18 10t-18-10Z" fill="#f99754"/>
+          <ellipse cx="31" cy="70" rx="10" ry="12" fill="#ffe8cd" stroke="none"/>
+          <path d="m19 51 15 7 14-7-8 16-6-9-5 10Z" fill="#bc96db"/>
+          <ellipse cx="21" cy="83" rx="8" ry="5" fill="#ffe8cd"/>
+          <ellipse cx="44" cy="83" rx="8" ry="5" fill="#ffe8cd"/>
+          <g transform="rotate(0.00 47 61)">
+            <path d="M46 63q4-12 12-13 8 0 7 7-1 10-13 11Z" fill="#f99754"/>
+            <ellipse cx="59" cy="56" rx="3" ry="2.5" fill="#efa4b3" stroke="none"/>
+          </g>
+        </g>
+        <g class="fox-head" stroke="#713924" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <g class="fox-ear"><path d="M10 30 8 9q0-4 4-2l17 14Z" fill="#f99754"/><path d="m13 14 11 10-9 5Z" fill="#ffc2b2" stroke="none"/></g>
+    <g class="fox-ear"><path d="M38 21 54 7q4-2 4 2l-2 21Z" fill="#f99754"/><path d="m52 14-11 10 9 5Z" fill="#ffc2b2" stroke="none"/></g>
+    <path d="M12 31q6-13 21-13t21 13l9 8-8 3 4 4-10 3q-7 8-16 8t-16-8L7 46l4-4-8-3Z" fill="#f99754"/>
+    <path d="M8 40q10-5 25 5 15-10 25-5l-6 4 4 2-9 2q-7 7-14 7t-14-7l-9-2 4-2Z" fill="#ffe8cd" stroke="none"/>
+    <path d="M20 35q3-4 6 0m14 0q3-4 6 0m-17 9q2 3 4 0 2 3 4 0" fill="none"/><path d="m30 40 3-1 3 1-3 3Z" fill="#713924" stroke="none"/>
+    <path d="m18 41 4 1m22 0 4-1" stroke="#da7770"/>
+  </g>
+      </g>
+      <g transform="translate(178 33) scale(1.05)" stroke="#713924" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 37C5 36 5 23 11 21l1 6 5-4q7 7-1 14Z" fill="#ff9d61"/>
+        <g transform="rotate(0.00 48 37)">
+          <path d="M48 37c11-1 11-14 5-16l-1 6-5-4q-7 7 1 14Z" fill="#ff9d61"/>
+          <path d="M55 26V-13m0 1c6-4 12 4 18 0V0c-6 4-12-4-18 0" fill="#efa4c8"/>
+        </g>
+        <path d="m20 46-6 5m9-3-4 6m25-8 6 5m-9-3 4 6" fill="none"/>
+        <ellipse cx="32" cy="38" rx="18" ry="13" fill="#ff9d61"/>
+        <path d="M23 36q2-4 5 0m8 0q3-4 5 0m-13 5q2 3 4 0 2 3 4 0" fill="none"/>
+      </g>
+      <g fill="none" stroke="#bc8cbd" stroke-width="1.6" stroke-linecap="round">
+        <path d="M145 24v7m-3.5-3.5h7M29 42v6m-3-3h6"/>
+      </g>
+    </svg>
