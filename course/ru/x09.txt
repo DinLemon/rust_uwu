@@ -1,0 +1,713 @@
+# MODULE x09 | no_std и встраиваемые системы | core и alloc, работа без кучи, биты и регистры, трейты железа
+
+## LESSON x09-1 | core, alloc и std | 8
+:: goals
+- Понять, из каких частей состоит стандартная библиотека
+- Писать код, которому не нужна операционная система
+
+:: text Три этажа
+Стандартная библиотека Rust — это три слоя:
+- **core** — то, что работает **везде**, даже на микроконтроллере без ОС: числа, `Option`, `Result`, итераторы, срезы, `fmt`, атомики. Никакой кучи.
+- **alloc** — то, что требует кучу: `Vec`, `String`, `Box`, `Rc`. Нужен аллокатор, но не ОС.
+- **std** — всё остальное: файлы, сеть, потоки, время, `println!`. Нужна операционная система.
+
+Атрибут `#![no_std]` в начале крейта говорит: «я пользуюсь только `core` (и, если надо, `alloc`)». Так пишут прошивки, ядра ОС, загрузчики — и библиотеки, которые хотят работать везде.
+
+> **Аналогия:** дом. `core` — фундамент и стены, `alloc` — водопровод, `std` — подключение к городским сетям. На необитаемом острове есть только фундамент.
+
+:: text Без println!
+Без `std` нет `println!`. Но есть трейт `core::fmt::Write` — «умею принимать текст». Реализуй его для своего буфера — и `write!` начнёт работать без кучи и без ОС.
+
+:: code
+```rust
+use core::fmt::{self, Write};
+
+// Строка фиксированной ёмкости: без кучи, только core
+struct FixedBuf<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> FixedBuf<N> {
+    const fn new() -> Self {
+        FixedBuf { data: [0; N], len: 0 }
+    }
+    fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.data[..self.len]).unwrap_or("")
+    }
+}
+
+impl<const N: usize> Write for FixedBuf<N> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let bytes = s.as_bytes();
+        if self.len + bytes.len() > N {
+            return Err(fmt::Error); // не влезает
+        }
+        self.data[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+        self.len += bytes.len();
+        Ok(())
+    }
+}
+
+fn main() {
+    let mut buf: FixedBuf<32> = FixedBuf::new();
+    write!(buf, "t={} v={:.1}", 25, 3.33).unwrap();
+    println!("{}", buf.as_str()); // println только чтобы показать результат
+    let mut tiny: FixedBuf<4> = FixedBuf::new();
+    println!("{:?}", write!(tiny, "слишком длинно"));
+}
+```
+```out
+t=25 v=3.3
+Err(Error)
+```
+`FixedBuf` и `write!` работают только на `core` — этот код запустится и на микроконтроллере.
+
+:: quiz
+В какой слой входит `Vec`?
+[ ] core => В `core` нет кучи.
+[x] alloc => Верно. Нужен аллокатор, но не ОС.
+[ ] Только std => `Vec` доступен и в `no_std` + `alloc`.
+
+:: task
+Реализуй `core::fmt::Write` для `Counter`, который не хранит текст, а только считает, сколько байт в него записали. Так узнают длину будущей строки без выделения памяти.
+```rust
+use core::fmt::{self, Write};
+
+struct Counter(usize);
+
+// твой код
+
+fn main() {
+    let mut c = Counter(0);
+    write!(c, "{}-{}-{}", 2026, "ноя", 24).unwrap();
+    println!("{}", c.0);
+}
+```
+```solution
+use core::fmt::{self, Write};
+
+struct Counter(usize);
+
+impl Write for Counter {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0 += s.len();
+        Ok(())
+    }
+}
+
+fn main() {
+    let mut c = Counter(0);
+    write!(c, "{}-{}-{}", 2026, "ноя", 24).unwrap();
+    println!("{}", c.0);
+}
+```
+```expect
+14
+```
+hint: `impl Write for Counter { fn write_str(&mut self, s: &str) -> fmt::Result { self.0 += s.len(); Ok(()) } }`.
+hint: «ноя» — 6 байт: кириллица занимает по 2 байта.
+
+:: recap
+- `core` — везде; `alloc` — с кучей; `std` — с ОС.
+- `#![no_std]` — крейт без стандартной библиотеки.
+- `core::fmt::Write` — форматирование без кучи.
+
+## LESSON x09-2 | heapless: коллекции без кучи | 8
+:: goals
+- Пользоваться `Vec` и `String` фиксированной ёмкости
+- Обрабатывать переполнение как обычную ошибку
+
+:: text Ёмкость — в типе
+На микроконтроллере часто **нет кучи** вообще. Крейт **heapless** даёт привычные коллекции с ёмкостью в типе (константное обобщение из модуля про типы):
+
+```rust
+let mut v: heapless::Vec<u8, 8> = heapless::Vec::new();
+v.push(1)?; // Err, если места нет
+```
+Вся память — внутри значения, на стеке или в статической переменной. Переполнение не паника, а `Result`.
+
+> **Аналогия:** рюкзак с жёсткими ячейками. Ячеек 8 — девятую вещь некуда, и это сразу видно.
+
+:: code
+```rust
+use heapless::{String, Vec};
+
+fn main() {
+    let mut readings: Vec<u16, 4> = Vec::new();
+    for r in [10, 20, 30, 40, 50] {
+        match readings.push(r) {
+            Ok(()) => {}
+            Err(lost) => println!("нет места для {lost}"),
+        }
+    }
+    println!("{:?} (ёмкость {})", readings, readings.capacity());
+
+    let mut name: String<8> = String::new();
+    name.push_str("Ferris").unwrap();
+    println!("{} {}", name, name.push_str("Crab").is_err());
+}
+```
+crates: yes
+```out
+нет места для 50
+[10, 20, 30, 40] (ёмкость 4)
+Ferris true
+```
+`push` вернул значение обратно в `Err(50)` — ничего не потерялось и не упало.
+
+:: quiz
+Что делает `heapless::Vec::push`, если места нет?
+[ ] Паникует => В прошивке паника — это перезагрузка. Поэтому здесь иначе.
+[x] Возвращает `Err` с тем же значением => Верно.
+[ ] Просит память у кучи => Кучи может не быть вовсе.
+
+:: task
+Без heapless, на чистом `core`: напиши `StackVec<const N: usize>` для `u8` с методами `push(&mut self, x) -> Result<(), u8>` и `as_slice`.
+```rust
+struct StackVec<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> StackVec<N> {
+    const fn new() -> Self {
+        StackVec { data: [0; N], len: 0 }
+    }
+    // твой код
+}
+
+fn main() {
+    let mut v: StackVec<3> = StackVec::new();
+    for x in [7, 8, 9, 10] {
+        if let Err(lost) = v.push(x) {
+            println!("лишнее: {lost}");
+        }
+    }
+    println!("{:?}", v.as_slice());
+}
+```
+```solution
+struct StackVec<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> StackVec<N> {
+    const fn new() -> Self {
+        StackVec { data: [0; N], len: 0 }
+    }
+    fn push(&mut self, x: u8) -> Result<(), u8> {
+        if self.len == N {
+            return Err(x);
+        }
+        self.data[self.len] = x;
+        self.len += 1;
+        Ok(())
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.data[..self.len]
+    }
+}
+
+fn main() {
+    let mut v: StackVec<3> = StackVec::new();
+    for x in [7, 8, 9, 10] {
+        if let Err(lost) = v.push(x) {
+            println!("лишнее: {lost}");
+        }
+    }
+    println!("{:?}", v.as_slice());
+}
+```
+```expect
+лишнее: 10
+[7, 8, 9]
+```
+hint: Если `len == N` — верни `Err(x)`. Иначе запиши в `data[len]` и увеличь `len`.
+
+:: recap
+- heapless: `Vec<T, N>`, `String<N>` — ёмкость в типе, память внутри значения.
+- Переполнение — `Err`, а не паника.
+- То же самое легко написать на `core` с константным обобщением.
+
+## LESSON x09-3 | Биты и регистры | 9
+:: goals
+- Ставить, сбрасывать и читать отдельные биты
+- Описывать регистр устройства безопасным типом
+
+:: text Регистры — это биты
+Микроконтроллер управляется **регистрами**: числами по особым адресам, где каждый бит что-то значит. Бит 0 — «светодиод горит», бит 3 — «включить прерывание», биты 4–6 — «скорость».
+
+Основные операции:
+- поставить бит `n`: `x | (1 << n)`;
+- сбросить бит `n`: `x & !(1 << n)`;
+- проверить бит `n`: `x & (1 << n) != 0`;
+- вынуть поле битов `[lo, lo+w)`: `(x >> lo) & ((1 << w) - 1)`.
+
+> **Аналогия:** ряд выключателей на щитке. Число — это фото щитка: какие выключатели вверх, какие вниз.
+
+:: code
+```rust
+#[derive(Clone, Copy, Debug)]
+struct Control(u8);
+
+impl Control {
+    const LED: u8 = 0;
+    const IRQ: u8 = 3;
+
+    fn set(self, bit: u8) -> Self { Control(self.0 | (1 << bit)) }
+    fn clear(self, bit: u8) -> Self { Control(self.0 & !(1 << bit)) }
+    fn is_set(self, bit: u8) -> bool { self.0 & (1 << bit) != 0 }
+    fn speed(self) -> u8 { (self.0 >> 4) & 0b111 }
+    fn with_speed(self, s: u8) -> Self { Control((self.0 & !(0b111 << 4)) | ((s & 0b111) << 4)) }
+}
+
+fn main() {
+    let c = Control(0).set(Control::LED).set(Control::IRQ).with_speed(5);
+    println!("{:08b} led={} speed={}", c.0, c.is_set(Control::LED), c.speed());
+    let c = c.clear(Control::LED);
+    println!("{:08b} led={}", c.0, c.is_set(Control::LED));
+}
+```
+```out
+01011001 led=true speed=5
+01011000 led=false
+```
+`{:08b}` печатает число в двоичном виде, 8 знаков с нулями слева.
+
+:: text volatile
+Настоящий регистр живёт по адресу памяти, и железо может изменить его **само**. Компилятор об этом не знает и может «оптимизировать» чтение. Поэтому регистры читают и пишут через `ptr::read_volatile` / `ptr::write_volatile` — «каждый раз по-настоящему обращайся к памяти».
+
+На практике это делают крейты PAC (peripheral access crate), сгенерированные из описания чипа. Ты пишешь `periph.GPIOA.odr.modify(|_, w| w.odr5().set_bit())`, а volatile внутри.
+
+:: quiz
+Как поставить бит 2 в числе `x`, не трогая остальные?
+[ ] `x = 1 << 2` => Это сбросит все остальные биты.
+[x] `x |= 1 << 2` => Верно.
+[ ] `x &= 1 << 2` => Это обнулит всё, кроме бита 2.
+
+:: task
+Разбери 16-битный «пакет датчика»: биты 0–3 — номер датчика, биты 4–13 — значение, бит 15 — флаг ошибки. Напиши `parse(raw) -> (u8, u16, bool)`.
+```rust
+fn parse(raw: u16) -> (u8, u16, bool) {
+    // твой код
+}
+
+fn main() {
+    let raw: u16 = 0b1000_0011_1110_0101;
+    let (id, value, err) = parse(raw);
+    println!("датчик {id}, значение {value}, ошибка {err}");
+    println!("{:?}", parse(0x0123));
+}
+```
+```solution
+fn parse(raw: u16) -> (u8, u16, bool) {
+    let id = (raw & 0b1111) as u8;
+    let value = (raw >> 4) & 0b11_1111_1111;
+    let err = raw & (1 << 15) != 0;
+    (id, value, err)
+}
+
+fn main() {
+    let raw: u16 = 0b1000_0011_1110_0101;
+    let (id, value, err) = parse(raw);
+    println!("датчик {id}, значение {value}, ошибка {err}");
+    println!("{:?}", parse(0x0123));
+}
+```
+```expect
+датчик 5, значение 62, ошибка true
+(3, 18, false)
+```
+hint: Номер: `raw & 0b1111`. Значение: сдвинь на 4 и возьми 10 бит: `& 0b11_1111_1111`.
+hint: Ошибка: `raw & (1 << 15) != 0`.
+
+:: recap
+- `|` ставит, `& !` сбрасывает, `&` проверяет, `>>` и маска вынимают поле.
+- Обёртка-newtype над числом делает регистр понятным и безопасным.
+- Настоящие регистры читают через volatile — обычно это делает PAC-крейт.
+
+## LESSON x09-4 | Трейты железа и путь в embedded | 8
+:: goals
+- Понять идею embedded-hal: код драйвера не зависит от конкретной платы
+- Написать драйвер, который проверяется на «фальшивом» пине
+
+:: text embedded-hal
+Драйвер светодиода не должен знать, на какой плате он работает. Поэтому есть крейт **embedded-hal** с общими трейтами:
+- `OutputPin` — умею `set_high()` / `set_low()`;
+- `InputPin` — умею `is_high()`;
+- `DelayNs` — умею ждать;
+- `I2c`, `SpiDevice` — шины для датчиков.
+
+Каждая плата реализует эти трейты для своего железа, а драйверы пишутся один раз — для трейтов. Это та же идея, что `dyn Shape` из второго уровня, только для железа.
+
+> **Аналогия:** розетка стандарта. Чайнику всё равно, какая электростанция — главное, чтобы вилка подошла.
+
+:: code
+Свой маленький «hal» и драйвер мигания, проверенный на фальшивом пине:
+```rust
+trait OutputPin {
+    fn set_high(&mut self);
+    fn set_low(&mut self);
+}
+
+trait Delay {
+    fn delay_ms(&mut self, ms: u32);
+}
+
+struct Blinker<P: OutputPin, D: Delay> {
+    pin: P,
+    delay: D,
+}
+
+impl<P: OutputPin, D: Delay> Blinker<P, D> {
+    fn blink(&mut self, times: u32, ms: u32) {
+        for _ in 0..times {
+            self.pin.set_high();
+            self.delay.delay_ms(ms);
+            self.pin.set_low();
+            self.delay.delay_ms(ms);
+        }
+    }
+}
+
+// «Фальшивое» железо для проверки на компьютере
+struct LogPin(Vec<&'static str>);
+impl OutputPin for LogPin {
+    fn set_high(&mut self) { self.0.push("H"); }
+    fn set_low(&mut self) { self.0.push("L"); }
+}
+struct FakeDelay(u32);
+impl Delay for FakeDelay {
+    fn delay_ms(&mut self, ms: u32) { self.0 += ms; }
+}
+
+fn main() {
+    let mut b = Blinker { pin: LogPin(vec![]), delay: FakeDelay(0) };
+    b.blink(3, 100);
+    println!("{}", b.pin.0.join(""));
+    println!("прошло {} мс", b.delay.0);
+}
+```
+```out
+HLHLHL
+прошло 600 мс
+```
+Тот же `Blinker` без изменений заработает на настоящей плате — нужно только подставить её `OutputPin` и `Delay`.
+
+:: text Как выглядит настоящий путь
+- **probe-rs** — прошивать и отлаживать плату через USB-программатор.
+- **Embassy** — async-фреймворк для микроконтроллеров: `async fn main`, таймеры и прерывания как `.await`. Отлично сочетается с тем, что ты знаешь из модуля про свой async.
+- **RTIC** — фреймворк на прерываниях с проверкой доступа к ресурсам при компиляции.
+- Хорошие первые платы: Raspberry Pi Pico (RP2040/RP2350), микроконтроллеры STM32, ESP32-C3.
+
+:: quiz
+Зачем драйвер пишут для трейта `OutputPin`, а не для конкретного пина конкретной платы?
+[x] Чтобы один драйвер работал на любой плате и проверялся на компьютере => Верно.
+[ ] Так быстрее => Статическая диспетчеризация через обобщения ничего не стоит, но смысл не в скорости.
+[ ] Иначе не скомпилируется => Скомпилируется, но будет привязан к одной плате.
+
+:: task
+Напиши драйвер `Button<P: InputPin>` с методом `count_presses(samples)`: считает, сколько раз пин перешёл из «отпущено» (`false`) в «нажато» (`true`). Проверь на фальшивом пине со списком значений.
+```rust
+trait InputPin {
+    fn is_high(&mut self) -> bool;
+}
+
+struct Button<P: InputPin> {
+    pin: P,
+}
+
+impl<P: InputPin> Button<P> {
+    fn count_presses(&mut self, samples: usize) -> u32 {
+        // твой код
+    }
+}
+
+struct ScriptPin {
+    values: Vec<bool>,
+    pos: usize,
+}
+
+impl InputPin for ScriptPin {
+    fn is_high(&mut self) -> bool {
+        let v = self.values.get(self.pos).copied().unwrap_or(false);
+        self.pos += 1;
+        v
+    }
+}
+
+fn main() {
+    let pin = ScriptPin { values: vec![false, true, true, false, true, false, false, true], pos: 0 };
+    let mut b = Button { pin };
+    println!("нажатий: {}", b.count_presses(8));
+}
+```
+```solution
+trait InputPin {
+    fn is_high(&mut self) -> bool;
+}
+
+struct Button<P: InputPin> {
+    pin: P,
+}
+
+impl<P: InputPin> Button<P> {
+    fn count_presses(&mut self, samples: usize) -> u32 {
+        let mut prev = false;
+        let mut presses = 0;
+        for _ in 0..samples {
+            let now = self.pin.is_high();
+            if now && !prev {
+                presses += 1;
+            }
+            prev = now;
+        }
+        presses
+    }
+}
+
+struct ScriptPin {
+    values: Vec<bool>,
+    pos: usize,
+}
+
+impl InputPin for ScriptPin {
+    fn is_high(&mut self) -> bool {
+        let v = self.values.get(self.pos).copied().unwrap_or(false);
+        self.pos += 1;
+        v
+    }
+}
+
+fn main() {
+    let pin = ScriptPin { values: vec![false, true, true, false, true, false, false, true], pos: 0 };
+    let mut b = Button { pin };
+    println!("нажатий: {}", b.count_presses(8));
+}
+```
+```expect
+нажатий: 3
+```
+hint: Помни прошлое значение `prev`. Нажатие — это когда сейчас `true`, а было `false`.
+
+:: recap
+- embedded-hal: общие трейты железа, драйверы пишутся один раз.
+- Фальшивое железо — проверка драйвера на обычном компьютере.
+- Реальный путь: probe-rs, Embassy или RTIC, плата вроде Raspberry Pi Pico.
+
+## LESSON x09-p | Практика: без кучи | 25 | practice
+:: goals
+- Решать задачи в стиле прошивки: без кучи и с битами
+
+:: task
+Контрольная сумма CRC-8 (полином `0x07`, начальное значение 0) для массива байт. Только `core`, без выделений.
+```rust
+fn crc8(data: &[u8]) -> u8 {
+    // твой код
+}
+
+fn main() {
+    println!("{:#04x}", crc8(b"123456789"));
+    println!("{:#04x}", crc8(&[]));
+}
+```
+```solution
+fn crc8(data: &[u8]) -> u8 {
+    let mut crc: u8 = 0;
+    for &byte in data {
+        crc ^= byte;
+        for _ in 0..8 {
+            crc = if crc & 0x80 != 0 { (crc << 1) ^ 0x07 } else { crc << 1 };
+        }
+    }
+    crc
+}
+
+fn main() {
+    println!("{:#04x}", crc8(b"123456789"));
+    println!("{:#04x}", crc8(&[]));
+}
+```
+```expect
+0xf4
+0x00
+```
+hint: Для каждого байта: `crc ^= byte`, затем 8 раз: если старший бит 1 — `(crc << 1) ^ 0x07`, иначе `crc << 1`.
+
+:: task
+Кольцевой буфер для UART без кучи: `Ring<const N: usize>` с `push(u8) -> bool` (false, если полон) и `pop() -> Option<u8>`. Голова и хвост — индексы по модулю `N`.
+```rust
+struct Ring<const N: usize> {
+    buf: [u8; N],
+    head: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    const fn new() -> Self {
+        Ring { buf: [0; N], head: 0, len: 0 }
+    }
+    fn push(&mut self, b: u8) -> bool {
+        // твой код
+    }
+    fn pop(&mut self) -> Option<u8> {
+        // твой код
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    println!("{} {} {} {}", r.push(1), r.push(2), r.push(3), r.push(4));
+    println!("{:?} {:?}", r.pop(), r.pop());
+    r.push(5);
+    r.push(6);
+    let mut out = Vec::new();
+    while let Some(b) = r.pop() {
+        out.push(b);
+    }
+    println!("{out:?}");
+}
+```
+```solution
+struct Ring<const N: usize> {
+    buf: [u8; N],
+    head: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    const fn new() -> Self {
+        Ring { buf: [0; N], head: 0, len: 0 }
+    }
+    fn push(&mut self, b: u8) -> bool {
+        if self.len == N {
+            return false;
+        }
+        self.buf[(self.head + self.len) % N] = b;
+        self.len += 1;
+        true
+    }
+    fn pop(&mut self) -> Option<u8> {
+        if self.len == 0 {
+            return None;
+        }
+        let b = self.buf[self.head];
+        self.head = (self.head + 1) % N;
+        self.len -= 1;
+        Some(b)
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    println!("{} {} {} {}", r.push(1), r.push(2), r.push(3), r.push(4));
+    println!("{:?} {:?}", r.pop(), r.pop());
+    r.push(5);
+    r.push(6);
+    let mut out = Vec::new();
+    while let Some(b) = r.pop() {
+        out.push(b);
+    }
+    println!("{out:?}");
+}
+```
+```expect
+true true true false
+Some(1) Some(2)
+[3, 5, 6]
+```
+hint: Запись — в `(head + len) % N`. Чтение — из `head`, потом `head = (head + 1) % N`.
+
+:: task
+Набор флагов: `Perms(u8)` с константами `READ = 1`, `WRITE = 2`, `EXEC = 4`. Реализуй `BitOr` (объединение), `contains` и `Display` в виде `rwx` / `r-x` / `---`.
+```rust
+use core::fmt;
+use core::ops::BitOr;
+
+#[derive(Clone, Copy, PartialEq)]
+struct Perms(u8);
+
+impl Perms {
+    const READ: Perms = Perms(1);
+    const WRITE: Perms = Perms(2);
+    const EXEC: Perms = Perms(4);
+    // твой код: contains
+}
+
+// твой код: BitOr и Display
+
+fn main() {
+    let rx = Perms::READ | Perms::EXEC;
+    println!("{} {}", rx, rx.contains(Perms::WRITE));
+    println!("{}", Perms::READ | Perms::WRITE | Perms::EXEC);
+    println!("{}", Perms(0));
+}
+```
+```solution
+use core::fmt;
+use core::ops::BitOr;
+
+#[derive(Clone, Copy, PartialEq)]
+struct Perms(u8);
+
+impl Perms {
+    const READ: Perms = Perms(1);
+    const WRITE: Perms = Perms(2);
+    const EXEC: Perms = Perms(4);
+    fn contains(self, other: Perms) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl BitOr for Perms {
+    type Output = Perms;
+    fn bitor(self, o: Perms) -> Perms {
+        Perms(self.0 | o.0)
+    }
+}
+
+impl fmt::Display for Perms {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let r = if self.contains(Perms::READ) { 'r' } else { '-' };
+        let w = if self.contains(Perms::WRITE) { 'w' } else { '-' };
+        let x = if self.contains(Perms::EXEC) { 'x' } else { '-' };
+        write!(f, "{r}{w}{x}")
+    }
+}
+
+fn main() {
+    let rx = Perms::READ | Perms::EXEC;
+    println!("{} {}", rx, rx.contains(Perms::WRITE));
+    println!("{}", Perms::READ | Perms::WRITE | Perms::EXEC);
+    println!("{}", Perms(0));
+}
+```
+```expect
+r-x false
+rwx
+---
+```
+hint: `contains`: все биты `other` есть в `self` — `self.0 & other.0 == other.0`.
+hint: Так устроен популярный крейт `bitflags` — он генерирует это за тебя.
+
+:: homework Первая прошивка
+Мигни светодиодом на настоящей плате (или в эмуляторе).
+
+1. Выбери путь:
+   - есть **Raspberry Pi Pico** — шаблон `embassy-rp` из репозитория Embassy (папка examples/rp);
+   - есть плата **STM32** — `embassy-stm32` или шаблон `cortex-m-quickstart`;
+   - платы нет — пройди главы про QEMU в книге **The Embedded Rust Book**.
+2. Поставь инструменты: `rustup target add thumbv6m-none-eabi` (Pico) или нужную цель для своей платы, и `cargo install probe-rs-tools`.
+3. Собери пример `blinky` и прошей: `cargo run --release` (runner — `probe-rs run`).
+4. Измени частоту мигания и добавь второй светодиод или вывод по `defmt`.
+[ ] Прошивка собирается под цель `thumbv*`
+[ ] Светодиод мигает (или пример работает в QEMU)
+[ ] Изменения частоты видны после перепрошивки
+[ ] В коде нет `std`: сверху стоит `#![no_std]`
+
+:: recap
+- CRC, кольцевой буфер и флаги — типичный код прошивок, и всё на `core`.
+- Флаги через newtype + `BitOr` — это то, что генерирует `bitflags`.
+- Дальше — настоящая плата: Embassy, RTIC, probe-rs.

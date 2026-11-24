@@ -1,0 +1,713 @@
+# MODULE x09 | no_std and embedded systems | core and alloc, working without a heap, bits and registers, hardware traits
+
+## LESSON x09-1 | core, alloc and std | 8
+:: goals
+- See what parts the standard library is made of
+- Write code that doesn't need an operating system
+
+:: text Three floors
+Rust's standard library has three layers:
+- **core** — what works **everywhere**, even on a microcontroller with no OS: numbers, `Option`, `Result`, iterators, slices, `fmt`, atomics. No heap.
+- **alloc** — what needs a heap: `Vec`, `String`, `Box`, `Rc`. It needs an allocator, but not an OS.
+- **std** — everything else: files, networking, threads, time, `println!`. It needs an operating system.
+
+The `#![no_std]` attribute at the top of a crate says: "I use only `core` (and `alloc` if needed)". That's how firmware, OS kernels and bootloaders are written — and libraries that want to work everywhere.
+
+> **Analogy:** a house. `core` is the foundation and walls, `alloc` is the plumbing, `std` is the connection to the city's utilities. On a desert island you only have the foundation.
+
+:: text No println!
+Without `std` there's no `println!`. But there's the `core::fmt::Write` trait — "I can accept text". Implement it for your own buffer, and `write!` works without a heap and without an OS.
+
+:: code
+```rust
+use core::fmt::{self, Write};
+
+// A fixed-capacity string: no heap, only core
+struct FixedBuf<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> FixedBuf<N> {
+    const fn new() -> Self {
+        FixedBuf { data: [0; N], len: 0 }
+    }
+    fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.data[..self.len]).unwrap_or("")
+    }
+}
+
+impl<const N: usize> Write for FixedBuf<N> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let bytes = s.as_bytes();
+        if self.len + bytes.len() > N {
+            return Err(fmt::Error); // doesn't fit
+        }
+        self.data[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+        self.len += bytes.len();
+        Ok(())
+    }
+}
+
+fn main() {
+    let mut buf: FixedBuf<32> = FixedBuf::new();
+    write!(buf, "t={} v={:.1}", 25, 3.33).unwrap();
+    println!("{}", buf.as_str()); // println only to show the result
+    let mut tiny: FixedBuf<4> = FixedBuf::new();
+    println!("{:?}", write!(tiny, "way too long"));
+}
+```
+```out
+t=25 v=3.3
+Err(Error)
+```
+`FixedBuf` and `write!` use only `core` — this code would run on a microcontroller too.
+
+:: quiz
+Which layer does `Vec` belong to?
+[ ] core => `core` has no heap.
+[x] alloc => Right. It needs an allocator, but not an OS.
+[ ] Only std => `Vec` is also available in `no_std` + `alloc`.
+
+:: task
+Implement `core::fmt::Write` for `Counter`, which stores no text but only counts how many bytes were written into it. That's how you learn the length of a future string without allocating.
+```rust
+use core::fmt::{self, Write};
+
+struct Counter(usize);
+
+// your code
+
+fn main() {
+    let mut c = Counter(0);
+    write!(c, "{}-{}-{}", 2026, "ноя", 24).unwrap();
+    println!("{}", c.0);
+}
+```
+```solution
+use core::fmt::{self, Write};
+
+struct Counter(usize);
+
+impl Write for Counter {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0 += s.len();
+        Ok(())
+    }
+}
+
+fn main() {
+    let mut c = Counter(0);
+    write!(c, "{}-{}-{}", 2026, "ноя", 24).unwrap();
+    println!("{}", c.0);
+}
+```
+```expect
+14
+```
+hint: `impl Write for Counter { fn write_str(&mut self, s: &str) -> fmt::Result { self.0 += s.len(); Ok(()) } }`.
+hint: "ноя" is 6 bytes: Cyrillic letters take 2 bytes each.
+
+:: recap
+- `core` — everywhere; `alloc` — with a heap; `std` — with an OS.
+- `#![no_std]` — a crate without the standard library.
+- `core::fmt::Write` — formatting without a heap.
+
+## LESSON x09-2 | heapless: collections without a heap | 8
+:: goals
+- Use fixed-capacity `Vec` and `String`
+- Handle overflow as an ordinary error
+
+:: text Capacity in the type
+A microcontroller often has **no heap** at all. The **heapless** crate gives familiar collections with the capacity in the type (a const generic from the types module):
+
+```rust
+let mut v: heapless::Vec<u8, 8> = heapless::Vec::new();
+v.push(1)?; // Err if there's no room
+```
+All the memory is inside the value, on the stack or in a static variable. Overflow isn't a panic but a `Result`.
+
+> **Analogy:** a backpack with rigid compartments. There are 8 — the ninth item has nowhere to go, and you see that right away.
+
+:: code
+```rust
+use heapless::{String, Vec};
+
+fn main() {
+    let mut readings: Vec<u16, 4> = Vec::new();
+    for r in [10, 20, 30, 40, 50] {
+        match readings.push(r) {
+            Ok(()) => {}
+            Err(lost) => println!("no room for {lost}"),
+        }
+    }
+    println!("{:?} (capacity {})", readings, readings.capacity());
+
+    let mut name: String<8> = String::new();
+    name.push_str("Ferris").unwrap();
+    println!("{} {}", name, name.push_str("Crab").is_err());
+}
+```
+crates: yes
+```out
+no room for 50
+[10, 20, 30, 40] (capacity 4)
+Ferris true
+```
+`push` handed the value back in `Err(50)` — nothing got lost and nothing crashed.
+
+:: quiz
+What does `heapless::Vec::push` do when there's no room?
+[ ] Panics => In firmware a panic means a reboot. That's why it works differently here.
+[x] Returns `Err` with the same value => Right.
+[ ] Asks the heap for memory => There may be no heap at all.
+
+:: task
+Without heapless, on pure `core`: write `StackVec<const N: usize>` for `u8` with methods `push(&mut self, x) -> Result<(), u8>` and `as_slice`.
+```rust
+struct StackVec<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> StackVec<N> {
+    const fn new() -> Self {
+        StackVec { data: [0; N], len: 0 }
+    }
+    // your code
+}
+
+fn main() {
+    let mut v: StackVec<3> = StackVec::new();
+    for x in [7, 8, 9, 10] {
+        if let Err(lost) = v.push(x) {
+            println!("extra: {lost}");
+        }
+    }
+    println!("{:?}", v.as_slice());
+}
+```
+```solution
+struct StackVec<const N: usize> {
+    data: [u8; N],
+    len: usize,
+}
+
+impl<const N: usize> StackVec<N> {
+    const fn new() -> Self {
+        StackVec { data: [0; N], len: 0 }
+    }
+    fn push(&mut self, x: u8) -> Result<(), u8> {
+        if self.len == N {
+            return Err(x);
+        }
+        self.data[self.len] = x;
+        self.len += 1;
+        Ok(())
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.data[..self.len]
+    }
+}
+
+fn main() {
+    let mut v: StackVec<3> = StackVec::new();
+    for x in [7, 8, 9, 10] {
+        if let Err(lost) = v.push(x) {
+            println!("extra: {lost}");
+        }
+    }
+    println!("{:?}", v.as_slice());
+}
+```
+```expect
+extra: 10
+[7, 8, 9]
+```
+hint: If `len == N`, return `Err(x)`. Otherwise write to `data[len]` and increase `len`.
+
+:: recap
+- heapless: `Vec<T, N>`, `String<N>` — capacity in the type, memory inside the value.
+- Overflow is an `Err`, not a panic.
+- The same is easy to write on `core` with a const generic.
+
+## LESSON x09-3 | Bits and registers | 9
+:: goals
+- Set, clear and read individual bits
+- Describe a device register with a safe type
+
+:: text Registers are bits
+A microcontroller is controlled through **registers**: numbers at special addresses where every bit means something. Bit 0 — "LED on", bit 3 — "enable the interrupt", bits 4–6 — "speed".
+
+The basic operations:
+- set bit `n`: `x | (1 << n)`;
+- clear bit `n`: `x & !(1 << n)`;
+- check bit `n`: `x & (1 << n) != 0`;
+- extract the bit field `[lo, lo+w)`: `(x >> lo) & ((1 << w) - 1)`.
+
+> **Analogy:** a row of switches on a panel. The number is a photo of the panel: which switches are up and which are down.
+
+:: code
+```rust
+#[derive(Clone, Copy, Debug)]
+struct Control(u8);
+
+impl Control {
+    const LED: u8 = 0;
+    const IRQ: u8 = 3;
+
+    fn set(self, bit: u8) -> Self { Control(self.0 | (1 << bit)) }
+    fn clear(self, bit: u8) -> Self { Control(self.0 & !(1 << bit)) }
+    fn is_set(self, bit: u8) -> bool { self.0 & (1 << bit) != 0 }
+    fn speed(self) -> u8 { (self.0 >> 4) & 0b111 }
+    fn with_speed(self, s: u8) -> Self { Control((self.0 & !(0b111 << 4)) | ((s & 0b111) << 4)) }
+}
+
+fn main() {
+    let c = Control(0).set(Control::LED).set(Control::IRQ).with_speed(5);
+    println!("{:08b} led={} speed={}", c.0, c.is_set(Control::LED), c.speed());
+    let c = c.clear(Control::LED);
+    println!("{:08b} led={}", c.0, c.is_set(Control::LED));
+}
+```
+```out
+01011001 led=true speed=5
+01011000 led=false
+```
+`{:08b}` prints a number in binary, 8 digits with leading zeros.
+
+:: text volatile
+A real register lives at a memory address, and the hardware can change it **by itself**. The compiler doesn't know that and might "optimize away" a read. So registers are read and written with `ptr::read_volatile` / `ptr::write_volatile` — "really access the memory every time".
+
+In practice PAC crates (peripheral access crates) generated from the chip's description do this. You write `periph.GPIOA.odr.modify(|_, w| w.odr5().set_bit())`, and the volatile access is inside.
+
+:: quiz
+How do you set bit 2 of a number `x` without touching the others?
+[ ] `x = 1 << 2` => That clears every other bit.
+[x] `x |= 1 << 2` => Right.
+[ ] `x &= 1 << 2` => That zeroes everything except bit 2.
+
+:: task
+Parse a 16-bit "sensor packet": bits 0–3 are the sensor number, bits 4–13 the value, bit 15 an error flag. Write `parse(raw) -> (u8, u16, bool)`.
+```rust
+fn parse(raw: u16) -> (u8, u16, bool) {
+    // your code
+}
+
+fn main() {
+    let raw: u16 = 0b1000_0011_1110_0101;
+    let (id, value, err) = parse(raw);
+    println!("sensor {id}, value {value}, error {err}");
+    println!("{:?}", parse(0x0123));
+}
+```
+```solution
+fn parse(raw: u16) -> (u8, u16, bool) {
+    let id = (raw & 0b1111) as u8;
+    let value = (raw >> 4) & 0b11_1111_1111;
+    let err = raw & (1 << 15) != 0;
+    (id, value, err)
+}
+
+fn main() {
+    let raw: u16 = 0b1000_0011_1110_0101;
+    let (id, value, err) = parse(raw);
+    println!("sensor {id}, value {value}, error {err}");
+    println!("{:?}", parse(0x0123));
+}
+```
+```expect
+sensor 5, value 62, error true
+(3, 18, false)
+```
+hint: The number: `raw & 0b1111`. The value: shift by 4 and take 10 bits: `& 0b11_1111_1111`.
+hint: The error: `raw & (1 << 15) != 0`.
+
+:: recap
+- `|` sets, `& !` clears, `&` checks, `>>` plus a mask extracts a field.
+- A newtype wrapper over a number makes a register clear and safe.
+- Real registers are accessed through volatile — usually a PAC crate does it.
+
+## LESSON x09-4 | Hardware traits and the path into embedded | 8
+:: goals
+- Understand the idea of embedded-hal: driver code doesn't depend on a specific board
+- Write a driver that's tested on a "fake" pin
+
+:: text embedded-hal
+An LED driver shouldn't know which board it runs on. That's why the **embedded-hal** crate has shared traits:
+- `OutputPin` — can `set_high()` / `set_low()`;
+- `InputPin` — can `is_high()`;
+- `DelayNs` — can wait;
+- `I2c`, `SpiDevice` — buses for sensors.
+
+Each board implements these traits for its hardware, and drivers are written once — against the traits. It's the same idea as `dyn Shape` from Level 2, only for hardware.
+
+> **Analogy:** a standard power socket. The kettle doesn't care which power plant it is — as long as the plug fits.
+
+:: code
+A tiny "hal" of our own and a blink driver, tested on a fake pin:
+```rust
+trait OutputPin {
+    fn set_high(&mut self);
+    fn set_low(&mut self);
+}
+
+trait Delay {
+    fn delay_ms(&mut self, ms: u32);
+}
+
+struct Blinker<P: OutputPin, D: Delay> {
+    pin: P,
+    delay: D,
+}
+
+impl<P: OutputPin, D: Delay> Blinker<P, D> {
+    fn blink(&mut self, times: u32, ms: u32) {
+        for _ in 0..times {
+            self.pin.set_high();
+            self.delay.delay_ms(ms);
+            self.pin.set_low();
+            self.delay.delay_ms(ms);
+        }
+    }
+}
+
+// "Fake" hardware for testing on a computer
+struct LogPin(Vec<&'static str>);
+impl OutputPin for LogPin {
+    fn set_high(&mut self) { self.0.push("H"); }
+    fn set_low(&mut self) { self.0.push("L"); }
+}
+struct FakeDelay(u32);
+impl Delay for FakeDelay {
+    fn delay_ms(&mut self, ms: u32) { self.0 += ms; }
+}
+
+fn main() {
+    let mut b = Blinker { pin: LogPin(vec![]), delay: FakeDelay(0) };
+    b.blink(3, 100);
+    println!("{}", b.pin.0.join(""));
+    println!("{} ms passed", b.delay.0);
+}
+```
+```out
+HLHLHL
+600 ms passed
+```
+The same `Blinker` would work unchanged on a real board — you only plug in its `OutputPin` and `Delay`.
+
+:: text What the real path looks like
+- **probe-rs** — flash and debug a board through a USB probe.
+- **Embassy** — an async framework for microcontrollers: `async fn main`, timers and interrupts as `.await`. It fits nicely with what you know from the your-own-async module.
+- **RTIC** — an interrupt-driven framework that checks resource access at compile time.
+- Good first boards: Raspberry Pi Pico (RP2040/RP2350), STM32 microcontrollers, ESP32-C3.
+
+:: quiz
+Why is a driver written for the `OutputPin` trait rather than a specific pin of a specific board?
+[x] So one driver works on any board and can be tested on a computer => Right.
+[ ] It's faster => Static dispatch through generics costs nothing, but speed isn't the point.
+[ ] It won't compile otherwise => It compiles, but it's tied to one board.
+
+:: task
+Write a `Button<P: InputPin>` driver with a `count_presses(samples)` method: count how many times the pin went from "released" (`false`) to "pressed" (`true`). Test it on a fake pin with a list of values.
+```rust
+trait InputPin {
+    fn is_high(&mut self) -> bool;
+}
+
+struct Button<P: InputPin> {
+    pin: P,
+}
+
+impl<P: InputPin> Button<P> {
+    fn count_presses(&mut self, samples: usize) -> u32 {
+        // your code
+    }
+}
+
+struct ScriptPin {
+    values: Vec<bool>,
+    pos: usize,
+}
+
+impl InputPin for ScriptPin {
+    fn is_high(&mut self) -> bool {
+        let v = self.values.get(self.pos).copied().unwrap_or(false);
+        self.pos += 1;
+        v
+    }
+}
+
+fn main() {
+    let pin = ScriptPin { values: vec![false, true, true, false, true, false, false, true], pos: 0 };
+    let mut b = Button { pin };
+    println!("presses: {}", b.count_presses(8));
+}
+```
+```solution
+trait InputPin {
+    fn is_high(&mut self) -> bool;
+}
+
+struct Button<P: InputPin> {
+    pin: P,
+}
+
+impl<P: InputPin> Button<P> {
+    fn count_presses(&mut self, samples: usize) -> u32 {
+        let mut prev = false;
+        let mut presses = 0;
+        for _ in 0..samples {
+            let now = self.pin.is_high();
+            if now && !prev {
+                presses += 1;
+            }
+            prev = now;
+        }
+        presses
+    }
+}
+
+struct ScriptPin {
+    values: Vec<bool>,
+    pos: usize,
+}
+
+impl InputPin for ScriptPin {
+    fn is_high(&mut self) -> bool {
+        let v = self.values.get(self.pos).copied().unwrap_or(false);
+        self.pos += 1;
+        v
+    }
+}
+
+fn main() {
+    let pin = ScriptPin { values: vec![false, true, true, false, true, false, false, true], pos: 0 };
+    let mut b = Button { pin };
+    println!("presses: {}", b.count_presses(8));
+}
+```
+```expect
+presses: 3
+```
+hint: Remember the previous value `prev`. A press is when it's `true` now and was `false` before.
+
+:: recap
+- embedded-hal: shared hardware traits; drivers are written once.
+- Fake hardware — testing a driver on an ordinary computer.
+- The real path: probe-rs, Embassy or RTIC, a board like the Raspberry Pi Pico.
+
+## LESSON x09-p | Practice: no heap | 25 | practice
+:: goals
+- Solve firmware-style tasks: no heap, lots of bits
+
+:: task
+A CRC-8 checksum (polynomial `0x07`, initial value 0) for a byte array. Only `core`, no allocations.
+```rust
+fn crc8(data: &[u8]) -> u8 {
+    // your code
+}
+
+fn main() {
+    println!("{:#04x}", crc8(b"123456789"));
+    println!("{:#04x}", crc8(&[]));
+}
+```
+```solution
+fn crc8(data: &[u8]) -> u8 {
+    let mut crc: u8 = 0;
+    for &byte in data {
+        crc ^= byte;
+        for _ in 0..8 {
+            crc = if crc & 0x80 != 0 { (crc << 1) ^ 0x07 } else { crc << 1 };
+        }
+    }
+    crc
+}
+
+fn main() {
+    println!("{:#04x}", crc8(b"123456789"));
+    println!("{:#04x}", crc8(&[]));
+}
+```
+```expect
+0xf4
+0x00
+```
+hint: For each byte: `crc ^= byte`, then 8 times: if the top bit is 1 — `(crc << 1) ^ 0x07`, otherwise `crc << 1`.
+
+:: task
+A heap-free ring buffer for a UART: `Ring<const N: usize>` with `push(u8) -> bool` (false when full) and `pop() -> Option<u8>`. Head and tail are indexes modulo `N`.
+```rust
+struct Ring<const N: usize> {
+    buf: [u8; N],
+    head: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    const fn new() -> Self {
+        Ring { buf: [0; N], head: 0, len: 0 }
+    }
+    fn push(&mut self, b: u8) -> bool {
+        // your code
+    }
+    fn pop(&mut self) -> Option<u8> {
+        // your code
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    println!("{} {} {} {}", r.push(1), r.push(2), r.push(3), r.push(4));
+    println!("{:?} {:?}", r.pop(), r.pop());
+    r.push(5);
+    r.push(6);
+    let mut out = Vec::new();
+    while let Some(b) = r.pop() {
+        out.push(b);
+    }
+    println!("{out:?}");
+}
+```
+```solution
+struct Ring<const N: usize> {
+    buf: [u8; N],
+    head: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    const fn new() -> Self {
+        Ring { buf: [0; N], head: 0, len: 0 }
+    }
+    fn push(&mut self, b: u8) -> bool {
+        if self.len == N {
+            return false;
+        }
+        self.buf[(self.head + self.len) % N] = b;
+        self.len += 1;
+        true
+    }
+    fn pop(&mut self) -> Option<u8> {
+        if self.len == 0 {
+            return None;
+        }
+        let b = self.buf[self.head];
+        self.head = (self.head + 1) % N;
+        self.len -= 1;
+        Some(b)
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    println!("{} {} {} {}", r.push(1), r.push(2), r.push(3), r.push(4));
+    println!("{:?} {:?}", r.pop(), r.pop());
+    r.push(5);
+    r.push(6);
+    let mut out = Vec::new();
+    while let Some(b) = r.pop() {
+        out.push(b);
+    }
+    println!("{out:?}");
+}
+```
+```expect
+true true true false
+Some(1) Some(2)
+[3, 5, 6]
+```
+hint: Write to `(head + len) % N`. Read from `head`, then `head = (head + 1) % N`.
+
+:: task
+A flag set: `Perms(u8)` with constants `READ = 1`, `WRITE = 2`, `EXEC = 4`. Implement `BitOr` (union), `contains` and `Display` as `rwx` / `r-x` / `---`.
+```rust
+use core::fmt;
+use core::ops::BitOr;
+
+#[derive(Clone, Copy, PartialEq)]
+struct Perms(u8);
+
+impl Perms {
+    const READ: Perms = Perms(1);
+    const WRITE: Perms = Perms(2);
+    const EXEC: Perms = Perms(4);
+    // your code: contains
+}
+
+// your code: BitOr and Display
+
+fn main() {
+    let rx = Perms::READ | Perms::EXEC;
+    println!("{} {}", rx, rx.contains(Perms::WRITE));
+    println!("{}", Perms::READ | Perms::WRITE | Perms::EXEC);
+    println!("{}", Perms(0));
+}
+```
+```solution
+use core::fmt;
+use core::ops::BitOr;
+
+#[derive(Clone, Copy, PartialEq)]
+struct Perms(u8);
+
+impl Perms {
+    const READ: Perms = Perms(1);
+    const WRITE: Perms = Perms(2);
+    const EXEC: Perms = Perms(4);
+    fn contains(self, other: Perms) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl BitOr for Perms {
+    type Output = Perms;
+    fn bitor(self, o: Perms) -> Perms {
+        Perms(self.0 | o.0)
+    }
+}
+
+impl fmt::Display for Perms {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let r = if self.contains(Perms::READ) { 'r' } else { '-' };
+        let w = if self.contains(Perms::WRITE) { 'w' } else { '-' };
+        let x = if self.contains(Perms::EXEC) { 'x' } else { '-' };
+        write!(f, "{r}{w}{x}")
+    }
+}
+
+fn main() {
+    let rx = Perms::READ | Perms::EXEC;
+    println!("{} {}", rx, rx.contains(Perms::WRITE));
+    println!("{}", Perms::READ | Perms::WRITE | Perms::EXEC);
+    println!("{}", Perms(0));
+}
+```
+```expect
+r-x false
+rwx
+---
+```
+hint: `contains`: every bit of `other` is in `self` — `self.0 & other.0 == other.0`.
+hint: That's how the popular `bitflags` crate works — it generates this for you.
+
+:: homework Your first firmware
+Blink an LED on a real board (or in an emulator).
+
+1. Pick a path:
+   - you have a **Raspberry Pi Pico** — the `embassy-rp` examples from the Embassy repository (the examples/rp folder);
+   - you have an **STM32** board — `embassy-stm32` or the `cortex-m-quickstart` template;
+   - no board — work through the QEMU chapters of **The Embedded Rust Book**.
+2. Install the tools: `rustup target add thumbv6m-none-eabi` (Pico) or your board's target, and `cargo install probe-rs-tools`.
+3. Build the `blinky` example and flash it: `cargo run --release` (the runner is `probe-rs run`).
+4. Change the blink rate and add a second LED or output through `defmt`.
+[ ] The firmware builds for a `thumbv*` target
+[ ] The LED blinks (or the example works in QEMU)
+[ ] Changes to the rate are visible after reflashing
+[ ] The code has no `std`: `#![no_std]` is at the top
+
+:: recap
+- CRC, a ring buffer and flags are typical firmware code, all on `core`.
+- Flags through a newtype + `BitOr` — that's what `bitflags` generates.
+- Next — a real board: Embassy, RTIC, probe-rs.
