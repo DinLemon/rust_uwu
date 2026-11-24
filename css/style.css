@@ -627,3 +627,13 @@ body.focus .topbar nav { display: none; }
   .course-diploma .diploma-recipient { font-size: 27pt; }
   .diploma-art { width: 104mm; max-width: 100%; height: 61mm; margin: 4mm auto 1mm; }
 }
+
+/* Плавная смена поз лисёнка: короткое растворение вместо резкой склейки */
+.hero-art .hero-fox-pose { opacity: 0; }
+.hero-art.has-pose .hero-fox-pose { opacity: 1; }
+/* поза проявляется поверх лисёнка в покое, а он прячется только после этого — без «прозрачного» кадра */
+.anim .hero-art .hero-fox-pose { transition: opacity .15s ease-out; }
+.anim .hero-art.has-pose .hero-fox-idle { transition: opacity 0s linear .15s; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-art .hero-fox-idle, .hero-art .hero-fox-pose { transition: none !important; }
+}

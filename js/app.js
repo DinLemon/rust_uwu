@@ -112,6 +112,8 @@
   };
   const mascot = (kind) => `<svg class="mascot mascot-${kind}" viewBox="0 0 96 64" aria-hidden="true" focusable="false">${mascotArt[kind]}</svg>`;
   const mascotBubble = (kind, content) => `<div class="mascot-bubble">${mascot(kind)}<div>${content}</div></div>`;
+  // Картинки лисёнка: лёгкая версия 960 px для обычных экранов, оригинал — для очень плотных.
+  const foxSet = (name) => `assets/fox-${name}-960.webp 960w, assets/fox-${name}.webp 1374w`;
   const mapFlag = `<path d="M5 21V3m0 1c5-4 10 4 15 0v9c-5 4-10-4-15 0" fill="#efa4c8" stroke="#713924" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
 
   function mapGuide(lesson) {
@@ -156,11 +158,11 @@
 
   // ---------- Главная ----------
   const foxReactions = {
-    wave: { pose: "assets/fox-wave.webp", duration: 920 },
+    wave: { pose: "wave", duration: 920 },
     pet: { duration: 920 },
-    stretch: { pose: "assets/fox-stretch.webp", duration: 1060 },
-    cookie: { pose: "assets/fox-cookie.webp", duration: 1160 },
-    nap: { pose: "assets/fox-nap.webp", duration: 1750 },
+    stretch: { pose: "stretch", duration: 1060 },
+    cookie: { pose: "cookie", duration: 1160 },
+    nap: { pose: "nap", duration: 1750 },
   };
 
   function bindHeroFox(fox) {
@@ -176,7 +178,9 @@
         const image = new Image(1374, 1145);
         image.className = "hero-fox-pose";
         image.alt = "";
-        image.src = src;
+        image.sizes = "(max-width: 600px) 19rem, 28rem";
+        image.srcset = foxSet(src);
+        image.src = `assets/fox-${src}-960.webp`;
         poses.set(src, image.decode().then(() => image, () => {
           poses.delete(src);
           return null;
@@ -185,8 +189,15 @@
       return poses.get(src);
     }
 
+    // Первую позу грузим сразу, остальные — когда браузер свободен (или при наведении на лисёнка).
+    const preloadAll = () => actions.forEach((a) => foxReactions[a].pose && loadPose(foxReactions[a].pose));
     loadPose(foxReactions.wave.pose);
-    art.querySelector(".fox-trigger").addEventListener("click", async () => {
+    const saveData = navigator.connection && navigator.connection.saveData;
+    if (!saveData) (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(preloadAll);
+    const trigger = art.querySelector(".fox-trigger");
+    trigger.addEventListener("pointerenter", preloadAll, { once: true });
+    trigger.addEventListener("focus", preloadAll, { once: true });
+    trigger.addEventListener("click", async () => {
       const action = actions[next];
       next = (next + 1) % actions.length;
       const reaction = foxReactions[action];
@@ -203,6 +214,7 @@
         if (selected !== revision || !art.isConnected) return;
         if (pose) {
           slot.replaceChildren(pose);
+          void pose.offsetWidth; // сначала поза прозрачная, потом плавно проявляется
           art.classList.add("has-pose");
         }
       }
@@ -212,7 +224,8 @@
       if (animate) settle = setTimeout(() => {
         delete art.dataset.foxReaction;
         art.classList.remove("has-pose");
-        slot.replaceChildren();
+        // ждём, пока поза плавно погаснет, и только потом убираем её
+        settle = setTimeout(() => { if (selected === revision) slot.replaceChildren(); }, 180);
       }, reaction.duration);
     });
   }
@@ -245,7 +258,7 @@
           </div>
           <div class="hero-companion">
             <div class="hero-art">
-              <img class="hero-fox-idle" src="assets/fox-mascot.webp" width="1374" height="1145" alt="">
+              <img class="hero-fox-idle" src="assets/fox-mascot-960.webp" srcset="${foxSet("mascot")}" sizes="(max-width: 600px) 19rem, 28rem" width="1374" height="1145" alt="" fetchpriority="high">
               <div class="fox-pose-slot" aria-hidden="true"></div>
               <svg class="fox-effects" viewBox="0 0 120 100" aria-hidden="true" focusable="false">
                 <g class="fox-wave-marks" fill="none" stroke="#ad70b8" stroke-width="1.8" stroke-linecap="round">
@@ -398,7 +411,7 @@
         </div>
       </div>
       ${complete && T.diploma ? `<div class="diploma-award">
-        <img src="assets/fox-diploma.webp" alt="">
+        <img src="assets/fox-diploma-960.webp" srcset="${foxSet("diploma")}" sizes="12rem" alt="">
         <div><p>${T.diploma.award}</p><a class="btn" href="#/diploma">${T.diploma.open}</a></div>
       </div>` : ""}
       ${recap.length ? `<h3>${T.remember}</h3><ul class="tldr">${recap.map((r) => `<li>${inline(r)}</li>`).join("")}</ul>` : ""}
@@ -846,7 +859,9 @@
     img.addEventListener("error", () => {
       if (img.parentElement === slot) slot.hidden = true;
     }, { once: true });
-    img.src = `assets/fox-${scene}.webp`;
+    img.sizes = "16rem";
+    img.srcset = foxSet(scene);
+    img.src = `assets/fox-${scene}-960.webp`;
   }
 
   function viewCheat() {
