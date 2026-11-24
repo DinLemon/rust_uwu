@@ -1,0 +1,494 @@
+# MODULE a05 | Времена жизни глубже | Метки в impl, 'static, несколько меток, разбор строк без копий
+
+## LESSON a05-1 | Метки в структурах и impl | 7
+:: goals
+- Вспомнить, зачем нужна метка `'a`
+- Писать `impl<'a>` для структуры со ссылкой
+
+:: text Короткое напоминание
+Метка времени жизни `'a` ничего **не меняет** в программе. Она только **описывает** связь: «эта ссылка живёт не дольше той».
+
+```rust
+fn longer<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() > b.len() { a } else { b }
+}
+```
+Читается: «результат живёт, пока живы оба аргумента».
+
+Если забыл основы — урок первого уровня «Времена жизни».
+
+> **Аналогия:** пропуск в здание. На нём написано «действует, пока действует пропуск сопровождающего». Пропуск ничего не продлевает, он просто честно говорит срок.
+
+:: text Структура с ссылкой
+Если структура хранит ссылку, у неё должна быть метка:
+
+```rust
+struct Highlight<'a> {
+    text: &'a str,
+}
+```
+«`Highlight` не может пережить строку, на которую смотрит».
+
+И у `impl` тоже пишут метку — объявить её, как объявляют `<T>`:
+
+```rust
+impl<'a> Highlight<'a> {
+    fn get(&self) -> &'a str { self.text }
+}
+```
+
+:: code
+```rust
+struct Highlight<'a> {
+    text: &'a str,
+}
+
+impl<'a> Highlight<'a> {
+    fn new(text: &'a str) -> Self {
+        Highlight { text }
+    }
+    fn first_word(&self) -> &'a str {
+        self.text.split_whitespace().next().unwrap_or("")
+    }
+}
+
+fn main() {
+    let book = String::from("Однажды в студёную зимнюю пору");
+    let h = Highlight::new(&book);
+    println!("{}", h.first_word());
+}
+```
+```out
+Однажды
+```
+`first_word` возвращает `&'a str` — кусок **исходной** книги, а не самой структуры. Он может пережить `h`, но не `book`.
+
+:: quiz
+Что означает `struct View<'a> { s: &'a str }`?
+[ ] `View` живёт ровно столько же, сколько строка => Не ровно: может меньше, но не дольше.
+[x] `View` не может пережить строку, на которую ссылается => Верно.
+[ ] Строка копируется внутрь `View` => Нет, внутри только ссылка.
+
+:: fill
+Заполни пропуски в объявлении `impl`.
+```rust
+struct Parser<'a> {
+    input: &'a str,
+}
+
+impl<___> Parser<___> {
+    fn rest(&self) -> &'a str {
+        self.input
+    }
+}
+```
+= 'a
+= 'a
+explain: Сначала метку объявляют: `impl<'a>`, потом используют: `Parser<'a>`.
+
+:: recap
+- `'a` описывает связь сроков, а не меняет их.
+- Структура со ссылкой — `struct S<'a>`.
+- `impl<'a> S<'a>` — объявить и использовать метку.
+
+## LESSON a05-2 | 'static: два разных смысла | 7
+:: goals
+- Различать `&'static T` и `T: 'static`
+- Не пугаться `'static` в ошибках компилятора
+
+:: text Смысл первый: ссылка на вечное
+`&'static str` — ссылка, которая действительна **всю программу**. Например, строковые литералы: они зашиты прямо в программу.
+
+```rust
+let s: &'static str = "привет"; // текст лежит в самой программе
+```
+
+:: text Смысл второй: тип без временных ссылок
+`T: 'static` в требованиях **не** значит «живёт вечно». Это значит: «внутри `T` нет ссылок на что-то временное». Такой тип можно держать сколько угодно.
+
+- `String`, `i32`, `Vec<u8>` — подходят: ссылок нет.
+- `&'static str` — подходит.
+- `&'a str` с коротким `'a` — не подходит.
+
+> **Аналогия:** «можно взять в долгий поход». Подходит то, что ни к чему не привязано: свой рюкзак — да, чужая вещь на время — нет.
+
+:: code
+```rust
+use std::thread;
+
+fn run_later<T: Send + 'static + std::fmt::Debug>(value: T) {
+    thread::spawn(move || println!("в потоке: {value:?}")).join().unwrap();
+}
+
+fn main() {
+    run_later(String::from("своя строка"));  // ок: String ни на что не ссылается
+    run_later(vec![1, 2, 3]);                 // ок
+    run_later("литерал");                     // ок: &'static str
+    // let local = String::from("x");
+    // run_later(&local);                     // нельзя: ссылка на временное
+}
+```
+```out
+в потоке: "своя строка"
+в потоке: [1, 2, 3]
+в потоке: "литерал"
+```
+`thread::spawn` требует `'static`: поток может жить дольше `main`. Раскомментируй последние строки и посмотри ошибку.
+
+:: quiz
+Удовлетворяет ли `String` требованию `T: 'static`?
+[x] Да => Верно. Внутри нет временных ссылок, `String` владеет своими данными.
+[ ] Нет, `String` ведь не живёт вечно => `'static` в требовании не про вечность, а про отсутствие временных ссылок.
+[ ] Только если строка пустая => Содержимое не важно.
+
+:: text Компилятор просит 'static. Что делать?
+Частая ситуация: «borrowed value does not live long enough… argument requires that it is borrowed for `'static`».
+
+Обычно помогает одно из:
+- передать **владение** (`String` вместо `&str`, `move` в замыкании);
+- склонировать данные;
+- обернуть в `Arc` (модуль про потоки).
+
+Писать `'static` в своих метках, чтобы «заткнуть» компилятор, почти никогда не нужно.
+
+:: recap
+- `&'static T` — ссылка на то, что живёт всю программу (литералы).
+- `T: 'static` — в типе нет временных ссылок. `String`, `Vec`, числа подходят.
+- Просит `'static` — отдай владение или склонируй.
+
+## LESSON a05-3 | Правила пропуска меток | 7
+:: goals
+- Знать, когда метки можно не писать
+- Понимать, откуда берётся срок результата у методов
+
+:: text Три правила
+Компилятор дописывает метки сам по трём правилам:
+1. Каждая ссылка-аргумент получает **свою** метку.
+2. Если ссылка-аргумент **одна** — её метка достаётся результату.
+3. Если есть `&self` или `&mut self` — результат получает метку **`self`**.
+
+Если по правилам не вышло — пиши метки сам.
+
+:: code
+```rust
+// Правило 2: один аргумент-ссылка — результат живёт как он
+fn first(s: &str) -> &str {
+    &s[..1]
+}
+
+struct Doc {
+    title: String,
+}
+
+impl Doc {
+    // Правило 3: результат живёт как self
+    fn short(&self, n: usize) -> &str {
+        &self.title[..n]
+    }
+}
+
+fn main() {
+    println!("{}", first("Rust"));
+    let d = Doc { title: String::from("Manual") };
+    println!("{}", d.short(3));
+}
+```
+```out
+R
+Man
+```
+Ни одной метки, а всё работает: компилятор применил правила.
+
+:: text Когда правила не угадали
+Метод с `&self` возвращает кусок **другого** аргумента — правило 3 тут ошибётся:
+
+```rust
+impl Doc {
+    // без меток компилятор решит, что результат живёт как self
+    fn pick<'b>(&self, other: &'b str) -> &'b str {
+        other
+    }
+}
+```
+Тут метку пишут явно: результат связан с `other`, а не с `self`.
+
+:: quiz
+`fn f(a: &str, b: &str) -> &str` без меток. Скомпилируется?
+[ ] Да, по правилу 2 => Правило 2 — для **одной** ссылки, а тут их две.
+[x] Нет, компилятор не знает, с чем связан результат => Верно. Нужно `<'a>` явно.
+[ ] Да, по правилу 3 => Тут нет `self`.
+
+:: task
+Функция `prefix` возвращает часть `text` длиной, которую задаёт `pattern.len()`. Расставь метки так, чтобы результат зависел только от `text`.
+```rust
+fn prefix(text: &str, pattern: &str) -> &str {
+    &text[..pattern.len()]
+}
+
+fn main() {
+    let text = String::from("hello world");
+    let p;
+    {
+        let pattern = String::from("hey");
+        p = prefix(&text, &pattern);
+    }
+    println!("{p}");
+}
+```
+```solution
+fn prefix<'a>(text: &'a str, pattern: &str) -> &'a str {
+    &text[..pattern.len()]
+}
+
+fn main() {
+    let text = String::from("hello world");
+    let p;
+    {
+        let pattern = String::from("hey");
+        p = prefix(&text, &pattern);
+    }
+    println!("{p}");
+}
+```
+```expect
+hel
+```
+hint: Метка нужна только у `text` и у результата: `fn prefix<'a>(text: &'a str, pattern: &str) -> &'a str`.
+hint: Если связать результат и с `pattern`, `main` не скомпилируется: `pattern` умирает раньше `println!`.
+
+:: deep for<'a>: метка «для любой»
+Иногда нужно сказать: «замыкание, которое работает со ссылкой **любого** срока». Для этого есть запись `for<'a>`:
+
+```rust
+fn apply<F>(f: F) where F: for<'a> Fn(&'a str) -> &'a str { ... }
+```
+Читается: «для любого `'a` функция берёт `&'a str` и возвращает `&'a str`».
+
+Хорошая новость: обычно писать это не надо. `F: Fn(&str) -> &str` компилятор сам разворачивает в `for<'a>`. Но в сообщениях об ошибках эта запись иногда встречается, так что полезно её узнавать. Называется **higher-ranked trait bounds** (HRTB).
+
+:: recap
+- Одна ссылка на входе — результат живёт как она.
+- Есть `&self` — результат живёт как `self`.
+- Иначе — пиши метки сам и связывай результат только с тем, откуда он взят.
+
+## LESSON a05-4 | Разбор строки без копий | 8
+:: goals
+- Написать парсер, который возвращает куски исходной строки
+- Понять, почему это быстро
+
+:: text Зачем возвращать &str, а не String
+Разбираешь большой текст на слова. Можно сделать каждое слово новой `String` — это **копирование**. А можно вернуть `&str` — **окошко** в исходный текст. Копий ноль.
+
+Метки времени жизни как раз и позволяют делать такое безопасно: Rust проследит, чтобы окошки не пережили текст.
+
+> **Аналогия:** закладки в книге вместо ксерокопий страниц. Закладки ничего не весят, но без книги бесполезны.
+
+:: code
+```rust
+struct Tokens<'a> {
+    rest: &'a str,
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let s = self.rest.trim_start();
+        if s.is_empty() {
+            return None;
+        }
+        let end = s.find(' ').unwrap_or(s.len());
+        let (word, rest) = s.split_at(end);
+        self.rest = rest;
+        Some(word)
+    }
+}
+
+fn main() {
+    let line = String::from("  let x  = 42 ;");
+    let words: Vec<&str> = Tokens { rest: &line }.collect();
+    println!("{words:?}");
+}
+```
+```out
+["let", "x", "=", "42", ";"]
+```
+Ни одной новой строки: каждое слово — кусочек `line`.
+
+:: text Где здесь метки
+- `Tokens<'a>` хранит `&'a str` — окошко в текст.
+- `type Item = &'a str` — выдаёт куски **того же** текста, а не самого итератора.
+- Поэтому `words` может жить дольше итератора — но не дольше `line`.
+
+:: quiz
+Почему в `Tokens` написано `type Item = &'a str`, а не просто `&str`?
+[x] Нужно сказать, что слова — куски исходного текста со сроком `'a` => Верно. В ассоциированном типе метку не пропустишь.
+[ ] Так быстрее работает => Метки не влияют на скорость.
+[ ] Без метки слова копировались бы => Копирований нет в обоих случаях — просто без метки не скомпилируется.
+
+:: task
+Допиши метод `key_value`, который разбирает `"ключ=значение"` и возвращает пару кусков **исходной** строки.
+```rust
+struct Line<'a> {
+    text: &'a str,
+}
+
+impl<'a> Line<'a> {
+    fn key_value(&self) -> Option<(&'a str, &'a str)> {
+        // твой код
+    }
+}
+
+fn main() {
+    let raw = String::from("name=Rust");
+    let pair = Line { text: &raw }.key_value();
+    println!("{pair:?}");
+    println!("{:?}", Line { text: "без знака" }.key_value());
+}
+```
+```solution
+struct Line<'a> {
+    text: &'a str,
+}
+
+impl<'a> Line<'a> {
+    fn key_value(&self) -> Option<(&'a str, &'a str)> {
+        let (k, v) = self.text.split_once('=')?;
+        Some((k.trim(), v.trim()))
+    }
+}
+
+fn main() {
+    let raw = String::from("name=Rust");
+    let pair = Line { text: &raw }.key_value();
+    println!("{pair:?}");
+    println!("{:?}", Line { text: "без знака" }.key_value());
+}
+```
+```expect
+Some(("name", "Rust"))
+None
+```
+hint: `split_once('=')` возвращает `Option<(&str, &str)>`. Знак `?` работает и с `Option`.
+
+:: recap
+- Возвращай `&'a str`, чтобы не копировать текст.
+- Метка в `type Item = &'a str` связывает результат с текстом, а не с итератором.
+- Rust не даст окошкам пережить сам текст.
+
+## LESSON a05-p | Практика: времена жизни | 12 | practice
+:: goals
+- Расставить метки в нескольких типичных местах
+
+:: task
+Структура `Longest` запоминает самое длинное слово из уже увиденных. Расставь метки, чтобы код скомпилировался.
+```rust
+struct Longest {
+    best: &str,
+}
+
+impl Longest {
+    fn see(&mut self, w: &str) {
+        if w.len() > self.best.len() {
+            self.best = w;
+        }
+    }
+}
+
+fn main() {
+    let text = String::from("кот гиппопотам ёж");
+    let mut l = Longest { best: "" };
+    for w in text.split(' ') {
+        l.see(w);
+    }
+    println!("{}", l.best);
+}
+```
+```solution
+struct Longest<'a> {
+    best: &'a str,
+}
+
+impl<'a> Longest<'a> {
+    fn see(&mut self, w: &'a str) {
+        if w.len() > self.best.len() {
+            self.best = w;
+        }
+    }
+}
+
+fn main() {
+    let text = String::from("кот гиппопотам ёж");
+    let mut l = Longest { best: "" };
+    for w in text.split(' ') {
+        l.see(w);
+    }
+    println!("{}", l.best);
+}
+```
+```expect
+гиппопотам
+```
+hint: Структура: `struct Longest<'a> { best: &'a str }`, и `impl<'a> Longest<'a>`.
+hint: `w` будет сохранено в `best`, значит у него тот же срок: `w: &'a str`.
+
+:: task
+Функция `split_name` делит `"Имя Фамилия"` на две части без копирования. Напиши её сигнатуру и тело.
+```rust
+// твой код
+
+fn main() {
+    let full = String::from("Ада Лавлейс");
+    let (first, last) = split_name(&full);
+    println!("{last}, {first}");
+}
+```
+```solution
+fn split_name(full: &str) -> (&str, &str) {
+    full.split_once(' ').unwrap_or((full, ""))
+}
+
+fn main() {
+    let full = String::from("Ада Лавлейс");
+    let (first, last) = split_name(&full);
+    println!("{last}, {first}");
+}
+```
+```expect
+Лавлейс, Ада
+```
+hint: Аргумент-ссылка один, поэтому метки можно не писать: `fn split_name(full: &str) -> (&str, &str)`.
+hint: `split_once(' ')` вернёт `Option`. Если пробела нет — `unwrap_or((full, ""))`.
+
+:: task
+Функция `pick` берёт два текста и флаг. Если флаг `true` — возвращает первый, иначе второй. Расставь метки.
+```rust
+fn pick(a: &str, b: &str, first: bool) -> &str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let x = String::from("левый");
+    let y = String::from("правый");
+    println!("{}", pick(&x, &y, false));
+}
+```
+```solution
+fn pick<'a>(a: &'a str, b: &'a str, first: bool) -> &'a str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let x = String::from("левый");
+    let y = String::from("правый");
+    println!("{}", pick(&x, &y, false));
+}
+```
+```expect
+правый
+```
+hint: Результат может быть любым из двух, поэтому оба получают одну метку `'a`.
+
+:: recap
+- Структура, которая хранит ссылку, — с меткой.
+- Сохраняешь аргумент в поле — у аргумента та же метка.
+- Результат «одно из двух» — одна общая метка.

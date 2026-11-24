@@ -1,0 +1,494 @@
+# MODULE a05 | Lifetimes, deeper | Labels in impl, 'static, several labels, parsing strings without copies
+
+## LESSON a05-1 | Labels in structs and impl | 7
+:: goals
+- Recall why the `'a` label exists
+- Write `impl<'a>` for a struct holding a reference
+
+:: text A short reminder
+A lifetime label `'a` **changes nothing** in the program. It only **describes** a link: "this reference lives no longer than that one".
+
+```rust
+fn longer<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() > b.len() { a } else { b }
+}
+```
+It reads: "the result lives while both arguments are alive".
+
+If you forgot the basics, see the Level 1 lesson "Lifetimes".
+
+> **Analogy:** a building pass that says "valid as long as your escort's pass is valid". The pass extends nothing; it just states the term honestly.
+
+:: text A struct with a reference
+If a struct holds a reference, it needs a label:
+
+```rust
+struct Highlight<'a> {
+    text: &'a str,
+}
+```
+"`Highlight` can't outlive the string it looks at".
+
+The `impl` gets a label too — you declare it the same way you declare `<T>`:
+
+```rust
+impl<'a> Highlight<'a> {
+    fn get(&self) -> &'a str { self.text }
+}
+```
+
+:: code
+```rust
+struct Highlight<'a> {
+    text: &'a str,
+}
+
+impl<'a> Highlight<'a> {
+    fn new(text: &'a str) -> Self {
+        Highlight { text }
+    }
+    fn first_word(&self) -> &'a str {
+        self.text.split_whitespace().next().unwrap_or("")
+    }
+}
+
+fn main() {
+    let book = String::from("Once upon a midnight dreary");
+    let h = Highlight::new(&book);
+    println!("{}", h.first_word());
+}
+```
+```out
+Once
+```
+`first_word` returns `&'a str` — a piece of the **original** book, not of the struct. It can outlive `h`, but not `book`.
+
+:: quiz
+What does `struct View<'a> { s: &'a str }` mean?
+[ ] `View` lives exactly as long as the string => Not exactly: it may live shorter, never longer.
+[x] `View` can't outlive the string it refers to => Right.
+[ ] The string is copied into `View` => No, only a reference is inside.
+
+:: fill
+Fill in the blanks in the `impl` declaration.
+```rust
+struct Parser<'a> {
+    input: &'a str,
+}
+
+impl<___> Parser<___> {
+    fn rest(&self) -> &'a str {
+        self.input
+    }
+}
+```
+= 'a
+= 'a
+explain: First the label is declared: `impl<'a>`, then used: `Parser<'a>`.
+
+:: recap
+- `'a` describes a link between terms, it doesn't change them.
+- A struct with a reference — `struct S<'a>`.
+- `impl<'a> S<'a>` — declare and use the label.
+
+## LESSON a05-2 | 'static: two different meanings | 7
+:: goals
+- Tell `&'static T` from `T: 'static`
+- Not be scared of `'static` in compiler errors
+
+:: text Meaning one: a reference to something eternal
+`&'static str` is a reference that is valid **for the whole program**. String literals, for example: they are baked right into the program.
+
+```rust
+let s: &'static str = "hello"; // the text lives in the program itself
+```
+
+:: text Meaning two: a type without temporary references
+`T: 'static` in a requirement does **not** mean "lives forever". It means: "there are no references to anything temporary inside `T`". Such a type can be kept as long as you like.
+
+- `String`, `i32`, `Vec<u8>` — fit: no references.
+- `&'static str` — fits.
+- `&'a str` with a short `'a` — doesn't fit.
+
+> **Analogy:** "can be taken on a long hike". What fits is what isn't tied to anything: your own backpack, yes; something borrowed for the afternoon, no.
+
+:: code
+```rust
+use std::thread;
+
+fn run_later<T: Send + 'static + std::fmt::Debug>(value: T) {
+    thread::spawn(move || println!("in the thread: {value:?}")).join().unwrap();
+}
+
+fn main() {
+    run_later(String::from("my own string")); // ok: String refers to nothing
+    run_later(vec![1, 2, 3]);                  // ok
+    run_later("a literal");                    // ok: &'static str
+    // let local = String::from("x");
+    // run_later(&local);                      // no: a reference to something temporary
+}
+```
+```out
+in the thread: "my own string"
+in the thread: [1, 2, 3]
+in the thread: "a literal"
+```
+`thread::spawn` requires `'static`: the thread may live longer than `main`. Uncomment the last lines and see the error.
+
+:: quiz
+Does `String` satisfy `T: 'static`?
+[x] Yes => Right. There are no temporary references inside; `String` owns its data.
+[ ] No, a `String` doesn't live forever => `'static` in a requirement isn't about forever, it's about having no temporary references.
+[ ] Only if the string is empty => The contents don't matter.
+
+:: text The compiler asks for 'static. What now?
+A common situation: "borrowed value does not live long enough… argument requires that it is borrowed for `'static`".
+
+Usually one of these helps:
+- pass **ownership** (`String` instead of `&str`, `move` in a closure);
+- clone the data;
+- wrap it in an `Arc` (see the threads module).
+
+You almost never need to write `'static` in your own labels just to "silence" the compiler.
+
+:: recap
+- `&'static T` — a reference to something that lives the whole program (literals).
+- `T: 'static` — the type has no temporary references. `String`, `Vec`, numbers fit.
+- Asked for `'static`? Give ownership or clone.
+
+## LESSON a05-3 | Label elision rules | 7
+:: goals
+- Know when labels can be left out
+- Understand where a method's result gets its term
+
+:: text Three rules
+The compiler fills in labels by itself using three rules:
+1. Each reference argument gets **its own** label.
+2. If there is **one** reference argument, its label goes to the result.
+3. If there is `&self` or `&mut self`, the result gets **`self`'s** label.
+
+If the rules don't settle it, write the labels yourself.
+
+:: code
+```rust
+// Rule 2: one reference argument — the result lives like it
+fn first(s: &str) -> &str {
+    &s[..1]
+}
+
+struct Doc {
+    title: String,
+}
+
+impl Doc {
+    // Rule 3: the result lives like self
+    fn short(&self, n: usize) -> &str {
+        &self.title[..n]
+    }
+}
+
+fn main() {
+    println!("{}", first("Rust"));
+    let d = Doc { title: String::from("Manual") };
+    println!("{}", d.short(3));
+}
+```
+```out
+R
+Man
+```
+Not a single label, and it all works: the compiler applied the rules.
+
+:: text When the rules guess wrong
+A method with `&self` returns a piece of **another** argument — rule 3 gets it wrong:
+
+```rust
+impl Doc {
+    // without labels the compiler would decide the result lives like self
+    fn pick<'b>(&self, other: &'b str) -> &'b str {
+        other
+    }
+}
+```
+Here you write the label explicitly: the result is tied to `other`, not to `self`.
+
+:: quiz
+`fn f(a: &str, b: &str) -> &str` without labels. Will it compile?
+[ ] Yes, by rule 2 => Rule 2 is for **one** reference, and there are two here.
+[x] No, the compiler doesn't know what the result is tied to => Right. You need `<'a>` explicitly.
+[ ] Yes, by rule 3 => There's no `self` here.
+
+:: task
+The function `prefix` returns the part of `text` whose length is `pattern.len()`. Add labels so the result depends only on `text`.
+```rust
+fn prefix(text: &str, pattern: &str) -> &str {
+    &text[..pattern.len()]
+}
+
+fn main() {
+    let text = String::from("hello world");
+    let p;
+    {
+        let pattern = String::from("hey");
+        p = prefix(&text, &pattern);
+    }
+    println!("{p}");
+}
+```
+```solution
+fn prefix<'a>(text: &'a str, pattern: &str) -> &'a str {
+    &text[..pattern.len()]
+}
+
+fn main() {
+    let text = String::from("hello world");
+    let p;
+    {
+        let pattern = String::from("hey");
+        p = prefix(&text, &pattern);
+    }
+    println!("{p}");
+}
+```
+```expect
+hel
+```
+hint: Only `text` and the result need the label: `fn prefix<'a>(text: &'a str, pattern: &str) -> &'a str`.
+hint: If you also tie the result to `pattern`, `main` won't compile: `pattern` dies before `println!`.
+
+:: deep for<'a>: a label "for any"
+Sometimes you need to say: "a closure that works with a reference of **any** term". There's a notation for that, `for<'a>`:
+
+```rust
+fn apply<F>(f: F) where F: for<'a> Fn(&'a str) -> &'a str { ... }
+```
+It reads: "for any `'a`, the function takes `&'a str` and returns `&'a str`".
+
+Good news: you usually don't need to write it. The compiler expands `F: Fn(&str) -> &str` into `for<'a>` by itself. But this notation sometimes shows up in error messages, so it's good to recognize it. It's called **higher-ranked trait bounds** (HRTB).
+
+:: recap
+- One reference in — the result lives like it.
+- There's `&self` — the result lives like `self`.
+- Otherwise write the labels yourself and tie the result only to where it comes from.
+
+## LESSON a05-4 | Parsing a string without copies | 8
+:: goals
+- Write a parser that returns pieces of the original string
+- See why it's fast
+
+:: text Why return &str and not String
+You're splitting a big text into words. You could make each word a new `String` — that's **copying**. Or you could return a `&str` — a **window** into the original text. Zero copies.
+
+Lifetime labels are exactly what makes this safe: Rust makes sure the windows don't outlive the text.
+
+> **Analogy:** bookmarks in a book instead of photocopies of pages. Bookmarks weigh nothing, but they're useless without the book.
+
+:: code
+```rust
+struct Tokens<'a> {
+    rest: &'a str,
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let s = self.rest.trim_start();
+        if s.is_empty() {
+            return None;
+        }
+        let end = s.find(' ').unwrap_or(s.len());
+        let (word, rest) = s.split_at(end);
+        self.rest = rest;
+        Some(word)
+    }
+}
+
+fn main() {
+    let line = String::from("  let x  = 42 ;");
+    let words: Vec<&str> = Tokens { rest: &line }.collect();
+    println!("{words:?}");
+}
+```
+```out
+["let", "x", "=", "42", ";"]
+```
+Not a single new string: each word is a slice of `line`.
+
+:: text Where the labels are
+- `Tokens<'a>` holds `&'a str` — a window into the text.
+- `type Item = &'a str` — yields pieces of **the same** text, not of the iterator.
+- So `words` can live longer than the iterator — but not longer than `line`.
+
+:: quiz
+Why does `Tokens` say `type Item = &'a str` and not just `&str`?
+[x] It must say the words are pieces of the original text with term `'a` => Right. You can't leave a label out in an associated type.
+[ ] It runs faster that way => Labels don't affect speed.
+[ ] Without the label the words would be copied => There are no copies either way — it just won't compile without the label.
+
+:: task
+Finish the `key_value` method, which parses `"key=value"` and returns a pair of pieces of the **original** string.
+```rust
+struct Line<'a> {
+    text: &'a str,
+}
+
+impl<'a> Line<'a> {
+    fn key_value(&self) -> Option<(&'a str, &'a str)> {
+        // your code
+    }
+}
+
+fn main() {
+    let raw = String::from("name=Rust");
+    let pair = Line { text: &raw }.key_value();
+    println!("{pair:?}");
+    println!("{:?}", Line { text: "no sign" }.key_value());
+}
+```
+```solution
+struct Line<'a> {
+    text: &'a str,
+}
+
+impl<'a> Line<'a> {
+    fn key_value(&self) -> Option<(&'a str, &'a str)> {
+        let (k, v) = self.text.split_once('=')?;
+        Some((k.trim(), v.trim()))
+    }
+}
+
+fn main() {
+    let raw = String::from("name=Rust");
+    let pair = Line { text: &raw }.key_value();
+    println!("{pair:?}");
+    println!("{:?}", Line { text: "no sign" }.key_value());
+}
+```
+```expect
+Some(("name", "Rust"))
+None
+```
+hint: `split_once('=')` returns `Option<(&str, &str)>`. The `?` sign works with `Option` too.
+
+:: recap
+- Return `&'a str` to avoid copying text.
+- The label in `type Item = &'a str` ties the result to the text, not the iterator.
+- Rust won't let the windows outlive the text.
+
+## LESSON a05-p | Practice: lifetimes | 12 | practice
+:: goals
+- Place labels in a few typical spots
+
+:: task
+The `Longest` struct remembers the longest word seen so far. Add labels so the code compiles.
+```rust
+struct Longest {
+    best: &str,
+}
+
+impl Longest {
+    fn see(&mut self, w: &str) {
+        if w.len() > self.best.len() {
+            self.best = w;
+        }
+    }
+}
+
+fn main() {
+    let text = String::from("cat hippopotamus hedgehog");
+    let mut l = Longest { best: "" };
+    for w in text.split(' ') {
+        l.see(w);
+    }
+    println!("{}", l.best);
+}
+```
+```solution
+struct Longest<'a> {
+    best: &'a str,
+}
+
+impl<'a> Longest<'a> {
+    fn see(&mut self, w: &'a str) {
+        if w.len() > self.best.len() {
+            self.best = w;
+        }
+    }
+}
+
+fn main() {
+    let text = String::from("cat hippopotamus hedgehog");
+    let mut l = Longest { best: "" };
+    for w in text.split(' ') {
+        l.see(w);
+    }
+    println!("{}", l.best);
+}
+```
+```expect
+hippopotamus
+```
+hint: The struct: `struct Longest<'a> { best: &'a str }`, and `impl<'a> Longest<'a>`.
+hint: `w` gets stored in `best`, so it has the same term: `w: &'a str`.
+
+:: task
+The function `split_name` splits `"First Last"` into two parts without copying. Write its signature and body.
+```rust
+// your code
+
+fn main() {
+    let full = String::from("Ada Lovelace");
+    let (first, last) = split_name(&full);
+    println!("{last}, {first}");
+}
+```
+```solution
+fn split_name(full: &str) -> (&str, &str) {
+    full.split_once(' ').unwrap_or((full, ""))
+}
+
+fn main() {
+    let full = String::from("Ada Lovelace");
+    let (first, last) = split_name(&full);
+    println!("{last}, {first}");
+}
+```
+```expect
+Lovelace, Ada
+```
+hint: There's one reference argument, so you can skip the labels: `fn split_name(full: &str) -> (&str, &str)`.
+hint: `split_once(' ')` returns an `Option`. If there's no space — `unwrap_or((full, ""))`.
+
+:: task
+The function `pick` takes two texts and a flag. If the flag is `true`, it returns the first, otherwise the second. Add labels.
+```rust
+fn pick(a: &str, b: &str, first: bool) -> &str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let x = String::from("left");
+    let y = String::from("right");
+    println!("{}", pick(&x, &y, false));
+}
+```
+```solution
+fn pick<'a>(a: &'a str, b: &'a str, first: bool) -> &'a str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let x = String::from("left");
+    let y = String::from("right");
+    println!("{}", pick(&x, &y, false));
+}
+```
+```expect
+right
+```
+hint: The result may be either of the two, so both get the same label `'a`.
+
+:: recap
+- A struct that holds a reference gets a label.
+- If you store an argument in a field, the argument gets the same label.
+- A result that is "one of two" — one shared label.
