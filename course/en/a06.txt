@@ -1,0 +1,631 @@
+# MODULE a06 | Memory without surprises | Drop, mem::take, Cow and Weak
+
+## LESSON a06-1 | Drop: what happens at the end | 7
+:: goals
+- Learn the order in which values are dropped
+- Write your own `Drop`
+
+:: text Scheduled cleanup
+When an owner goes out of scope, Rust **drops** the value. Before that it calls the `drop` method of the `Drop` trait, if there is one.
+
+That's how a `String` frees its memory, a file gets closed and a lock gets released. You don't call `drop` yourself — Rust does.
+
+> **Analogy:** checking out of a hotel. You just leave, and housekeeping cleans the room. Your own `Drop` is a note for housekeeping: "please water the plant".
+
+:: code
+```rust
+struct Noisy(&'static str);
+
+impl Drop for Noisy {
+    fn drop(&mut self) {
+        println!("cleaning up {}", self.0);
+    }
+}
+
+fn main() {
+    let _a = Noisy("a");
+    let _b = Noisy("b");
+    {
+        let _c = Noisy("c");
+        println!("end of block");
+    }
+    println!("end of main");
+}
+```
+```out
+end of block
+cleaning up c
+end of main
+cleaning up b
+cleaning up a
+```
+Variables are dropped in **reverse** order: the last one created goes first. Like plates in a stack.
+
+:: text Drop it early: drop(x)
+Sometimes a value must go **before** the end of the block: close a file, release a lock. That's what the `drop(x)` function is for:
+
+```rust
+let lock = data.lock().unwrap();
+// work with the data
+drop(lock); // released the lock now, not at the end of the function
+```
+`drop(x)` simply takes `x` and ends right away. Rust won't let you call `x.drop()` directly — so the same thing can't be cleaned up twice.
+
+:: quiz
+`let a = ...; let b = ...;` — in what order does Rust drop them at the end of the block?
+[ ] First `a`, then `b` => The other way round.
+[x] First `b`, then `a` => Right. Reverse order of creation.
+[ ] At the same time => The order is always strict.
+
+:: quiz
+How do you drop a value `x` before the end of the block?
+[ ] `x.drop()` => Rust doesn't allow that.
+[x] `drop(x)` => Right.
+[ ] `x = null` => Rust has no `null`.
+
+:: deep Field order and why _ is dangerous
+Struct fields are dropped in **declaration** order — top to bottom. This rarely matters, but sometimes one field must die before another (say, a thread before a channel). Then you reorder the fields.
+
+Another trap: `let _ = value;` drops the value **immediately**, because `_` isn't a variable, it means "throw away". But `let _guard = value;` keeps it until the end of the block. With locks the difference is huge:
+
+```rust
+let _ = mutex.lock(); // the lock is released right away!
+let _g = mutex.lock(); // the lock is held until the end of the block
+```
+
+:: task
+Write `Drop` for `Guard` so it prints `leaving: <name>`. Check the order.
+```rust
+struct Guard {
+    name: String,
+}
+
+// your code
+
+fn main() {
+    let _outer = Guard { name: String::from("outer") };
+    let inner = Guard { name: String::from("inner") };
+    drop(inner);
+    println!("working");
+}
+```
+```solution
+struct Guard {
+    name: String,
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        println!("leaving: {}", self.name);
+    }
+}
+
+fn main() {
+    let _outer = Guard { name: String::from("outer") };
+    let inner = Guard { name: String::from("inner") };
+    drop(inner);
+    println!("working");
+}
+```
+```expect
+leaving: inner
+working
+leaving: outer
+```
+hint: `impl Drop for Guard { fn drop(&mut self) { println!("leaving: {}", self.name); } }`.
+
+:: recap
+- `Drop::drop` is called by itself when a value is dropped.
+- Variables are dropped in reverse order.
+- `drop(x)` — clean up early.
+
+## LESSON a06-2 | mem::take and mem::replace | 7
+:: goals
+- Get a value out of a `&mut` without cloning
+- Know `take`, `replace` and `swap`
+
+:: text Problem: taking from behind a reference
+You have `&mut self` and need to **take** the field `self.items` (say, to hand it out). Plain `let v = self.items;` isn't allowed: you can't leave the struct with a "hole".
+
+The fix is to swap the value for another one:
+- `std::mem::take(&mut x)` — take `x` and put an empty (default) value in its place.
+- `std::mem::replace(&mut x, new)` — take `x` and put `new` in its place.
+- `std::mem::swap(&mut a, &mut b)` — swap two values.
+
+> **Analogy:** swapping the vase on a table. You take the old one and put the new one down at once — the table is never empty.
+
+:: code
+```rust
+use std::mem;
+
+struct Inbox {
+    messages: Vec<String>,
+}
+
+impl Inbox {
+    fn drain_all(&mut self) -> Vec<String> {
+        mem::take(&mut self.messages) // taken, an empty Vec in its place
+    }
+}
+
+fn main() {
+    let mut inbox = Inbox { messages: vec![String::from("hi"), String::from("how are you")] };
+    let got = inbox.drain_all();
+    println!("took {}: {:?}", got.len(), got);
+    println!("in the inbox: {}", inbox.messages.len());
+
+    let mut mode = String::from("day");
+    let old = mem::replace(&mut mode, String::from("night"));
+    println!("{old} -> {mode}");
+}
+```
+```out
+took 2: ["hi", "how are you"]
+in the inbox: 0
+day -> night
+```
+No `clone()` at all: the strings simply moved.
+
+:: text take and Option
+`Option` has a handy `take()` method: it takes the value and leaves `None`.
+
+```rust
+let mut slot: Option<String> = Some(String::from("key"));
+let k = slot.take(); // k = Some("key"), slot = None
+```
+"One-time" things are often built this way: take it, and it's gone.
+
+:: quiz
+What's left in `v` after `let x = std::mem::take(&mut v);`, if `v: Vec<i32>`?
+[x] An empty vector => Right. `take` puts the default value there.
+[ ] Nothing, `v` was dropped => `v` is alive, just empty.
+[ ] A copy of the old vector => There are no copies, everything moved into `x`.
+
+:: task
+The `finish` method must return the collected text and clear the buffer. Use `mem::take`.
+```rust
+use std::mem;
+
+struct Writer {
+    buf: String,
+}
+
+impl Writer {
+    fn write(&mut self, s: &str) {
+        self.buf.push_str(s);
+    }
+    fn finish(&mut self) -> String {
+        // your code
+    }
+}
+
+fn main() {
+    let mut w = Writer { buf: String::new() };
+    w.write("One, ");
+    w.write("two");
+    let text = w.finish();
+    println!("{text}");
+    println!("empty: {}", w.buf.is_empty());
+}
+```
+```solution
+use std::mem;
+
+struct Writer {
+    buf: String,
+}
+
+impl Writer {
+    fn write(&mut self, s: &str) {
+        self.buf.push_str(s);
+    }
+    fn finish(&mut self) -> String {
+        mem::take(&mut self.buf)
+    }
+}
+
+fn main() {
+    let mut w = Writer { buf: String::new() };
+    w.write("One, ");
+    w.write("two");
+    let text = w.finish();
+    println!("{text}");
+    println!("empty: {}", w.buf.is_empty());
+}
+```
+```expect
+One, two
+empty: true
+```
+hint: One line: `mem::take(&mut self.buf)`.
+
+:: recap
+- `mem::take` — take it and leave an empty one.
+- `mem::replace` — take it and leave your own.
+- `Option::take()` — take it and leave `None`.
+
+## LESSON a06-3 | Cow: copy only when needed | 7
+:: goals
+- Understand what `Cow` is
+- Return either a reference or a new string from the same function
+
+:: text Sometimes change, sometimes not
+A function cleans up text: it removes extra whitespace. Often the text is **already** clean — no reason to copy it. But sometimes it must change — and then you need a new `String`.
+
+`Cow` (clone on write) is an `enum` with two variants:
+- `Cow::Borrowed(&str)` — just a reference, nothing copied;
+- `Cow::Owned(String)` — we had to make our own copy.
+
+> **Analogy:** borrowing a book from a friend. If you only read it, you give it back as is. Want to underline things? Buy your own.
+
+:: code
+```rust
+use std::borrow::Cow;
+
+fn no_tabs(s: &str) -> Cow<'_, str> {
+    if s.contains('\t') {
+        Cow::Owned(s.replace('\t', "    "))
+    } else {
+        Cow::Borrowed(s)
+    }
+}
+
+fn main() {
+    for line in ["clean line", "a\tb"] {
+        let r = no_tabs(line);
+        let kind = match r {
+            Cow::Borrowed(_) => "no copy",
+            Cow::Owned(_) => "copy",
+        };
+        println!("{kind}: {r}");
+    }
+}
+```
+```out
+no copy: clean line
+copy: a    b
+```
+A `Cow` prints and works like a normal string. The only difference is whether a copy was made.
+
+:: text Where Cow shows up
+- `String::from_utf8_lossy` returns a `Cow<str>`: if the bytes are valid, there's no copy.
+- In functions that "usually change nothing".
+- `.into_owned()` turns any `Cow` into an owned value when you definitely need to own it.
+
+:: quiz
+A function returned `Cow::Borrowed(s)`. Was anything copied?
+[ ] Yes, `Cow` always copies => It copies only on write.
+[x] No, it's just a reference to the original data => Right.
+[ ] Unknown => The `Borrowed` variant says it plainly: no copy.
+
+:: task
+The function `shout` returns the text as is if it's already all uppercase, otherwise a new uppercase string. Use `Cow`.
+```rust
+use std::borrow::Cow;
+
+fn shout(s: &str) -> Cow<'_, str> {
+    // your code
+}
+
+fn main() {
+    for s in ["HELLO", "Hi"] {
+        let r = shout(s);
+        println!("{} {}", r, matches!(r, Cow::Borrowed(_)));
+    }
+}
+```
+```solution
+use std::borrow::Cow;
+
+fn shout(s: &str) -> Cow<'_, str> {
+    if s.chars().all(|c| !c.is_lowercase()) {
+        Cow::Borrowed(s)
+    } else {
+        Cow::Owned(s.to_uppercase())
+    }
+}
+
+fn main() {
+    for s in ["HELLO", "Hi"] {
+        let r = shout(s);
+        println!("{} {}", r, matches!(r, Cow::Borrowed(_)));
+    }
+}
+```
+```expect
+HELLO true
+HI false
+```
+hint: The check is "no lowercase letters": `s.chars().all(|c| !c.is_lowercase())`.
+
+:: recap
+- `Cow` = either a reference (`Borrowed`) or an owned value (`Owned`).
+- Handy when changes are rarely needed.
+- `.into_owned()` — get an owned value either way.
+
+## LESSON a06-4 | Weak: a reference that doesn't hold on | 8
+:: goals
+- See how `Rc` can leak memory
+- Break a cycle with `Weak`
+
+:: text A leak through a circle
+`Rc` drops a value when its owner count reaches zero. What if A holds B and B holds A? The counts never reach zero, so the memory is never freed. That's a **leak**.
+
+> **Analogy:** two people holding hands, each waiting for the other to let go first. They stand there forever.
+
+:: text Weak — look without holding
+`Weak` is a weak reference. It knows where the value is but **doesn't extend** its life.
+- `Rc::downgrade(&rc)` — make a `Weak` from an `Rc`.
+- `weak.upgrade()` — try to get an `Rc` back. Returns an `Option`: `None` if the value is already gone.
+
+The rule: **a parent holds its children with `Rc`, a child looks at its parent with `Weak`**.
+
+:: code
+```rust
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+struct Node {
+    name: String,
+    parent: RefCell<Weak<Node>>,
+    children: RefCell<Vec<Rc<Node>>>,
+}
+
+fn main() {
+    let root = Rc::new(Node {
+        name: String::from("root"),
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![]),
+    });
+    let leaf = Rc::new(Node {
+        name: String::from("leaf"),
+        parent: RefCell::new(Weak::new()),
+        children: RefCell::new(vec![]),
+    });
+    *leaf.parent.borrow_mut() = Rc::downgrade(&root);
+    root.children.borrow_mut().push(Rc::clone(&leaf));
+
+    let p = leaf.parent.borrow().upgrade();
+    println!("leaf's parent: {}", p.map(|n| n.name.clone()).unwrap_or_default());
+    println!("root's children: {}", root.children.borrow().len());
+    println!("root strong: {}, weak: {}", Rc::strong_count(&root), Rc::weak_count(&root));
+}
+```
+```out
+leaf's parent: root
+root's children: 1
+root strong: 1, weak: 1
+```
+The root has one strong owner (`root`) and one weak reference (from the leaf). When `root` goes away, the root node is dropped — no cycle.
+
+:: code
+`upgrade` returns `None` if the value is already gone:
+```rust
+use std::rc::Rc;
+
+fn main() {
+    let strong = Rc::new(5);
+    let weak = Rc::downgrade(&strong);
+    println!("{:?}", weak.upgrade());
+    drop(strong);
+    println!("{:?}", weak.upgrade());
+}
+```
+```out
+Some(5)
+None
+```
+
+:: quiz
+In a tree, a child keeps a reference to its parent. Which kind?
+[ ] `Rc<Node>` => That makes a cycle: the parent holds the child, the child holds the parent.
+[x] `Weak<Node>` => Right. The child looks but doesn't hold.
+[ ] `Box<Node>` => `Box` is the only owner, and the parent already has an owner.
+
+:: fill
+Fill in the blanks: get a `Weak` from an `Rc`, then try to get the `Rc` back.
+```rust
+let strong = Rc::new(String::from("data"));
+let weak = Rc::___(&strong);
+if let Some(s) = weak.___() {
+    println!("{s}");
+}
+```
+= downgrade
+= upgrade
+explain: `downgrade` makes a weak reference, `upgrade` tries to get a strong one again.
+
+:: recap
+- A circle of `Rc`s is a leak: the counts never reach zero.
+- `Weak` looks but doesn't hold. `upgrade()` → `Option<Rc>`.
+- Parent → child: `Rc`. Child → parent: `Weak`.
+
+## LESSON a06-p | Practice: memory | 12 | practice
+:: goals
+- Use `Drop`, `mem::replace`, `Cow` and `Weak`
+
+:: task
+A traffic light's state changes with the `next` method, which returns the **old** state. Use `mem::replace`.
+```rust
+use std::mem;
+
+#[derive(Debug)]
+enum Light {
+    Red,
+    Green,
+    Yellow,
+}
+
+struct Traffic {
+    light: Light,
+}
+
+impl Traffic {
+    fn next(&mut self) -> Light {
+        let new = match self.light {
+            Light::Red => Light::Green,
+            Light::Green => Light::Yellow,
+            Light::Yellow => Light::Red,
+        };
+        // your code
+    }
+}
+
+fn main() {
+    let mut t = Traffic { light: Light::Red };
+    println!("{:?}", t.next());
+    println!("{:?}", t.next());
+    println!("{:?}", t.light);
+}
+```
+```solution
+use std::mem;
+
+#[derive(Debug)]
+enum Light {
+    Red,
+    Green,
+    Yellow,
+}
+
+struct Traffic {
+    light: Light,
+}
+
+impl Traffic {
+    fn next(&mut self) -> Light {
+        let new = match self.light {
+            Light::Red => Light::Green,
+            Light::Green => Light::Yellow,
+            Light::Yellow => Light::Red,
+        };
+        mem::replace(&mut self.light, new)
+    }
+}
+
+fn main() {
+    let mut t = Traffic { light: Light::Red };
+    println!("{:?}", t.next());
+    println!("{:?}", t.next());
+    println!("{:?}", t.light);
+}
+```
+```expect
+Red
+Green
+Yellow
+```
+hint: `mem::replace(&mut self.light, new)` puts `new` in and returns the old one.
+
+:: task
+The `Tracker` counter prints how many times it was called when it's dropped. Write the `Drop`.
+```rust
+struct Tracker {
+    calls: u32,
+}
+
+impl Tracker {
+    fn hit(&mut self) {
+        self.calls += 1;
+    }
+}
+
+// your code
+
+fn main() {
+    let mut t = Tracker { calls: 0 };
+    t.hit();
+    t.hit();
+    t.hit();
+    println!("done");
+}
+```
+```solution
+struct Tracker {
+    calls: u32,
+}
+
+impl Tracker {
+    fn hit(&mut self) {
+        self.calls += 1;
+    }
+}
+
+impl Drop for Tracker {
+    fn drop(&mut self) {
+        println!("calls: {}", self.calls);
+    }
+}
+
+fn main() {
+    let mut t = Tracker { calls: 0 };
+    t.hit();
+    t.hit();
+    t.hit();
+    println!("done");
+}
+```
+```expect
+done
+calls: 3
+```
+hint: The message appears after `done`: `t` is dropped at the end of `main`.
+
+:: task
+The function `normalize` replaces `colour` with `color`. If there's no `colour`, no copy is made. Count how many strings had to be copied.
+```rust
+use std::borrow::Cow;
+
+fn normalize(s: &str) -> Cow<'_, str> {
+    // your code
+}
+
+fn main() {
+    let words = ["colour", "cat", "colourful", "dog"];
+    let mut copies = 0;
+    for w in words {
+        let n = normalize(w);
+        if let Cow::Owned(_) = n {
+            copies += 1;
+        }
+        print!("{n} ");
+    }
+    println!();
+    println!("copies: {copies}");
+}
+```
+```solution
+use std::borrow::Cow;
+
+fn normalize(s: &str) -> Cow<'_, str> {
+    if s.contains("colour") {
+        Cow::Owned(s.replace("colour", "color"))
+    } else {
+        Cow::Borrowed(s)
+    }
+}
+
+fn main() {
+    let words = ["colour", "cat", "colourful", "dog"];
+    let mut copies = 0;
+    for w in words {
+        let n = normalize(w);
+        if let Cow::Owned(_) = n {
+            copies += 1;
+        }
+        print!("{n} ");
+    }
+    println!();
+    println!("copies: {copies}");
+}
+```
+```expect
+color cat colorful dog
+copies: 2
+```
+hint: `s.contains("colour")` checks, `s.replace("colour", "color")` makes the new string.
+
+:: recap
+- `mem::replace` — switch the state and return the old one.
+- `Drop` — code "on the way out".
+- `Cow` — copy only what changes.
