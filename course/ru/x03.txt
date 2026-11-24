@@ -1,0 +1,560 @@
+# MODULE x03 | Подтипы, вариантность и борьба с проверкой заимствований | Почему &'static подходит вместо &'a, а &mut — нет, и приёмы на каждый день
+
+## LESSON x03-1 | Подтипы времён жизни | 8
+:: goals
+- Понять, что более долгая ссылка подходит вместо более короткой
+- Читать ограничения `'a: 'b` и `T: 'a`
+
+:: text Долгое подходит вместо короткого
+В Rust почти нет подтипов, кроме одного места — **времена жизни**. Если ссылка живёт дольше, её можно отдать туда, где ждут более короткую.
+
+```rust
+fn show<'a>(s: &'a str) { println!("{s}"); }
+let lit: &'static str = "вечная строка";
+show(lit); // &'static str подходит вместо &'a str
+```
+Говорят: `'static` — **подтип** любого `'a`. Пишут это как `'static: 'a` — «`'static` живёт не меньше `'a`».
+
+> **Аналогия:** пропуск на год подходит туда, где просят пропуск на день. Наоборот — нет.
+
+:: text Как читать 'a: 'b и T: 'a
+- `'a: 'b` — «`'a` живёт **не меньше** `'b`».
+- `T: 'a` — «внутри `T` нет ссылок, которые умрут раньше `'a`».
+
+```rust
+struct Holder<'a, T: 'a> {
+    item: &'a T,
+}
+```
+Сейчас компилятор часто выводит такие ограничения сам, но в сообщениях об ошибках они встречаются постоянно.
+
+:: code
+```rust
+fn pick_first<'long: 'short, 'short>(a: &'long str, _b: &'short str) -> &'short str {
+    a // 'long живёт дольше, поэтому подходит как 'short
+}
+
+fn main() {
+    let outer = String::from("снаружи");
+    let r;
+    {
+        let inner = String::from("внутри");
+        r = pick_first(&outer, &inner);
+        println!("{r}");
+    }
+}
+```
+```out
+снаружи
+```
+Результат помечен коротким сроком `'short`, поэтому его нельзя использовать после блока — хотя на самом деле это ссылка на `outer`. Метки честно говорят «не дольше короткого».
+
+:: quiz
+Что значит `'a: 'b`?
+[x] `'a` живёт не меньше `'b` => Верно.
+[ ] `'a` живёт меньше `'b` => Наоборот.
+[ ] `'a` и `'b` одинаковые => Не обязательно: `'a` может быть и дольше.
+
+:: task
+Функция `choose` возвращает один из двух `&str`, а в `main` её результат сохраняется в переменную, которая живёт дольше блока. Расставь метки так, чтобы код скомпилировался.
+```rust
+fn choose<'a>(a: &'a str, b: &'a str, first: bool) -> &'a str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let saved: &'static str;
+    {
+        let tmp = String::from("временная");
+        let _ = choose(&tmp, "x", true);
+        saved = choose("первая", "вторая", false);
+    }
+    println!("{saved}");
+}
+```
+```solution
+fn choose<'a>(a: &'a str, b: &'a str, first: bool) -> &'a str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let saved: &'static str;
+    {
+        let tmp = String::from("временная");
+        let _ = choose(&tmp, "x", true);
+        saved = choose("первая", "вторая", false);
+    }
+    println!("{saved}");
+}
+```
+```expect
+вторая
+```
+hint: Ловушка: код уже правильный! Во втором вызове оба аргумента `'static`, поэтому `'a = 'static` и результат тоже `'static`. Просто запусти.
+
+:: recap
+- Долгая ссылка подходит вместо короткой: `'static` подходит везде.
+- `'a: 'b` — `'a` живёт не меньше `'b`. `T: 'a` — в `T` нет более коротких ссылок.
+- Метка результата — это обещание «не дольше», а не реальный срок.
+
+## LESSON x03-2 | Вариантность | 9
+:: goals
+- Понять, где подтипы «проходят сквозь» тип, а где нет
+- Узнать, почему `&mut` строже, чем `&`
+
+:: text Три вида
+**Вариантность** отвечает на вопрос: если `'long` подходит вместо `'short`, подходит ли `Тип<'long>` вместо `Тип<'short>`?
+
+- **Ковариантность** — да. `&'a T`, `Box<T>`, `Vec<T>`, `Option<T>`. Почти всё.
+- **Инвариантность** — нет, только точное совпадение. `&mut T`, `Cell<T>`, `RefCell<T>`, `UnsafeCell<T>`.
+- **Контравариантность** — наоборот. Встречается только в аргументах функций: `fn(T)`.
+
+> **Аналогия:** коробку с годовым пропуском можно отдать тому, кто ждёт коробку с дневным — он только посмотрит. Но если коробку дают, чтобы **положить** в неё что-то своё, подмена опасна: он положит дневной пропуск туда, где ты ждёшь годовой.
+
+:: text Почему &mut инвариантен
+Если бы `&mut &'static str` подходил вместо `&mut &'short str`, можно было бы записать **короткую** ссылку туда, где все думают, что лежит **вечная**:
+
+```rust
+fn put<'a>(slot: &mut &'a str, s: &'a str) { *slot = s; }
+
+let mut forever: &'static str = "вечная";
+{
+    let tmp = String::from("временная");
+    put(&mut forever, &tmp); // ошибка! иначе forever указывал бы на мёртвую tmp
+}
+```
+Инвариантность `&mut` эту дыру закрывает.
+
+:: code
+Запусти и посмотри на ошибку — это и есть защита инвариантности:
+```rust
+fn put<'a>(slot: &mut &'a str, s: &'a str) {
+    *slot = s;
+}
+
+fn main() {
+    let mut forever: &'static str = "вечная";
+    {
+        let tmp = String::from("временная");
+        put(&mut forever, &tmp);
+    }
+    println!("{forever}");
+}
+```
+fails: yes
+Компилятор говорит: `tmp` does not live long enough. Через `&mut` нельзя «укоротить» срок, а значит нельзя протащить короткую ссылку в долгое место.
+
+:: quiz
+Какой тип инвариантен по `T`?
+[ ] `&'a T` => Ковариантен: только чтение.
+[ ] `Vec<T>` => Ковариантен.
+[x] `Cell<T>` => Верно. Через `Cell` можно записывать, поэтому подмена опасна.
+
+:: quiz
+Почему `Vec<&'static str>` можно передать туда, где ждут `Vec<&'a str>`, а `&mut Vec<&'static str>` туда, где ждут `&mut Vec<&'a str>`, — нельзя?
+[x] Через `&mut` функция могла бы положить в вектор короткую ссылку => Верно. Владеющий `Vec` отдают целиком — дыры нет.
+[ ] `Vec` нельзя изменять => Можно, но владение — у того, кому отдали.
+[ ] Это ошибка компилятора => Это сознательное правило безопасности.
+
+:: task
+Функция `add_word` кладёт ссылку на слово в список. Список и слова в `main` живут одинаково долго. Расставь метки так, чтобы код скомпилировался.
+```rust
+fn add_word(list: &mut Vec<&str>, w: &str) {
+    list.push(w);
+}
+
+fn main() {
+    let text = String::from("рыба кит краб");
+    let mut words = Vec::new();
+    for w in text.split(' ') {
+        add_word(&mut words, w);
+    }
+    println!("{words:?}");
+}
+```
+```solution
+fn add_word<'a>(list: &mut Vec<&'a str>, w: &'a str) {
+    list.push(w);
+}
+
+fn main() {
+    let text = String::from("рыба кит краб");
+    let mut words = Vec::new();
+    for w in text.split(' ') {
+        add_word(&mut words, w);
+    }
+    println!("{words:?}");
+}
+```
+```expect
+["рыба", "кит", "краб"]
+```
+hint: Слово кладётся **внутрь** списка, значит у него тот же срок, что и у элементов: `list: &mut Vec<&'a str>, w: &'a str`.
+hint: Ссылке на сам список (`&mut`) отдельная метка не нужна.
+
+:: recap
+- Ковариантно: `&T`, `Box<T>`, `Vec<T>` — долгое подходит вместо короткого.
+- Инвариантно: `&mut T`, `Cell<T>` — только точное совпадение.
+- Инвариантность защищает от записи короткой ссылки в долгое место.
+
+## LESSON x03-3 | PhantomData и вариантность | 7
+:: goals
+- Выбирать правильный вид `PhantomData`
+- Знать, как он влияет на `Send`, `Sync` и удаление
+
+:: text PhantomData решает три вещи
+Когда в структуре есть сырой указатель или параметр, который не хранится, `PhantomData` говорит компилятору, **как** к нему относиться:
+
+- `PhantomData<T>` — «я как бы владею `T`»: ковариантно, `Send/Sync` как у `T`, при удалении `T` может удаляться.
+- `PhantomData<&'a T>` — «я одалживаю `T` на `'a`».
+- `PhantomData<fn() -> T>` — «я только произвожу `T`»: ковариантно, но не влияет на `Send/Sync` и удаление.
+- `PhantomData<*const T>` — «как сырой указатель»: убирает `Send` и `Sync`.
+
+:: code
+```rust
+use std::marker::PhantomData;
+
+struct OwnsT<T>(PhantomData<T>);
+struct NotThreadSafe(PhantomData<*const u8>);
+
+fn is_send<T: Send>() -> bool { true }
+
+fn main() {
+    println!("{}", is_send::<OwnsT<String>>());
+    // println!("{}", is_send::<NotThreadSafe>()); // ошибка: *const u8 не Send
+    let _x = NotThreadSafe(PhantomData);
+    println!("размеры: {} {}", std::mem::size_of::<OwnsT<String>>(), std::mem::size_of::<NotThreadSafe>());
+}
+```
+```out
+true
+размеры: 0 0
+```
+Раскомментируй строку и посмотри: `PhantomData<*const u8>` сделал тип непригодным для потоков. Иногда это и нужно: например, для дескриптора, который должен жить в одном потоке.
+
+:: quiz
+Нужно запретить отправку типа в другой поток, не добавляя данных. Что поставить в поле?
+[ ] `PhantomData<u8>` => `u8` — `Send`, ничего не изменится.
+[x] `PhantomData<*const ()>` => Верно. Сырые указатели не `Send` и не `Sync`.
+[ ] `PhantomData<String>` => `String` — `Send`.
+
+:: deep Drop check
+Когда тип с `Drop` удаляется, компилятор проверяет: не обратится ли `drop` к уже мёртвым данным. Это **drop check**.
+
+Для своих коллекций на сырых указателях важно сказать компилятору «я владею `T`» через `PhantomData<T>`. Тогда он поймёт, что при удалении коллекции удаляются и элементы, и проверит времена жизни правильно.
+
+Стандартная библиотека иногда ослабляет проверку специальным атрибутом `#[may_dangle]` (только на nightly). В обычном коде это не нужно — достаточно правильного `PhantomData`.
+
+:: recap
+- `PhantomData<T>` — владею; `<&'a T>` — одалживаю; `<fn() -> T>` — только произвожу.
+- `PhantomData<*const T>` убирает `Send` и `Sync`.
+- Размер `PhantomData` всегда ноль.
+
+## LESSON x03-4 | Приёмы против борьбы с проверкой заимствований | 9
+:: goals
+- Знать четыре частых приёма, которые снимают ошибки заимствования
+- Решать задачи без лишних `clone()`
+
+:: text Приём 1: заимствовать поля по отдельности
+Компилятор различает **поля** структуры. `&mut self.a` и `&self.b` одновременно — можно. Но если взять `&mut self` целиком через метод — уже нельзя.
+
+```rust
+// плохо: метод занимает весь self
+let first = self.first_item();
+self.counter += 1; // ошибка, если first ещё жив
+// хорошо: поля по отдельности
+let first = &self.items[0];
+self.counter += 1; // ок
+```
+
+:: text Приём 2: индекс вместо ссылки
+Не держи ссылку на элемент — держи его **индекс**. Индекс — просто число, он ничего не заимствует.
+
+:: text Приём 3: entry вместо get + insert
+```rust
+// плохо
+if !map.contains_key(&k) { map.insert(k, 0); }
+*map.get_mut(&k).unwrap() += 1;
+// хорошо
+*map.entry(k).or_insert(0) += 1;
+```
+
+:: text Приём 4: сначала прочитать, потом изменить
+Вынеси нужное значение в переменную (скопируй число, `clone` маленькой строки), закончи заимствование — и только потом меняй.
+
+> **Аналогия:** не пытайся одновременно читать книгу и переклеивать в ней страницы. Выпиши нужную строку на листок, закрой книгу — и клей.
+
+:: task
+Метод `promote_first` должен увеличить счётчик повышений и поставить первому сотруднику флаг `boss`. Сейчас код не компилируется. Почини через заимствование полей по отдельности.
+```rust
+struct Team {
+    names: Vec<String>,
+    bosses: Vec<bool>,
+    promotions: u32,
+}
+
+impl Team {
+    fn first_name(&self) -> &String {
+        &self.names[0]
+    }
+    fn promote_first(&mut self) -> String {
+        let name = self.first_name();
+        self.bosses[0] = true;
+        self.promotions += 1;
+        format!("{name} теперь начальник")
+    }
+}
+
+fn main() {
+    let mut t = Team { names: vec![String::from("Ада")], bosses: vec![false], promotions: 0 };
+    println!("{}", t.promote_first());
+    println!("{} {}", t.bosses[0], t.promotions);
+}
+```
+```solution
+struct Team {
+    names: Vec<String>,
+    bosses: Vec<bool>,
+    promotions: u32,
+}
+
+impl Team {
+    fn promote_first(&mut self) -> String {
+        let name = &self.names[0];
+        self.bosses[0] = true;
+        self.promotions += 1;
+        format!("{name} теперь начальник")
+    }
+}
+
+fn main() {
+    let mut t = Team { names: vec![String::from("Ада")], bosses: vec![false], promotions: 0 };
+    println!("{}", t.promote_first());
+    println!("{} {}", t.bosses[0], t.promotions);
+}
+```
+```expect
+Ада теперь начальник
+true 1
+```
+hint: `self.first_name()` занимает весь `self`. Возьми поле напрямую: `let name = &self.names[0];`.
+
+:: task
+Найди индекс самого длинного слова и **допиши** к нему `!` прямо в векторе. Ссылку держать нельзя — используй индекс.
+```rust
+fn main() {
+    let mut words = vec![String::from("кот"), String::from("бегемот"), String::from("ёж")];
+    // твой код
+    println!("{words:?}");
+}
+```
+```solution
+fn main() {
+    let mut words = vec![String::from("кот"), String::from("бегемот"), String::from("ёж")];
+    let idx = (0..words.len()).max_by_key(|&i| words[i].chars().count()).unwrap();
+    words[idx].push('!');
+    println!("{words:?}");
+}
+```
+```expect
+["кот", "бегемот!", "ёж"]
+```
+hint: `(0..words.len()).max_by_key(|&i| words[i].chars().count())` вернёт индекс.
+hint: Потом `words[idx].push('!')` — заимствование для поиска уже закончилось.
+
+:: recap
+- Поля по отдельности — можно, весь `self` через метод — нельзя.
+- Индекс вместо ссылки.
+- `entry` вместо `get` + `insert`.
+- Сначала прочитай и закончи заимствование, потом меняй.
+
+## LESSON x03-p | Практика: заимствования | 20 | practice
+:: goals
+- Починить несколько типичных ошибок заимствования без лишних копий
+
+:: task
+Посчитай частоту букв в тексте в `BTreeMap<char, u32>` через `entry`. Пробелы пропускай.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "мама мыла";
+    let mut freq: BTreeMap<char, u32> = BTreeMap::new();
+    // твой код
+    println!("{freq:?}");
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "мама мыла";
+    let mut freq: BTreeMap<char, u32> = BTreeMap::new();
+    for c in text.chars().filter(|c| !c.is_whitespace()) {
+        *freq.entry(c).or_insert(0) += 1;
+    }
+    println!("{freq:?}");
+}
+```
+```expect
+{'а': 3, 'л': 1, 'м': 3, 'ы': 1}
+```
+hint: `*freq.entry(c).or_insert(0) += 1;`.
+
+:: task
+Метод `transfer` переводит деньги между двумя счетами в одном векторе. Две `&mut` на элементы одного вектора напрямую не получить — используй `split_at_mut` или работу по индексам.
+```rust
+struct Bank {
+    accounts: Vec<i64>,
+}
+
+impl Bank {
+    fn transfer(&mut self, from: usize, to: usize, amount: i64) {
+        let a = &mut self.accounts[from];
+        let b = &mut self.accounts[to];
+        *a -= amount;
+        *b += amount;
+    }
+}
+
+fn main() {
+    let mut bank = Bank { accounts: vec![100, 50, 0] };
+    bank.transfer(0, 2, 30);
+    bank.transfer(1, 0, 10);
+    println!("{:?}", bank.accounts);
+}
+```
+```solution
+struct Bank {
+    accounts: Vec<i64>,
+}
+
+impl Bank {
+    fn transfer(&mut self, from: usize, to: usize, amount: i64) {
+        self.accounts[from] -= amount;
+        self.accounts[to] += amount;
+    }
+}
+
+fn main() {
+    let mut bank = Bank { accounts: vec![100, 50, 0] };
+    bank.transfer(0, 2, 30);
+    bank.transfer(1, 0, 10);
+    println!("{:?}", bank.accounts);
+}
+```
+```expect
+[80, 40, 30]
+```
+hint: Самое простое — не держать две ссылки: `self.accounts[from] -= amount; self.accounts[to] += amount;`.
+hint: Если нужны именно две `&mut` одновременно — `get_disjoint_mut([from, to])` или `split_at_mut`.
+
+:: task
+Кэш: метод `get_or_compute` возвращает `&str` из словаря, а если ключа нет — вычисляет значение (строка ключа в верхнем регистре) и сохраняет. Почини версию, которая не компилируется.
+```rust
+use std::collections::HashMap;
+
+struct Cache {
+    map: HashMap<String, String>,
+    misses: u32,
+}
+
+impl Cache {
+    fn get_or_compute(&mut self, key: &str) -> &str {
+        if let Some(v) = self.map.get(key) {
+            return v;
+        }
+        self.misses += 1;
+        self.map.insert(key.to_string(), key.to_uppercase());
+        self.map.get(key).unwrap()
+    }
+}
+
+fn main() {
+    let mut c = Cache { map: HashMap::new(), misses: 0 };
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("краб"));
+    println!("промахов: {}", c.misses);
+}
+```
+```solution
+use std::collections::HashMap;
+
+struct Cache {
+    map: HashMap<String, String>,
+    misses: u32,
+}
+
+impl Cache {
+    fn get_or_compute(&mut self, key: &str) -> &str {
+        if !self.map.contains_key(key) {
+            self.misses += 1;
+        }
+        self.map.entry(key.to_string()).or_insert_with(|| key.to_uppercase())
+    }
+}
+
+fn main() {
+    let mut c = Cache { map: HashMap::new(), misses: 0 };
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("краб"));
+    println!("промахов: {}", c.misses);
+}
+```
+```expect
+RUST
+RUST
+КРАБ
+промахов: 2
+```
+hint: Это известное ограничение проверки: ранний `return v` из `get` держит заимствование до конца функции.
+hint: Разбей на «проверить» (`contains_key`) и «вставить или взять» (`entry(...).or_insert_with(...)`).
+
+:: task
+Функция `longest_line` возвращает самую длинную строку текста. Сейчас она принимает `&String` и возвращает `String` через `clone`. Перепиши так, чтобы копий не было: принимать `&str`, возвращать `&str`.
+```rust
+fn longest_line(text: &String) -> String {
+    let mut best = String::new();
+    for line in text.lines() {
+        if line.len() > best.len() {
+            best = line.to_string();
+        }
+    }
+    best.clone()
+}
+
+fn main() {
+    let t = String::from("короткая\nсамая длинная строка\nсредняя");
+    println!("{}", longest_line(&t));
+}
+```
+```solution
+fn longest_line(text: &str) -> &str {
+    let mut best = "";
+    for line in text.lines() {
+        if line.len() > best.len() {
+            best = line;
+        }
+    }
+    best
+}
+
+fn main() {
+    let t = String::from("короткая\nсамая длинная строка\nсредняя");
+    println!("{}", longest_line(&t));
+}
+```
+```expect
+самая длинная строка
+```
+contains: -> &str
+hint: Одна ссылка на входе — метки можно не писать: `fn longest_line(text: &str) -> &str`.
+hint: `let mut best = "";` и присваивай `best = line;` — это всё куски исходного текста.
+
+:: recap
+- `entry` — подсчёты и кэши без двойного поиска.
+- Индексы — когда нужно менять два элемента одной коллекции.
+- Ранний `return` ссылки — частая ловушка; спасает `entry`.
+- `&str` вместо `String` — меньше копий.

@@ -1,0 +1,560 @@
+# MODULE x03 | Subtyping, variance and fighting the borrow checker | Why &'static fits where &'a is expected but &mut doesn't, and everyday tricks
+
+## LESSON x03-1 | Lifetime subtyping | 8
+:: goals
+- See that a longer-lived reference fits where a shorter one is expected
+- Read the bounds `'a: 'b` and `T: 'a`
+
+:: text Long fits where short is expected
+Rust has almost no subtyping, except in one place — **lifetimes**. If a reference lives longer, you can pass it where a shorter one is expected.
+
+```rust
+fn show<'a>(s: &'a str) { println!("{s}"); }
+let lit: &'static str = "an eternal string";
+show(lit); // &'static str fits where &'a str is expected
+```
+We say `'static` is a **subtype** of any `'a`. It's written `'static: 'a` — "`'static` lives at least as long as `'a`".
+
+> **Analogy:** a yearly pass works where a daily pass is required. Not the other way round.
+
+:: text How to read 'a: 'b and T: 'a
+- `'a: 'b` — "`'a` lives **at least as long as** `'b`".
+- `T: 'a` — "`T` holds no references that die before `'a`".
+
+```rust
+struct Holder<'a, T: 'a> {
+    item: &'a T,
+}
+```
+These days the compiler often infers such bounds by itself, but they show up in error messages all the time.
+
+:: code
+```rust
+fn pick_first<'long: 'short, 'short>(a: &'long str, _b: &'short str) -> &'short str {
+    a // 'long lives longer, so it fits as 'short
+}
+
+fn main() {
+    let outer = String::from("outside");
+    let r;
+    {
+        let inner = String::from("inside");
+        r = pick_first(&outer, &inner);
+        println!("{r}");
+    }
+}
+```
+```out
+outside
+```
+The result is labeled with the short term `'short`, so it can't be used after the block — even though it really points to `outer`. The labels honestly say "no longer than the short one".
+
+:: quiz
+What does `'a: 'b` mean?
+[x] `'a` lives at least as long as `'b` => Right.
+[ ] `'a` lives shorter than `'b` => The opposite.
+[ ] `'a` and `'b` are the same => Not necessarily: `'a` may be longer.
+
+:: task
+The function `choose` returns one of two `&str`, and `main` stores its result in a variable that lives longer than the block. Add labels so the code compiles.
+```rust
+fn choose<'a>(a: &'a str, b: &'a str, first: bool) -> &'a str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let saved: &'static str;
+    {
+        let tmp = String::from("temporary");
+        let _ = choose(&tmp, "x", true);
+        saved = choose("first", "second", false);
+    }
+    println!("{saved}");
+}
+```
+```solution
+fn choose<'a>(a: &'a str, b: &'a str, first: bool) -> &'a str {
+    if first { a } else { b }
+}
+
+fn main() {
+    let saved: &'static str;
+    {
+        let tmp = String::from("temporary");
+        let _ = choose(&tmp, "x", true);
+        saved = choose("first", "second", false);
+    }
+    println!("{saved}");
+}
+```
+```expect
+second
+```
+hint: A trap: the code is already correct! In the second call both arguments are `'static`, so `'a = 'static` and the result is `'static` too. Just run it.
+
+:: recap
+- A long reference fits where a short one is expected: `'static` fits everywhere.
+- `'a: 'b` — `'a` lives at least as long as `'b`. `T: 'a` — `T` holds no shorter references.
+- A result's label is a promise of "no longer than", not its real term.
+
+## LESSON x03-2 | Variance | 9
+:: goals
+- See where subtyping "passes through" a type and where it doesn't
+- Learn why `&mut` is stricter than `&`
+
+:: text Three kinds
+**Variance** answers the question: if `'long` fits where `'short` is expected, does `Type<'long>` fit where `Type<'short>` is expected?
+
+- **Covariance** — yes. `&'a T`, `Box<T>`, `Vec<T>`, `Option<T>`. Almost everything.
+- **Invariance** — no, only an exact match. `&mut T`, `Cell<T>`, `RefCell<T>`, `UnsafeCell<T>`.
+- **Contravariance** — the reverse. It only shows up in function arguments: `fn(T)`.
+
+> **Analogy:** a box with a yearly pass can go to someone expecting a box with a daily pass — they'll only look. But if the box is given so they can **put** something of theirs into it, swapping is dangerous: they'll put a daily pass where you expect a yearly one.
+
+:: text Why &mut is invariant
+If `&mut &'static str` fitted where `&mut &'short str` is expected, you could write a **short** reference where everyone thinks an **eternal** one lives:
+
+```rust
+fn put<'a>(slot: &mut &'a str, s: &'a str) { *slot = s; }
+
+let mut forever: &'static str = "eternal";
+{
+    let tmp = String::from("temporary");
+    put(&mut forever, &tmp); // error! otherwise forever would point to a dead tmp
+}
+```
+The invariance of `&mut` closes that hole.
+
+:: code
+Run it and look at the error — that's invariance protecting you:
+```rust
+fn put<'a>(slot: &mut &'a str, s: &'a str) {
+    *slot = s;
+}
+
+fn main() {
+    let mut forever: &'static str = "eternal";
+    {
+        let tmp = String::from("temporary");
+        put(&mut forever, &tmp);
+    }
+    println!("{forever}");
+}
+```
+fails: yes
+The compiler says: `tmp` does not live long enough. Through `&mut` you can't "shorten" a term, so you can't smuggle a short reference into a long-lived place.
+
+:: quiz
+Which type is invariant in `T`?
+[ ] `&'a T` => Covariant: read-only.
+[ ] `Vec<T>` => Covariant.
+[x] `Cell<T>` => Right. You can write through a `Cell`, so swapping is dangerous.
+
+:: quiz
+Why can a `Vec<&'static str>` go where a `Vec<&'a str>` is expected, but a `&mut Vec<&'static str>` can't go where a `&mut Vec<&'a str>` is expected?
+[x] Through `&mut`, the function could put a short reference into the vector => Right. An owned `Vec` is handed over whole — no hole.
+[ ] A `Vec` can't be changed => It can, but ownership goes to whoever received it.
+[ ] It's a compiler bug => It's a deliberate safety rule.
+
+:: task
+The function `add_word` puts a reference to a word into a list. The list and the words in `main` live equally long. Add labels so the code compiles.
+```rust
+fn add_word(list: &mut Vec<&str>, w: &str) {
+    list.push(w);
+}
+
+fn main() {
+    let text = String::from("fish whale crab");
+    let mut words = Vec::new();
+    for w in text.split(' ') {
+        add_word(&mut words, w);
+    }
+    println!("{words:?}");
+}
+```
+```solution
+fn add_word<'a>(list: &mut Vec<&'a str>, w: &'a str) {
+    list.push(w);
+}
+
+fn main() {
+    let text = String::from("fish whale crab");
+    let mut words = Vec::new();
+    for w in text.split(' ') {
+        add_word(&mut words, w);
+    }
+    println!("{words:?}");
+}
+```
+```expect
+["fish", "whale", "crab"]
+```
+hint: The word goes **inside** the list, so it has the same term as the elements: `list: &mut Vec<&'a str>, w: &'a str`.
+hint: The reference to the list itself (`&mut`) doesn't need its own label.
+
+:: recap
+- Covariant: `&T`, `Box<T>`, `Vec<T>` — long fits where short is expected.
+- Invariant: `&mut T`, `Cell<T>` — only an exact match.
+- Invariance protects against writing a short reference into a long-lived place.
+
+## LESSON x03-3 | PhantomData and variance | 7
+:: goals
+- Choose the right kind of `PhantomData`
+- Know how it affects `Send`, `Sync` and dropping
+
+:: text PhantomData decides three things
+When a struct has a raw pointer or a parameter that isn't stored, `PhantomData` tells the compiler **how** to treat it:
+
+- `PhantomData<T>` — "I sort of own a `T`": covariant, `Send/Sync` like `T`, `T` may be dropped along with it.
+- `PhantomData<&'a T>` — "I borrow a `T` for `'a`".
+- `PhantomData<fn() -> T>` — "I only produce `T`s": covariant, but doesn't affect `Send/Sync` or dropping.
+- `PhantomData<*const T>` — "like a raw pointer": removes `Send` and `Sync`.
+
+:: code
+```rust
+use std::marker::PhantomData;
+
+struct OwnsT<T>(PhantomData<T>);
+struct NotThreadSafe(PhantomData<*const u8>);
+
+fn is_send<T: Send>() -> bool { true }
+
+fn main() {
+    println!("{}", is_send::<OwnsT<String>>());
+    // println!("{}", is_send::<NotThreadSafe>()); // error: *const u8 isn't Send
+    let _x = NotThreadSafe(PhantomData);
+    println!("sizes: {} {}", std::mem::size_of::<OwnsT<String>>(), std::mem::size_of::<NotThreadSafe>());
+}
+```
+```out
+true
+sizes: 0 0
+```
+Uncomment the line and see: `PhantomData<*const u8>` made the type unusable across threads. Sometimes that's exactly what you want — say, for a handle that must stay on one thread.
+
+:: quiz
+You need to forbid sending a type to another thread without adding data. What goes in the field?
+[ ] `PhantomData<u8>` => `u8` is `Send`, nothing changes.
+[x] `PhantomData<*const ()>` => Right. Raw pointers are neither `Send` nor `Sync`.
+[ ] `PhantomData<String>` => `String` is `Send`.
+
+:: deep Drop check
+When a type with `Drop` is dropped, the compiler checks that `drop` won't touch data that's already dead. This is the **drop check**.
+
+For your own collections built on raw pointers, it's important to tell the compiler "I own `T`" with `PhantomData<T>`. Then it understands that dropping the collection drops the elements too, and checks the lifetimes correctly.
+
+The standard library sometimes relaxes the check with a special attribute `#[may_dangle]` (nightly only). Ordinary code doesn't need it — the right `PhantomData` is enough.
+
+:: recap
+- `PhantomData<T>` — I own; `<&'a T>` — I borrow; `<fn() -> T>` — I only produce.
+- `PhantomData<*const T>` removes `Send` and `Sync`.
+- `PhantomData` always has size zero.
+
+## LESSON x03-4 | Tricks against fighting the borrow checker | 9
+:: goals
+- Know four common tricks that make borrow errors go away
+- Solve tasks without extra `clone()`s
+
+:: text Trick 1: borrow fields separately
+The compiler tells a struct's **fields** apart. `&mut self.a` and `&self.b` at the same time — fine. But taking the whole `&mut self` through a method — not fine.
+
+```rust
+// bad: the method borrows all of self
+let first = self.first_item();
+self.counter += 1; // error if first is still alive
+// good: separate fields
+let first = &self.items[0];
+self.counter += 1; // ok
+```
+
+:: text Trick 2: an index instead of a reference
+Don't keep a reference to an element — keep its **index**. An index is just a number; it borrows nothing.
+
+:: text Trick 3: entry instead of get + insert
+```rust
+// bad
+if !map.contains_key(&k) { map.insert(k, 0); }
+*map.get_mut(&k).unwrap() += 1;
+// good
+*map.entry(k).or_insert(0) += 1;
+```
+
+:: text Trick 4: read first, then change
+Pull the value you need into a variable (copy a number, `clone` a small string), end the borrow — and only then change things.
+
+> **Analogy:** don't try to read a book and re-glue its pages at the same time. Copy the line you need onto a note, close the book — then glue.
+
+:: task
+The `promote_first` method must bump the promotion counter and set the `boss` flag for the first employee. Right now it doesn't compile. Fix it by borrowing fields separately.
+```rust
+struct Team {
+    names: Vec<String>,
+    bosses: Vec<bool>,
+    promotions: u32,
+}
+
+impl Team {
+    fn first_name(&self) -> &String {
+        &self.names[0]
+    }
+    fn promote_first(&mut self) -> String {
+        let name = self.first_name();
+        self.bosses[0] = true;
+        self.promotions += 1;
+        format!("{name} is the boss now")
+    }
+}
+
+fn main() {
+    let mut t = Team { names: vec![String::from("Ada")], bosses: vec![false], promotions: 0 };
+    println!("{}", t.promote_first());
+    println!("{} {}", t.bosses[0], t.promotions);
+}
+```
+```solution
+struct Team {
+    names: Vec<String>,
+    bosses: Vec<bool>,
+    promotions: u32,
+}
+
+impl Team {
+    fn promote_first(&mut self) -> String {
+        let name = &self.names[0];
+        self.bosses[0] = true;
+        self.promotions += 1;
+        format!("{name} is the boss now")
+    }
+}
+
+fn main() {
+    let mut t = Team { names: vec![String::from("Ada")], bosses: vec![false], promotions: 0 };
+    println!("{}", t.promote_first());
+    println!("{} {}", t.bosses[0], t.promotions);
+}
+```
+```expect
+Ada is the boss now
+true 1
+```
+hint: `self.first_name()` borrows all of `self`. Take the field directly: `let name = &self.names[0];`.
+
+:: task
+Find the index of the longest word and **append** `!` to it right in the vector. You can't hold a reference — use the index.
+```rust
+fn main() {
+    let mut words = vec![String::from("cat"), String::from("hippo"), String::from("ox")];
+    // your code
+    println!("{words:?}");
+}
+```
+```solution
+fn main() {
+    let mut words = vec![String::from("cat"), String::from("hippo"), String::from("ox")];
+    let idx = (0..words.len()).max_by_key(|&i| words[i].chars().count()).unwrap();
+    words[idx].push('!');
+    println!("{words:?}");
+}
+```
+```expect
+["cat", "hippo!", "ox"]
+```
+hint: `(0..words.len()).max_by_key(|&i| words[i].chars().count())` returns the index.
+hint: Then `words[idx].push('!')` — the borrow used for searching is already over.
+
+:: recap
+- Separate fields — fine; all of `self` through a method — not fine.
+- An index instead of a reference.
+- `entry` instead of `get` + `insert`.
+- Read first and end the borrow, then change.
+
+## LESSON x03-p | Practice: borrowing | 20 | practice
+:: goals
+- Fix several typical borrow errors without extra copies
+
+:: task
+Count letter frequencies in a text into a `BTreeMap<char, u32>` using `entry`. Skip spaces.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "banana bar";
+    let mut freq: BTreeMap<char, u32> = BTreeMap::new();
+    // your code
+    println!("{freq:?}");
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "banana bar";
+    let mut freq: BTreeMap<char, u32> = BTreeMap::new();
+    for c in text.chars().filter(|c| !c.is_whitespace()) {
+        *freq.entry(c).or_insert(0) += 1;
+    }
+    println!("{freq:?}");
+}
+```
+```expect
+{'a': 4, 'b': 2, 'n': 2, 'r': 1}
+```
+hint: `*freq.entry(c).or_insert(0) += 1;`.
+
+:: task
+The `transfer` method moves money between two accounts in one vector. You can't directly get two `&mut` to elements of the same vector — use `split_at_mut` or work by indexes.
+```rust
+struct Bank {
+    accounts: Vec<i64>,
+}
+
+impl Bank {
+    fn transfer(&mut self, from: usize, to: usize, amount: i64) {
+        let a = &mut self.accounts[from];
+        let b = &mut self.accounts[to];
+        *a -= amount;
+        *b += amount;
+    }
+}
+
+fn main() {
+    let mut bank = Bank { accounts: vec![100, 50, 0] };
+    bank.transfer(0, 2, 30);
+    bank.transfer(1, 0, 10);
+    println!("{:?}", bank.accounts);
+}
+```
+```solution
+struct Bank {
+    accounts: Vec<i64>,
+}
+
+impl Bank {
+    fn transfer(&mut self, from: usize, to: usize, amount: i64) {
+        self.accounts[from] -= amount;
+        self.accounts[to] += amount;
+    }
+}
+
+fn main() {
+    let mut bank = Bank { accounts: vec![100, 50, 0] };
+    bank.transfer(0, 2, 30);
+    bank.transfer(1, 0, 10);
+    println!("{:?}", bank.accounts);
+}
+```
+```expect
+[80, 40, 30]
+```
+hint: Simplest: don't hold two references: `self.accounts[from] -= amount; self.accounts[to] += amount;`.
+hint: If you really need two `&mut` at once — `get_disjoint_mut([from, to])` or `split_at_mut`.
+
+:: task
+A cache: `get_or_compute` returns a `&str` from the map, and if the key is missing it computes the value (the key in uppercase) and stores it. Fix the version that doesn't compile.
+```rust
+use std::collections::HashMap;
+
+struct Cache {
+    map: HashMap<String, String>,
+    misses: u32,
+}
+
+impl Cache {
+    fn get_or_compute(&mut self, key: &str) -> &str {
+        if let Some(v) = self.map.get(key) {
+            return v;
+        }
+        self.misses += 1;
+        self.map.insert(key.to_string(), key.to_uppercase());
+        self.map.get(key).unwrap()
+    }
+}
+
+fn main() {
+    let mut c = Cache { map: HashMap::new(), misses: 0 };
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("crab"));
+    println!("misses: {}", c.misses);
+}
+```
+```solution
+use std::collections::HashMap;
+
+struct Cache {
+    map: HashMap<String, String>,
+    misses: u32,
+}
+
+impl Cache {
+    fn get_or_compute(&mut self, key: &str) -> &str {
+        if !self.map.contains_key(key) {
+            self.misses += 1;
+        }
+        self.map.entry(key.to_string()).or_insert_with(|| key.to_uppercase())
+    }
+}
+
+fn main() {
+    let mut c = Cache { map: HashMap::new(), misses: 0 };
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("rust"));
+    println!("{}", c.get_or_compute("crab"));
+    println!("misses: {}", c.misses);
+}
+```
+```expect
+RUST
+RUST
+CRAB
+misses: 2
+```
+hint: This is a known limitation of the checker: the early `return v` from `get` keeps the borrow alive until the end of the function.
+hint: Split it into "check" (`contains_key`) and "insert or take" (`entry(...).or_insert_with(...)`).
+
+:: task
+The `longest_line` function returns the longest line of a text. Right now it takes a `&String` and returns a `String` via `clone`. Rewrite it with no copies: take `&str`, return `&str`.
+```rust
+fn longest_line(text: &String) -> String {
+    let mut best = String::new();
+    for line in text.lines() {
+        if line.len() > best.len() {
+            best = line.to_string();
+        }
+    }
+    best.clone()
+}
+
+fn main() {
+    let t = String::from("short\nthe longest line here\nmedium");
+    println!("{}", longest_line(&t));
+}
+```
+```solution
+fn longest_line(text: &str) -> &str {
+    let mut best = "";
+    for line in text.lines() {
+        if line.len() > best.len() {
+            best = line;
+        }
+    }
+    best
+}
+
+fn main() {
+    let t = String::from("short\nthe longest line here\nmedium");
+    println!("{}", longest_line(&t));
+}
+```
+```expect
+the longest line here
+```
+contains: -> &str
+hint: One reference in — no labels needed: `fn longest_line(text: &str) -> &str`.
+hint: `let mut best = "";` and assign `best = line;` — they're all pieces of the original text.
+
+:: recap
+- `entry` — counts and caches without a double lookup.
+- Indexes — when you need to change two elements of one collection.
+- An early `return` of a reference is a common trap; `entry` saves the day.
+- `&str` instead of `String` — fewer copies.
