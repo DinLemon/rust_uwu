@@ -72,7 +72,7 @@ def parse_card(kind, title, lines, where):
                 raise SystemExit(f"{where}: незакрытый блок ```")
             i += 1
             # в text/quiz код остаётся частью markdown
-            if kind in ("text", "quiz") or (kind == "deep" and (tag not in ("rust", "out") or (tag == "rust" and "fn main" not in "\n".join(buf)))):
+            if kind in ("text", "quiz", "homework") or (kind == "deep" and (tag not in ("rust", "out") or (tag == "rust" and "fn main" not in "\n".join(buf)))):
                 md.append("```" + ("" if tag == "rust" else tag))
                 md.extend(buf)
                 md.append("```")
@@ -90,6 +90,8 @@ def parse_card(kind, title, lines, where):
             opts.append((body.strip(), right, why.strip() if why else None))
         elif kind == "fill" and line.startswith("= "):
             answers.append([a.strip() for a in line[2:].split(" | ")])
+        elif kind == "homework" and line.startswith("[ ] "):
+            items.append(line[4:].strip())
         elif kind in ("goals", "recap") and line.startswith("- "):
             items.append(line[2:].strip())
         elif line.startswith("explain: "):
@@ -131,6 +133,10 @@ def parse_card(kind, title, lines, where):
         if not items:
             raise SystemExit(f"{where}: пустой список {kind}")
         card["items"] = items
+    elif kind == "homework":
+        if not title or not items:
+            raise SystemExit(f"{where}: у homework нужен заголовок и пункты самопроверки [ ]")
+        card["check"] = items
     elif kind == "deep":
         if not title:
             raise SystemExit(f"{where}: у карточки deep нужен заголовок")
@@ -223,7 +229,7 @@ def parse_file(path):
             head = line[3:].strip().split(" ", 1)
             kind = head[0]
             title = head[1] if len(head) > 1 else None
-            if kind not in ("goals", "text", "code", "quiz", "fill", "order", "task", "recap", "deep"):
+            if kind not in ("goals", "text", "code", "quiz", "fill", "order", "task", "recap", "deep", "homework"):
                 raise SystemExit(f"{path}:{lineno}: неизвестный тип карточки {kind}")
         else:
             if kind is None and line.strip() and not line.startswith("//"):
@@ -234,7 +240,7 @@ def parse_file(path):
     return modules
 
 
-TRACKS = {"base": ("m*.txt", "glossary.txt"), "pro": ("a*.txt", "glossary-pro.txt")}
+TRACKS = {"base": ("m*.txt", "glossary.txt"), "pro": ("a*.txt", "glossary-pro.txt"), "expert": ("x*.txt", "glossary-expert.txt")}
 
 
 def load_lang(lang, track="base"):
@@ -268,7 +274,7 @@ def shape(modules):
     for m in modules:
         for l in m["lessons"]:
             out[l["id"]] = (m["id"], bool(l.get("practice")), tuple(
-                (c["t"], bool(c.get("tests")), len(c.get("options", [])), c.get("answer"), len(c.get("answers", [])), len(c.get("lines", [])), c.get("outputCheck"), bool(c.get("expectFormat")))
+                (c["t"], bool(c.get("tests")), len(c.get("options", [])), c.get("answer"), len(c.get("answers", [])), len(c.get("lines", [])), c.get("outputCheck"), bool(c.get("expectFormat")), len(c.get("check", [])))
                 for c in l["cards"]))
     return out
 
@@ -341,8 +347,9 @@ def main():
             n_c = sum(len(l["cards"]) for m in modules for l in m["lessons"])
             n_t = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] in ("task", "fill", "order"))
             n_d = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] == "deep")
+            n_h = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] == "homework")
             mins = sum(l["min"] for m in modules for l in m["lessons"])
-            print(f"{key}: модулей {len(modules)}, уроков {n_l}, карточек {n_c}, практики {n_t}, углублений {n_d}, минут {mins}, терминов {len(glossaries[lang])}, {len(raw)//1024} КБ")
+            print(f"{key}: модулей {len(modules)}, уроков {n_l}, карточек {n_c}, практики {n_t}, углублений {n_d}, домашних {n_h}, минут {mins}, терминов {len(glossaries[lang])}, {len(raw)//1024} КБ")
     if failed:
         raise SystemExit(1)
     mtext = ("// Сгенерировано tools/build.py: какие файлы курса есть и их версии (для сброса кэша).\n"

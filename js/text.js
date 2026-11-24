@@ -105,7 +105,9 @@
         const items = [];
         while (i < lines.length && re.test(lines[i])) items.push(lines[i++].replace(re, ""));
         const tag = ordered ? "ol" : "ul";
-        html += `<${tag}>${items.map((t) => `<li>${inline(esc(t))}</li>`).join("")}</${tag}>`;
+        // нумерация продолжается после блока кода: «3.» даёт <ol start="3">
+        const start = ordered ? parseInt(line, 10) : 1;
+        html += `<${tag}${start > 1 ? ` start="${start}"` : ""}>${items.map((t) => `<li>${inline(esc(t))}</li>`).join("")}</${tag}>`;
         continue;
       }
       const buf = [];

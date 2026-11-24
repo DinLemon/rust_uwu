@@ -650,3 +650,10 @@ body.focus .topbar nav { display: none; }
 .track-tab[aria-current="page"] small { color: inherit; opacity: .85; }
 .track-tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .pro-note { margin: 1rem 0 0; }
+
+/* Домашнее задание: чек-лист самопроверки */
+.hw-check { border: 1px solid var(--line); border-radius: 14px; padding: .6rem .9rem .8rem; margin: 1rem 0 .4rem; }
+.hw-check legend { font-weight: 700; padding: 0 .3rem; }
+.hw-item { display: flex; gap: .6rem; align-items: flex-start; padding: .35rem 0; cursor: pointer; line-height: 1.4; }
+.hw-item input { width: 1.2rem; height: 1.2rem; margin-top: .15rem; flex: none; accent-color: var(--accent); }
+.hw-item input:checked + span { color: var(--muted); }

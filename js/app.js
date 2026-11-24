@@ -53,14 +53,19 @@
     return loading[key];
   }
   const curLang = () => (RK.STR[S.settings.lang] ? S.settings.lang : "ru");
-  const curTrack = () => (S.track === "pro" && hasTrack("pro") ? "pro" : "base");
-  const isPro = () => curTrack() === "pro";
+  // Уровни курса: id урока начинается с буквы уровня (m00-1, a00-1, x00-1).
+  const TRACKS = ["base", "pro", "expert"];
+  const PREFIX = { m: "base", a: "pro", x: "expert" };
+  const trackOfId = (id) => PREFIX[id[0]] || "base";
+  const curTrack = () => (S.track !== "base" && hasTrack(S.track) ? S.track : "base");
+  const isPro = () => curTrack() !== "base";
+  const TX = () => (isPro() ? T[curTrack()] : null); // тексты уровня поверх общих
   function setTrack(track) {
     if (track !== S.track && (track === "base" || hasTrack(track))) { S.track = track; save(); }
   }
-  // Тексты уровня 2 поверх общих: заголовки, диплом.
-  const trackText = (name) => (isPro() && T.pro && T.pro[name] != null ? T.pro[name] : T[name]);
-  const dip = () => (isPro() && T.pro ? Object.assign({}, T.diploma, T.pro.diploma) : T.diploma);
+  // Тексты уровня 2 и 3 поверх общих: заголовки, диплом.
+  const trackText = (name) => (TX() && TX()[name] != null ? TX()[name] : T[name]);
+  const dip = () => (TX() ? Object.assign({}, T.diploma, TX().diploma) : T.diploma);
 
   let indexedKey = null;
   function indexCourse(force) {
@@ -271,24 +276,26 @@
   // Переключатель уровней. Виден, только когда второй уровень есть на сайте.
   function trackTabs() {
     if (!hasTrack("pro") || !T.pro) return `<span class="hero-kicker">Rust UwU</span>`;
-    const tab = (t, label) => {
+    const labels = { base: T.pro.base, pro: T.pro.pro, expert: T.expert && T.expert.label };
+    const tab = (t) => {
       const n = MANIFEST.lessons[t] || 0;
-      const d = Object.keys(S.done).filter((id) => (id[0] === "a") === (t === "pro")).length;
-      return `<a class="track-tab" href="#/${t}"${curTrack() === t ? ' aria-current="page"' : ""}>${label}${n ? `<small>${T.pro.tabDone(Math.min(d, n), n)}</small>` : ""}</a>`;
+      const d = Object.keys(S.done).filter((id) => trackOfId(id) === t).length;
+      return `<a class="track-tab" href="#/${t}"${curTrack() === t ? ' aria-current="page"' : ""}>${labels[t]}${n ? `<small>${T.pro.tabDone(Math.min(d, n), n)}</small>` : ""}</a>`;
     };
-    return `<nav class="track-tabs" aria-label="${T.pro.tabsLabel}">${tab("base", T.pro.base)}${tab("pro", T.pro.pro)}</nav>`;
+    return `<nav class="track-tabs" aria-label="${T.pro.tabsLabel}">${TRACKS.filter((t) => t === "base" || (hasTrack(t) && labels[t])).map(tab).join("")}</nav>`;
   }
   // Совет начать с основ. Ничего не запирает: можно учиться в любом порядке.
   function proNote() {
-    if (!isPro() || !T.pro) return "";
-    const baseDone = Object.keys(S.done).filter((id) => id[0] === "m").length;
-    if (baseDone >= (MANIFEST.lessons.base || 1)) return "";
-    return `<div class="pro-note">${mascotBubble("bookmark", T.pro.note)}</div>`;
+    if (!TX()) return "";
+    const prev = TRACKS[TRACKS.indexOf(curTrack()) - 1];
+    const prevDone = Object.keys(S.done).filter((id) => trackOfId(id) === prev).length;
+    if (prevDone >= (MANIFEST.lessons[prev] || 1)) return "";
+    return `<div class="pro-note">${mascotBubble("bookmark", TX().note)}</div>`;
   }
 
   function viewHome() {
     setNav("home");
-    document.title = isPro() && T.pro ? T.pro.docTitle : T.docTitle;
+    document.title = TX() ? TX().docTitle : T.docTitle;
     const n = nextLesson();
     const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
     const cont = saved || n;
@@ -421,7 +428,7 @@
     app.innerHTML = `<div class="wrap">
       <div class="lesson-head">
         <a class="btn btn-quiet btn-sm" href="#/" aria-label="${T.toMap}">←</a>
-        <div><div class="crumbs">${esc((isPro() && T.pro ? T.pro.crumb + " · " : "") + T.crumbs(lesson.mi, lesson.module.title, step + 1, L.cards.length))}</div>
+        <div><div class="crumbs">${esc((TX() ? TX().crumb + " · " : "") + T.crumbs(lesson.mi, lesson.module.title, step + 1, L.cards.length))}</div>
         <h1>${esc(lesson.title)}</h1></div>
       </div>
       <div class="progress" aria-hidden="true">${segs}</div>
@@ -485,7 +492,7 @@
     const kind = card.t === "text" ? "" : (card.warm ? T.kindTitle.warm : T.kindTitle[card.t]);
     el.innerHTML = kind ? `<span class="card-kind">${kind}</span>` : "";
     if (card.title && card.t !== "deep") el.insertAdjacentHTML("beforeend", `<h2>${inline(card.title)}</h2>`);
-    ({ text: cText, code: cCode, quiz: cQuiz, fill: cFill, order: cOrder, task: cTask, recap: cRecap, goals: cGoals, deep: cDeep })[card.t](card, el);
+    ({ text: cText, code: cCode, quiz: cQuiz, fill: cFill, order: cOrder, task: cTask, recap: cRecap, goals: cGoals, deep: cDeep, homework: cHomework })[card.t](card, el);
   }
   const attempt = (card) => card._onAttempt && card._onAttempt();
 
@@ -498,6 +505,31 @@
     el.insertAdjacentHTML("beforeend", `${c.items.length ? `<ul class="tldr">${c.items.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>` : ""}
       <p class="plan">${esc(T.planLine(c.plan.length + 1, parts, c.min || 5))}</p>
       <p class="muted small">${T.planEnd}</p>`);
+  }
+
+  // Домашнее задание: делается на своём компьютере с cargo. Сайт не проверяет код,
+  // только запоминает отмеченные пункты самопроверки. Идти дальше можно в любой момент.
+  function cHomework(c, el) {
+    const key = (L && L.lesson ? L.lesson.id : "") + "#" + (c.title || "");
+    S.hw = S.hw || {};
+    const marks = S.hw[key] || [];
+    el.insertAdjacentHTML("beforeend", `<p class="muted small">${T.hwNote}</p>${md(c.md || "")}
+      <fieldset class="hw-check"><legend>${T.hwCheck}</legend>
+      ${c.check.map((item, i) => `<label class="hw-item"><input type="checkbox" data-i="${i}"${marks[i] ? " checked" : ""}> <span>${inline(item)}</span></label>`).join("")}
+      </fieldset><p class="hw-status muted small" role="status"></p>`);
+    const status = el.querySelector(".hw-status");
+    const paint = () => {
+      const n = (S.hw[key] || []).filter(Boolean).length;
+      status.textContent = n === c.check.length ? T.hwDone : T.hwProgress(n, c.check.length);
+    };
+    el.querySelectorAll(".hw-item input").forEach((box) => box.addEventListener("change", () => {
+      const arr = (S.hw[key] || []).slice();
+      arr[+box.dataset.i] = box.checked;
+      S.hw[key] = arr;
+      save();
+      paint();
+    }));
+    paint();
   }
 
   function cRecap(c, el) {
@@ -970,7 +1002,7 @@
     document.title = T.glossTitle + T.titleSuffix;
     const lang = curLang();
     const seen = new Set();
-    const terms = ["pro", "base"].flatMap((t) => (window.RK_DATA?.[dataKey(t, lang)]?.glossary || []).map((g) => Object.assign({ pro: t === "pro" }, g)))
+    const terms = TRACKS.slice().reverse().flatMap((t) => (window.RK_DATA?.[dataKey(t, lang)]?.glossary || []).map((g) => Object.assign({ lvl: t === "base" ? null : t }, g)))
       .filter((g) => !seen.has(g.term) && seen.add(g.term))
       .sort((a, b) => a.term.localeCompare(b.term, lang));
     app.innerHTML = `<div class="wrap"><h1>${T.glossTitle}</h1><p class="muted">${T.glossText}</p>
@@ -998,7 +1030,7 @@
       empty.hidden = true;
       empty.querySelector("[role=status]").textContent = "";
       list.innerHTML = found.map((t) => `<details class="gloss-entry" name="gloss-entry">
-        <summary>${esc(t.term)} ${t.en && t.en !== t.term ? `<small>${esc(t.en)}</small>` : ""}${t.pro && T.pro ? ` <span class="tag">${T.pro.short}</span>` : ""}</summary>
+        <summary>${esc(t.term)} ${t.en && t.en !== t.term ? `<small>${esc(t.en)}</small>` : ""}${t.lvl && T[t.lvl] ? ` <span class="tag">${T[t.lvl].short}</span>` : ""}</summary>
         <div class="gloss-definition"><div>${inline(t.def)}</div>
           <div class="section-fox" aria-hidden="true" hidden></div></div>
       </details>`).join("");
@@ -1132,13 +1164,13 @@
     mapObserver?.disconnect();
     mapObserver = null;
     let p = location.hash.replace(/^#\/?/, "").split("/");
-    if (p[0] === "pro" || p[0] === "base") { setTrack(p[0]); p = p.slice(1); }
-    else if (p[0] === "l" && p[1]) setTrack(p[1][0] === "a" ? "pro" : "base");
+    if (TRACKS.includes(p[0])) { setTrack(p[0]); p = p.slice(1); }
+    else if (p[0] === "l" && p[1]) setTrack(trackOfId(p[1]));
     const inLesson = p[0] === "l";
     document.body.classList.toggle("focus", inLesson && S.settings.focus);
     const lang = curLang();
     const needs = [curTrack()];
-    if (p[0] === "glossary" && hasTrack("pro")) needs.push(curTrack() === "pro" ? "base" : "pro");
+    if (p[0] === "glossary") TRACKS.forEach((t) => { if (t !== needs[0] && (t === "base" || hasTrack(t))) needs.push(t); });
     if (!indexCourse() || needs.some((t) => !window.RK_DATA?.[dataKey(t, lang)])) {
       app.innerHTML = `<div class="wrap"><p class="muted" role="status">${T.loadingCourse || "…"}</p></div>`;
       try { await Promise.all(needs.map((t) => loadData(t, lang))); }

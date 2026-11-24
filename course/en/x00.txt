@@ -1,0 +1,434 @@
+# MODULE x00 | Welcome to the workshop | How to learn here, home assignments and a warm-up
+
+## LESSON x00-1 | How Level 3 works | 6
+:: goals
+- See how the workshop differs from the first two levels
+- Learn what home assignments are
+
+:: text The workshop
+Level 1 taught you to drive. Level 2 opened the hood. Level 3 is the **workshop**: here you make your own parts.
+
+What changed:
+- **More practice than theory.** Every lesson has several tasks, and each module ends with a big practice lesson.
+- **Deeper topics.** Your own allocators, your own Future, lock-free code, macros, web, databases.
+- **Home assignments.** Some things don't fit into one Playground file: a web server, your own procedural macro, firmware for a board. You do those on your own computer.
+
+The rules stay the same: short steps, "Go deeper" can be skipped, progress saves by itself.
+
+> **Analogy:** before, you built models from instructions. Now you have a workbench, tools and blueprints — and you machine the parts yourself.
+
+:: text Home assignments
+A "Home assignment" card looks like this:
+- what to do — step by step, with `cargo` commands;
+- a **self-check** list: items you tick yourself.
+
+The site doesn't run that code. The ticks are for you: you can see what's done. You can move on without them.
+
+For home assignments you need Rust on your computer. It installs with one command from **rustup.rs**.
+
+:: quiz
+What does the site do with a home assignment?
+[ ] Checks the code automatically => No, that code runs on your computer.
+[x] Remembers the self-check items you ticked => Right.
+[ ] Won't let you move on until everything is ticked => Nothing is locked: you can always move on.
+
+:: homework Set up your workbench
+Install Rust and check that everything works.
+
+1. Install Rust from **rustup.rs** (Windows: download `rustup-init.exe`; macOS and Linux: one terminal command).
+2. Check the versions:
+```sh
+rustc --version
+cargo --version
+```
+3. Create a project and run it:
+```sh
+cargo new workshop
+cd workshop
+cargo run
+```
+4. Install an editor with hints: VS Code + the **rust-analyzer** extension (or RustRover).
+[ ] `cargo --version` prints a version
+[ ] `cargo run` in the new project prints `Hello, world!`
+[ ] The editor shows hints and underlines errors
+
+:: recap
+- The workshop: lots of practice and deep topics.
+- Home assignments are done on your computer; you tick the self-check by hand.
+- Rust installs through rustup.rs.
+
+## LESSON x00-2 | Reading compiler errors like a pro | 8
+:: goals
+- Break long compiler messages into parts
+- Use `rustc --explain`
+
+:: text An error is a hint
+At Level 3 compiler messages get longer: generics, lifetimes, traits. But they're all built the same way:
+1. The **error code** — `error[E0502]`.
+2. The **main sentence** — what's wrong.
+3. The **arrows** under the code — where exactly.
+4. **help** and **note** — how to fix it. Often there's a ready-made fix.
+
+Read top to bottom and look at the **first** error first: the others are often its consequences.
+
+> **Analogy:** a sat-nav says "in 200 meters, turn right". It isn't scolding you — it's showing you the way.
+
+:: text rustc --explain
+Every error has a detailed explanation with examples:
+```sh
+rustc --explain E0502
+```
+The same is on the web: the "Rust error codes index". In the Playground you can just click the error code.
+
+:: code
+This code won't compile. Run it and read the error: the code, the main sentence, the arrows, the help.
+```rust
+fn main() {
+    let mut list = vec![1, 2, 3];
+    let first = &list[0];
+    list.push(4);
+    println!("{first}");
+}
+```
+fails: yes
+Error `E0502`: you can't change `list` (`push`) while the reference `first` is alive. Fix it by moving the `println!` above the `push`, or by copying the number: `let first = list[0];`.
+
+:: quiz
+The compiler output has five errors. Which do you start with?
+[x] The first one => Right. The others often follow from it.
+[ ] The last one => The last ones are usually consequences of the first.
+[ ] The shortest one => Length says nothing about importance.
+
+:: task
+Fix the code without changing its meaning: first print the first element, then add `4` and print the length.
+```rust
+fn main() {
+    let mut list = vec![1, 2, 3];
+    let first = &list[0];
+    list.push(4);
+    println!("{first}");
+    println!("{}", list.len());
+}
+```
+```solution
+fn main() {
+    let mut list = vec![1, 2, 3];
+    let first = list[0];
+    list.push(4);
+    println!("{first}");
+    println!("{}", list.len());
+}
+```
+```expect
+1
+4
+```
+hint: `i32` is `Copy`. Take a copy of the number instead of a reference: `let first = list[0];`.
+
+:: task
+Fix error `E0382` (use after move): the function should only **look** at the string.
+```rust
+fn shout(s: String) -> String {
+    s.to_uppercase()
+}
+
+fn main() {
+    let name = String::from("ferris");
+    println!("{}", shout(name));
+    println!("{name}");
+}
+```
+```solution
+fn shout(s: &str) -> String {
+    s.to_uppercase()
+}
+
+fn main() {
+    let name = String::from("ferris");
+    println!("{}", shout(&name));
+    println!("{name}");
+}
+```
+```expect
+FERRIS
+ferris
+```
+hint: Let the function take `&str`, and call it as `shout(&name)`.
+
+:: recap
+- Error code, main sentence, arrows, help — read them in order.
+- Start with the first error.
+- `rustc --explain E0XXX` — a detailed explanation.
+
+## LESSON x00-3 | How workshop tasks work | 6
+:: goals
+- Learn the format of Level 3 tasks
+- Get used to tests inside tasks
+
+:: text Tasks got bigger
+Many tasks are now checked not by output but by **tests**: the code has a `#[cfg(test)] mod tests`, and the site runs `cargo test`. The task is solved when all tests are green.
+
+That's how real projects are checked: not "did it print the right thing", but "does the function work on different inputs".
+
+:: text How to solve a big task
+1. Read the description and the **tests**: they're more precise than any text.
+2. First get the code to **compile** — `todo!()` inside is fine.
+3. Then fix the tests one at a time.
+4. Stuck? Open a hint. That's not shameful, it's a tool.
+
+> **Analogy:** tests are like a blueprint with dimensions. The part is done when every dimension matches.
+
+:: task
+Finish `median` so the tests pass. An empty slice gives `None`; with an even length, it's the average of the two middle values (rounded down).
+```rust
+pub fn median(v: &[i32]) -> Option<i32> {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty() {
+        assert_eq!(median(&[]), None);
+    }
+
+    #[test]
+    fn odd() {
+        assert_eq!(median(&[5, 1, 3]), Some(3));
+    }
+
+    #[test]
+    fn even() {
+        assert_eq!(median(&[4, 1, 3, 2]), Some(2));
+    }
+}
+```
+```solution
+pub fn median(v: &[i32]) -> Option<i32> {
+    if v.is_empty() {
+        return None;
+    }
+    let mut s = v.to_vec();
+    s.sort();
+    let n = s.len();
+    if n % 2 == 1 {
+        Some(s[n / 2])
+    } else {
+        Some((s[n / 2 - 1] + s[n / 2]) / 2)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty() {
+        assert_eq!(median(&[]), None);
+    }
+
+    #[test]
+    fn odd() {
+        assert_eq!(median(&[5, 1, 3]), Some(3));
+    }
+
+    #[test]
+    fn even() {
+        assert_eq!(median(&[4, 1, 3, 2]), Some(2));
+    }
+}
+```
+tests: yes
+hint: Copy the slice into a `Vec` (`v.to_vec()`) and sort it.
+hint: For `[1, 2, 3, 4]` the middle indexes are `1` and `2`: `(2 + 3) / 2 = 2`.
+
+:: recap
+- Tasks with tests: solved when all tests pass.
+- Compile first (with `todo!()` if needed), then fix the tests.
+- Tests are the most precise task description.
+
+## LESSON x00-p | Practice: workshop warm-up | 15 | practice
+:: goals
+- Warm up on Level 2 tasks to check yourself
+
+:: task
+The `Pairs` iterator yields neighboring pairs of a slice: for `[1, 2, 3]` — `(1, 2)`, `(2, 3)`. Finish `next`.
+```rust
+struct Pairs<'a> {
+    items: &'a [i32],
+    pos: usize,
+}
+
+impl<'a> Iterator for Pairs<'a> {
+    type Item = (i32, i32);
+    fn next(&mut self) -> Option<(i32, i32)> {
+        // your code
+    }
+}
+
+fn main() {
+    let v: Vec<(i32, i32)> = Pairs { items: &[1, 2, 3, 4], pos: 0 }.collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Pairs<'a> {
+    items: &'a [i32],
+    pos: usize,
+}
+
+impl<'a> Iterator for Pairs<'a> {
+    type Item = (i32, i32);
+    fn next(&mut self) -> Option<(i32, i32)> {
+        if self.pos + 1 >= self.items.len() {
+            return None;
+        }
+        let r = (self.items[self.pos], self.items[self.pos + 1]);
+        self.pos += 1;
+        Some(r)
+    }
+}
+
+fn main() {
+    let v: Vec<(i32, i32)> = Pairs { items: &[1, 2, 3, 4], pos: 0 }.collect();
+    println!("{v:?}");
+}
+```
+```expect
+[(1, 2), (2, 3), (3, 4)]
+```
+hint: If `pos + 1` is already past the end — `None`.
+
+:: task
+The `group_by_len` function sorts words by length into a `BTreeMap<usize, Vec<&str>>`. Finish it so the tests pass.
+```rust
+use std::collections::BTreeMap;
+
+pub fn group_by_len<'a>(words: &[&'a str]) -> BTreeMap<usize, Vec<&'a str>> {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn groups() {
+        let g = group_by_len(&["cat", "ox", "dog", "rust"]);
+        assert_eq!(g[&2], vec!["ox"]);
+        assert_eq!(g[&3], vec!["cat", "dog"]);
+        assert_eq!(g[&4], vec!["rust"]);
+    }
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+pub fn group_by_len<'a>(words: &[&'a str]) -> BTreeMap<usize, Vec<&'a str>> {
+    let mut g: BTreeMap<usize, Vec<&'a str>> = BTreeMap::new();
+    for w in words {
+        g.entry(w.chars().count()).or_default().push(*w);
+    }
+    g
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn groups() {
+        let g = group_by_len(&["cat", "ox", "dog", "rust"]);
+        assert_eq!(g[&2], vec!["ox"]);
+        assert_eq!(g[&3], vec!["cat", "dog"]);
+        assert_eq!(g[&4], vec!["rust"]);
+    }
+}
+```
+tests: yes
+hint: Count the length in characters: `w.chars().count()`.
+hint: `g.entry(len).or_default().push(*w)` — creates an empty `Vec` the first time.
+
+:: task
+Write `impl From<&str> for Rgb` that parses `"#ff8000"` into three bytes. A bad string gives black, `Rgb(0, 0, 0)`.
+```rust
+#[derive(Debug, PartialEq)]
+struct Rgb(u8, u8, u8);
+
+// your code
+
+fn main() {
+    let a: Rgb = "#ff8000".into();
+    let b: Rgb = "oops".into();
+    println!("{a:?} {b:?}");
+}
+```
+```solution
+#[derive(Debug, PartialEq)]
+struct Rgb(u8, u8, u8);
+
+impl From<&str> for Rgb {
+    fn from(s: &str) -> Self {
+        let parse = |i: usize| s.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok());
+        if s.len() == 7 && s.starts_with('#') {
+            if let (Some(r), Some(g), Some(b)) = (parse(1), parse(3), parse(5)) {
+                return Rgb(r, g, b);
+            }
+        }
+        Rgb(0, 0, 0)
+    }
+}
+
+fn main() {
+    let a: Rgb = "#ff8000".into();
+    let b: Rgb = "oops".into();
+    println!("{a:?} {b:?}");
+}
+```
+```expect
+Rgb(255, 128, 0) Rgb(0, 0, 0)
+```
+hint: `u8::from_str_radix("ff", 16)` turns hexadecimal text into a number.
+hint: `s.get(1..3)` safely takes a piece of the string and returns `None` if it isn't there.
+
+:: task
+A counter closure: `make_counter()` returns an `impl FnMut() -> u32` that returns the next number on every call, starting at 1.
+```rust
+fn make_counter() -> impl FnMut() -> u32 {
+    // your code
+}
+
+fn main() {
+    let mut c = make_counter();
+    let mut d = make_counter();
+    println!("{} {} {}", c(), c(), c());
+    println!("{}", d());
+}
+```
+```solution
+fn make_counter() -> impl FnMut() -> u32 {
+    let mut n = 0;
+    move || {
+        n += 1;
+        n
+    }
+}
+
+fn main() {
+    let mut c = make_counter();
+    let mut d = make_counter();
+    println!("{} {} {}", c(), c(), c());
+    println!("{}", d());
+}
+```
+```expect
+1 2 3
+1
+```
+hint: `let mut n = 0; move || { n += 1; n }` — each counter gets its own `n`.
+
+:: recap
+- Iterators, `BTreeMap`, `From`, closures with state — the base for the workshop.
+- If something was hard, revisit that Level 2 module.
