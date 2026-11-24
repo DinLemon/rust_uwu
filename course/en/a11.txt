@@ -1,0 +1,380 @@
+# MODULE a11 | unsafe and FFI | Raw pointers, safe wrappers and talking to C
+
+## LESSON a11-1 | What unsafe allows | 8
+:: goals
+- See that `unsafe` doesn't turn checks off but adds five extra abilities
+- Work with raw pointers
+
+:: text unsafe doesn't mean "no rules"
+The Rust compiler is careful: if it can't **prove** code is safe, it won't let it through. But sometimes safe code still can't be proven — talking to hardware, say, or to a C library.
+
+An `unsafe { ... }` block says: "here I am responsible for safety". Borrow and type checks **keep working**. Only five "superpowers" are added:
+1. dereference a **raw pointer**;
+2. call an `unsafe` function;
+3. read/change a mutable static variable;
+4. implement an `unsafe` trait (for example, `Send` by hand);
+5. access fields of a `union`.
+
+> **Analogy:** a "Staff only" sign. Behind the door the same safety rules apply, but only people who know what they're doing may open it.
+
+:: text Raw pointers
+`*const T` and `*mut T` are pointers "like in C". Unlike references:
+- they may be null or point to garbage;
+- the compiler doesn't track how many there are or who changes the data;
+- you can create them anywhere, but **dereference** them only in `unsafe`.
+
+```rust
+let x = 5;
+let p = &raw const x; // creating is safe
+let v = unsafe { *p }; // reading only in unsafe
+```
+
+:: code
+```rust
+fn main() {
+    let mut nums = [10, 20, 30];
+    let p = nums.as_mut_ptr(); // *mut i32 to the first element
+
+    unsafe {
+        *p.add(1) += 5;           // the second element
+        let third = *p.add(2);    // the third
+        println!("third: {third}");
+    }
+    println!("{nums:?}");
+}
+```
+```out
+third: 30
+[10, 25, 30]
+```
+`p.add(1)` moves the pointer by one element. Moving past the end of the array and reading is **undefined behavior**: the program may do anything. That's on you.
+
+:: quiz
+What happens to borrow checking inside an `unsafe` block?
+[ ] It's turned off => No, it works as usual.
+[x] It works as usual; five abilities are simply added => Right.
+[ ] It works only for `&mut` references => It works for all references.
+
+:: quiz
+Where can you **create** a raw pointer, and where can you **read** through it?
+[x] Create anywhere, read only in `unsafe` => Right. Reading and writing are the dangerous parts.
+[ ] Both only in `unsafe` => Creating a pointer breaks nothing by itself.
+[ ] Both anywhere => Then `unsafe` wouldn't be needed.
+
+:: deep What undefined behavior is
+**Undefined behavior** (UB) is a situation the language promises nothing about. Reading past the end of an array, two `&mut` to the same thing, reading uninitialized memory.
+
+The danger is that the program may **seem** to work. When optimizing, the compiler assumes UB never happens and may reorder or remove code. The bug shows up later, somewhere else, on another computer.
+
+Safe Rust guarantees there's no UB. In `unsafe`, you give that guarantee yourself.
+
+:: recap
+- `unsafe` = "I'm responsible for safety". Checks aren't turned off.
+- Five superpowers; the main one is dereferencing a raw pointer.
+- A mistake in `unsafe` can cause undefined behavior.
+
+## LESSON a11-2 | A safe wrapper | 8
+:: goals
+- Hide `unsafe` inside a function with a safe interface
+- Write a `// SAFETY:` comment with an explanation
+
+:: text The main idea
+The standard library is full of `unsafe`: `Vec`, `String`, `HashMap` work with raw pointers inside. But from the outside they're **safe**: however you call them, there's no UB.
+
+That's the right approach: a small piece of `unsafe` **inside**, checks around it, and an ordinary safe function on the outside.
+
+> **Analogy:** an electrical panel. Dangerous wires inside, but a cover and switches outside. Anyone can use it, but only an electrician opens the cover.
+
+:: code
+Our own `split_at_mut`: two **different** mutable pieces of one slice. With plain references the compiler won't allow it, even though the pieces don't overlap.
+```rust
+fn split_mut(v: &mut [i32], mid: usize) -> (&mut [i32], &mut [i32]) {
+    assert!(mid <= v.len(), "mid is out of bounds");
+    let len = v.len();
+    let p = v.as_mut_ptr();
+    // SAFETY: mid <= len was checked above, so both pieces are inside the slice
+    // and don't overlap: [0, mid) and [mid, len).
+    unsafe {
+        (
+            std::slice::from_raw_parts_mut(p, mid),
+            std::slice::from_raw_parts_mut(p.add(mid), len - mid),
+        )
+    }
+}
+
+fn main() {
+    let mut data = [1, 2, 3, 4, 5];
+    let (a, b) = split_mut(&mut data, 2);
+    a[0] = 100;
+    b[0] = 300;
+    println!("{data:?}");
+}
+```
+```out
+[100, 2, 300, 4, 5]
+```
+The `assert!` is the "check around it". Without it, calling `split_mut(&mut data, 99)` would be UB. With it — an honest panic.
+
+:: text The SAFETY comment
+Before each `unsafe` block it's customary to write **why** it's safe:
+
+```rust
+// SAFETY: the index was checked above, i < len
+unsafe { *ptr.add(i) }
+```
+And an `unsafe fn` gets a `# Safety` section in its docs: what the caller must guarantee. The `clippy` linter can require such comments.
+
+:: quiz
+What matters most in a safe wrapper around `unsafe`?
+[ ] As much `unsafe` as possible => The opposite: as little as possible.
+[x] Whatever is passed to the function, UB can't happen => Right. All dangerous cases are cut off by checks.
+[ ] The function's name starts with `safe_` => A name guarantees nothing.
+
+:: task
+The `get_two` function returns the sum of the elements at indexes `i` and `j`. It uses `get_unchecked` inside. Add a check so bad indexes cause the panic `index out of slice`, not UB.
+```rust
+fn get_two(v: &[i32], i: usize, j: usize) -> i32 {
+    // add a check
+    // SAFETY: i and j were checked above and are below v.len()
+    unsafe { v.get_unchecked(i) + v.get_unchecked(j) }
+}
+
+fn main() {
+    let v = [5, 10, 20];
+    println!("{}", get_two(&v, 0, 2));
+}
+```
+```solution
+fn get_two(v: &[i32], i: usize, j: usize) -> i32 {
+    assert!(i < v.len() && j < v.len(), "index out of slice");
+    // SAFETY: i and j were checked above and are below v.len()
+    unsafe { v.get_unchecked(i) + v.get_unchecked(j) }
+}
+
+fn main() {
+    let v = [5, 10, 20];
+    println!("{}", get_two(&v, 0, 2));
+}
+```
+```expect
+25
+```
+contains: assert!
+hint: `assert!(i < v.len() && j < v.len(), "index out of slice");`.
+
+:: deep Miri — checking unsafe code
+**Miri** is a Rust interpreter that runs your program very slowly but **notices** UB: out-of-bounds access, bad pointers, broken borrowing rules.
+
+```
+rustup +nightly component add miri
+cargo +nightly miri test
+```
+If you write `unsafe`, run your tests under Miri. Rust Playground has it too: **Tools → Miri**.
+
+:: recap
+- `unsafe` is hidden inside a safe function.
+- Checks (`assert!`) cut off every dangerous input.
+- `// SAFETY:` — an explanation of why the block is safe.
+
+## LESSON a11-3 | FFI: talking to C | 8
+:: goals
+- Call a function from a C library
+- Make a Rust function that C can call
+
+:: text Why it's needed
+A huge number of libraries are written in C: system calls, graphics, compression, databases. Rust can call them directly. This is called **FFI** (foreign function interface).
+
+Rust can't check that everything inside a C function is right. So every such call is `unsafe`.
+
+> **Analogy:** an international phone call. The line works, but your carrier isn't responsible for the conversation on the other end.
+
+:: code
+```rust
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_int};
+
+unsafe extern "C" {
+    fn abs(x: c_int) -> c_int;
+    fn strlen(s: *const c_char) -> usize;
+}
+
+fn main() {
+    let a = unsafe { abs(-42) };
+    println!("abs: {a}");
+
+    let text = CString::new("hello").unwrap();
+    let n = unsafe { strlen(text.as_ptr()) };
+    println!("bytes: {n}");
+
+    let back: &CStr = text.as_c_str();
+    println!("back: {}", back.to_str().unwrap());
+}
+```
+```out
+abs: 42
+bytes: 5
+back: hello
+```
+`unsafe extern "C" { ... }` is a declaration: "these functions exist somewhere, with the C calling convention". Rust takes your word for it.
+
+:: text Strings at the border
+Strings work differently in C and Rust:
+- in C a string is a pointer to bytes ending with a **zero byte** `\0`;
+- in Rust a `String` knows its length and has no zero at the end.
+
+So there are adapters:
+- `CString` — your own "C-style" string (with a zero at the end). `.as_ptr()` gives a `*const c_char`.
+- `CStr` — a reference to someone else's C string.
+
+:: text Rust for C
+It works the other way too — you can make a function that C will call:
+
+```rust
+#[unsafe(no_mangle)]
+pub extern "C" fn add_numbers(a: i32, b: i32) -> i32 {
+    a + b
+}
+```
+- `extern "C"` — use the C calling convention;
+- `#[unsafe(no_mangle)]` — keep the name `add_numbers` as is (normally Rust "mangles" it).
+
+That's how modules for Python, Node.js and other languages are written. The `pyo3` and `napi-rs` crates handle the routine for you.
+
+:: quiz
+Why must a call to an `extern "C"` function be wrapped in `unsafe`?
+[x] Rust can't check what someone else's function does => Right. The responsibility is yours.
+[ ] C functions are always slow => Speed has nothing to do with it.
+[ ] The operating system requires it => It's Rust's rule, not the system's.
+
+:: fill
+Fill in the blanks: make a C string and get a pointer to it.
+```rust
+use std::ffi::CString;
+
+let s = ___::new("hello").unwrap();
+let p = s.___();
+```
+= CString
+= as_ptr
+explain: `CString::new` adds a zero byte at the end, and `as_ptr()` gives a pointer for C.
+
+:: recap
+- `unsafe extern "C" { fn ...; }` declares C functions. Calls go in `unsafe`.
+- `CString` / `CStr` — strings at the border with C.
+- `#[unsafe(no_mangle)] pub extern "C" fn` — a Rust function for other languages.
+
+## LESSON a11-p | Practice: unsafe | 12 | practice
+:: goals
+- Work with raw pointers and safe wrappers
+
+:: task
+Using a raw pointer `*mut i32`, add 1 to every element of the array. Use `as_mut_ptr()` and `add(i)`.
+```rust
+fn main() {
+    let mut a = [1, 2, 3, 4];
+    let p = a.as_mut_ptr();
+    for i in 0..a.len() {
+        // your code
+    }
+    println!("{a:?}");
+}
+```
+```solution
+fn main() {
+    let mut a = [1, 2, 3, 4];
+    let p = a.as_mut_ptr();
+    for i in 0..a.len() {
+        // SAFETY: i < a.len(), the pointer stays inside the array
+        unsafe {
+            *p.add(i) += 1;
+        }
+    }
+    println!("{a:?}");
+}
+```
+```expect
+[2, 3, 4, 5]
+```
+hint: `unsafe { *p.add(i) += 1; }`.
+
+:: task
+The `swap_ends` function swaps the first and last elements using raw pointers. Add a check for an empty slice: then do nothing.
+```rust
+fn swap_ends(v: &mut [i32]) {
+    // your code
+}
+
+fn main() {
+    let mut a = [1, 2, 3, 4];
+    swap_ends(&mut a);
+    println!("{a:?}");
+    let mut empty: [i32; 0] = [];
+    swap_ends(&mut empty);
+    println!("{empty:?}");
+}
+```
+```solution
+fn swap_ends(v: &mut [i32]) {
+    if v.is_empty() {
+        return;
+    }
+    let last = v.len() - 1;
+    let p = v.as_mut_ptr();
+    // SAFETY: the slice isn't empty, so indexes 0 and last are inside it
+    unsafe {
+        std::ptr::swap(p, p.add(last));
+    }
+}
+
+fn main() {
+    let mut a = [1, 2, 3, 4];
+    swap_ends(&mut a);
+    println!("{a:?}");
+    let mut empty: [i32; 0] = [];
+    swap_ends(&mut empty);
+    println!("{empty:?}");
+}
+```
+```expect
+[4, 2, 3, 1]
+[]
+```
+hint: First `if v.is_empty() { return; }`.
+hint: `std::ptr::swap(p, p.add(last))` swaps the values behind two pointers.
+
+:: task
+Call the C function `abs` on each number and print the sum of the absolute values.
+```rust
+use std::os::raw::c_int;
+
+unsafe extern "C" {
+    fn abs(x: c_int) -> c_int;
+}
+
+fn main() {
+    let nums = [-3, 5, -7];
+    // your code
+}
+```
+```solution
+use std::os::raw::c_int;
+
+unsafe extern "C" {
+    fn abs(x: c_int) -> c_int;
+}
+
+fn main() {
+    let nums = [-3, 5, -7];
+    let total: i32 = nums.iter().map(|&n| unsafe { abs(n) }).sum();
+    println!("{total}");
+}
+```
+```expect
+15
+```
+hint: `nums.iter().map(|&n| unsafe { abs(n) }).sum()`.
+
+:: recap
+- `as_mut_ptr()` + `add(i)` — walk an array with a pointer.
+- Before `unsafe` — a check and a `// SAFETY:` comment.
+- C calls go in `unsafe` too.
