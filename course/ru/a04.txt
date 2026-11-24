@@ -1,0 +1,715 @@
+# MODULE a04 | Ошибки в больших программах | Свои типы ошибок, From и ?, Box<dyn Error>, anyhow и thiserror
+
+## LESSON a04-1 | Свой тип ошибки | 8
+:: goals
+- Описать все ошибки программы одним `enum`
+- Научить ошибку печататься понятно
+
+:: text Почему String плохо для ошибок
+В основах мы часто писали `Result<T, String>`. Это просто, но:
+- по строке трудно понять, **какая** именно ошибка, и по-разному на неё ответить;
+- легко опечататься в тексте.
+
+В больших программах ошибки описывают через `enum`. Каждый вариант — один вид проблемы.
+
+> **Аналогия:** врач не пишет в карте «что-то болит». Он пишет диагноз из списка. По диагнозу понятно, как лечить.
+
+:: code
+```rust
+#[derive(Debug)]
+enum LoginError {
+    EmptyName,
+    TooShort(usize),
+    Banned { name: String },
+}
+
+fn check(name: &str) -> Result<(), LoginError> {
+    if name.is_empty() {
+        return Err(LoginError::EmptyName);
+    }
+    if name.len() < 3 {
+        return Err(LoginError::TooShort(name.len()));
+    }
+    if name == "admin" {
+        return Err(LoginError::Banned { name: name.to_string() });
+    }
+    Ok(())
+}
+
+fn main() {
+    for n in ["", "ab", "admin", "alice"] {
+        println!("{:?}", check(n));
+    }
+}
+```
+```out
+Err(EmptyName)
+Err(TooShort(2))
+Err(Banned { name: "admin" })
+Ok(())
+```
+В вариантах можно хранить подробности: длину, имя — что угодно.
+
+:: text Понятный текст: Display
+`{:?}` — для программиста. Для человека нужен `{}`. Его даёт трейт `Display`:
+
+```rust
+use std::fmt;
+
+impl fmt::Display for LoginError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LoginError::EmptyName => write!(f, "имя пустое"),
+            LoginError::TooShort(n) => write!(f, "имя короткое: {n} симв."),
+            LoginError::Banned { name } => write!(f, "{name} заблокирован"),
+        }
+    }
+}
+```
+
+:: text Трейт Error
+В стандартной библиотеке есть трейт `std::error::Error`. Он говорит: «я — ошибка». Требует `Debug` и `Display`, а сам может быть пустым:
+
+```rust
+impl std::error::Error for LoginError {}
+```
+Зачем? Тогда твою ошибку можно положить в `Box<dyn Error>`, отдать чужому коду и вообще обращаться с ней, как с любой ошибкой Rust.
+
+:: quiz
+Какие трейты нужны, чтобы реализовать `std::error::Error`?
+[ ] Только `Clone` => `Clone` ошибкам не обязателен.
+[x] `Debug` и `Display` => Верно. Это его супертрейты.
+[ ] `From` и `Into` => Они полезны, но не обязательны.
+
+:: task
+Допиши `Display` для `ParseColorError`, чтобы программа печатала понятные сообщения.
+```rust
+use std::fmt;
+
+#[derive(Debug)]
+enum ParseColorError {
+    Empty,
+    Unknown(String),
+}
+
+impl fmt::Display for ParseColorError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // твой код
+    }
+}
+
+impl std::error::Error for ParseColorError {}
+
+fn parse(s: &str) -> Result<&str, ParseColorError> {
+    match s {
+        "" => Err(ParseColorError::Empty),
+        "red" | "green" => Ok(s),
+        other => Err(ParseColorError::Unknown(other.to_string())),
+    }
+}
+
+fn main() {
+    for s in ["red", "", "pink"] {
+        match parse(s) {
+            Ok(c) => println!("цвет: {c}"),
+            Err(e) => println!("ошибка: {e}"),
+        }
+    }
+}
+```
+```solution
+use std::fmt;
+
+#[derive(Debug)]
+enum ParseColorError {
+    Empty,
+    Unknown(String),
+}
+
+impl fmt::Display for ParseColorError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseColorError::Empty => write!(f, "пустая строка"),
+            ParseColorError::Unknown(s) => write!(f, "неизвестный цвет «{s}»"),
+        }
+    }
+}
+
+impl std::error::Error for ParseColorError {}
+
+fn parse(s: &str) -> Result<&str, ParseColorError> {
+    match s {
+        "" => Err(ParseColorError::Empty),
+        "red" | "green" => Ok(s),
+        other => Err(ParseColorError::Unknown(other.to_string())),
+    }
+}
+
+fn main() {
+    for s in ["red", "", "pink"] {
+        match parse(s) {
+            Ok(c) => println!("цвет: {c}"),
+            Err(e) => println!("ошибка: {e}"),
+        }
+    }
+}
+```
+```expect
+цвет: red
+ошибка: пустая строка
+ошибка: неизвестный цвет «pink»
+```
+hint: Внутри `fmt` сделай `match self { ... }` и в каждой ветке `write!(f, "...")`.
+
+:: recap
+- Ошибки большой программы — `enum`, по варианту на каждый вид.
+- `Display` — текст для людей, `Debug` — для программистов.
+- `impl std::error::Error for MyError {}` — «я настоящая ошибка».
+
+## LESSON a04-2 | From и ?: ошибки сами превращаются | 8
+:: goals
+- Понять, что `?` умеет менять тип ошибки
+- Собрать ошибки из разных мест в одну
+
+:: text Проблема: ошибки разных видов
+Функция читает число из текста и проверяет его. Может сломаться `parse` (ошибка `ParseIntError`), а может твоя проверка (`AppError`). Но вернуть функция может только **один** тип ошибки.
+
+:: text Секрет ?
+`?` делает чуть больше, чем кажется. При ошибке он вызывает `From::from(ошибка)` — **превращает** её в тип ошибки функции.
+
+Значит, достаточно написать `impl From<ParseIntError> for AppError` — и `?` будет сам переводить одну ошибку в другую.
+
+> **Аналогия:** переходник для розетки. Вилка чужая, розетка твоя — переходник (`From`) их соединяет.
+
+:: code
+```rust
+use std::fmt;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AppError {
+    NotNumber(ParseIntError),
+    Negative(i32),
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AppError::NotNumber(e) => write!(f, "не число: {e}"),
+            AppError::Negative(n) => write!(f, "отрицательное: {n}"),
+        }
+    }
+}
+
+impl From<ParseIntError> for AppError {
+    fn from(e: ParseIntError) -> Self {
+        AppError::NotNumber(e)
+    }
+}
+
+fn read_positive(s: &str) -> Result<i32, AppError> {
+    let n: i32 = s.trim().parse()?; // ParseIntError -> AppError сам
+    if n < 0 {
+        return Err(AppError::Negative(n));
+    }
+    Ok(n)
+}
+
+fn main() {
+    for s in ["42", "-5", "кот"] {
+        match read_positive(s) {
+            Ok(n) => println!("ok {n}"),
+            Err(e) => println!("ошибка: {e}"),
+        }
+    }
+}
+```
+```out
+ok 42
+ошибка: отрицательное: -5
+ошибка: не число: invalid digit found in string
+```
+Убери `impl From` — и `?` перестанет компилироваться: Rust не знает, как превратить одно в другое.
+
+:: quiz
+Что делает `?`, когда функция возвращает `Result<T, AppError>`, а вызов вернул `Err(ParseIntError)`?
+[ ] Паникует => Нет, паники тут нет.
+[ ] Не компилируется никогда => Скомпилируется, если есть подходящий `From`.
+[x] Вызывает `AppError::from(...)` и возвращает результат => Верно.
+
+:: fill
+Заполни пропуски, чтобы `?` мог превратить `std::io::Error` в `MyError`.
+```rust
+impl ___<std::io::Error> for MyError {
+    fn ___(e: std::io::Error) -> Self {
+        MyError::Io(e)
+    }
+}
+```
+= From
+= from
+explain: Нужен `impl From<std::io::Error> for MyError` с методом `from`.
+
+:: text map_err: превратить руками
+Иногда `From` писать не хочется — ошибка нужна в одном месте. Тогда `map_err`:
+
+```rust
+let n: i32 = s.parse().map_err(|_| AppError::Negative(0))?;
+```
+`map_err` меняет ошибку, а `?` уже возвращает готовую.
+
+:: task
+Сделай `impl From<ParseIntError> for AgeError`, чтобы `?` в `parse_age` заработал.
+```rust
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AgeError {
+    Bad(ParseIntError),
+    TooOld(u32),
+}
+
+// твой код
+
+fn parse_age(s: &str) -> Result<u32, AgeError> {
+    let n: u32 = s.parse()?;
+    if n > 150 {
+        return Err(AgeError::TooOld(n));
+    }
+    Ok(n)
+}
+
+fn main() {
+    println!("{:?}", parse_age("30"));
+    println!("{:?}", parse_age("200"));
+    println!("{}", matches!(parse_age("x"), Err(AgeError::Bad(_))));
+}
+```
+```solution
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum AgeError {
+    Bad(ParseIntError),
+    TooOld(u32),
+}
+
+impl From<ParseIntError> for AgeError {
+    fn from(e: ParseIntError) -> Self {
+        AgeError::Bad(e)
+    }
+}
+
+fn parse_age(s: &str) -> Result<u32, AgeError> {
+    let n: u32 = s.parse()?;
+    if n > 150 {
+        return Err(AgeError::TooOld(n));
+    }
+    Ok(n)
+}
+
+fn main() {
+    println!("{:?}", parse_age("30"));
+    println!("{:?}", parse_age("200"));
+    println!("{}", matches!(parse_age("x"), Err(AgeError::Bad(_))));
+}
+```
+```expect
+Ok(30)
+Err(TooOld(200))
+true
+```
+hint: `impl From<ParseIntError> for AgeError { fn from(e: ParseIntError) -> Self { ... } }`.
+
+:: recap
+- `?` вызывает `From::from` для ошибки.
+- `impl From<ЧужаяОшибка> for МояОшибка` — и `?` сам переводит.
+- Разово — `map_err(|e| ...)?`.
+
+## LESSON a04-3 | Box<dyn Error>: любая ошибка | 7
+:: goals
+- Возвращать «любую ошибку» без своего `enum`
+- Узнать про цепочку причин `source()`
+
+:: text Ленивый, но честный вариант
+Иногда свой `enum` — это слишком. Например, в маленьком скрипте или в `main`. Тогда пишут:
+
+```rust
+fn run() -> Result<(), Box<dyn std::error::Error>> { ... }
+```
+`Box<dyn Error>` — «коробка с **какой-то** ошибкой». Любой тип с трейтом `Error` превращается в неё через `?` сам.
+
+> **Аналогия:** общая корзина для всех жалоб. Удобно складывать, но разбирать потом сложнее.
+
+:: code
+```rust
+use std::error::Error;
+
+fn sum_line(line: &str) -> Result<i32, Box<dyn Error>> {
+    let mut total = 0;
+    for part in line.split('+') {
+        let n: i32 = part.trim().parse()?;
+        total += n;
+    }
+    if total > 100 {
+        return Err("слишком много".into());
+    }
+    Ok(total)
+}
+
+fn main() {
+    println!("{:?}", sum_line("1 + 2 + 3").ok());
+    match sum_line("1 + x") {
+        Err(e) => println!("ошибка: {e}"),
+        Ok(_) => {}
+    }
+    match sum_line("60 + 70") {
+        Err(e) => println!("ошибка: {e}"),
+        Ok(_) => {}
+    }
+}
+```
+```out
+Some(6)
+ошибка: invalid digit found in string
+ошибка: слишком много
+```
+`"слишком много".into()` — даже обычную строку можно превратить в `Box<dyn Error>`.
+
+:: text Когда что выбирать
+- **Библиотека**, которую будут использовать другие — свой `enum`. Пусть пользователь сможет сделать `match` по вариантам.
+- **Приложение** или скрипт, где ошибку в основном печатают — `Box<dyn Error>` (или крейт `anyhow`, о нём в следующем уроке).
+
+:: text main тоже может вернуть Result
+```rust
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let n: i32 = "42".parse()?;
+    println!("{n}");
+    Ok(())
+}
+```
+Если `main` вернёт `Err`, программа напечатает `Error: ...` и завершится с кодом ошибки. Удобно для коротких программ.
+
+:: quiz
+Ты пишешь библиотеку для чтения настроек. Её будут подключать другие программы. Что выбрать для ошибок?
+[x] Свой `enum` ошибок => Верно. Пользователь сможет различать случаи.
+[ ] `Box<dyn Error>` => Пользователь не сможет удобно понять, что именно случилось.
+[ ] `String` => Так ещё хуже: только текст.
+
+:: deep Цепочка причин: source()
+Хорошая ошибка помнит, **из-за чего** она случилась. Для этого у трейта `Error` есть метод `source()`:
+
+```rust
+impl std::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ConfigError::BadPort(e) => Some(e), // внутри ParseIntError
+            _ => None,
+        }
+    }
+}
+```
+Так получается цепочка: «не прочитал настройки» → «порт неверный» → «в строке не цифра». Логгеры и `anyhow` умеют печатать её целиком. Это очень помогает искать причину проблемы.
+
+:: recap
+- `Box<dyn Error>` — любая ошибка, `?` складывает туда всё сам.
+- Библиотеке — свой `enum`, приложению — `Box<dyn Error>` или `anyhow`.
+- `main` может вернуть `Result`.
+
+## LESSON a04-4 | thiserror и anyhow | 7
+:: goals
+- Убрать шаблонный код ошибок с помощью крейтов
+- Понять, какой крейт для чего
+
+:: text Два популярных помощника
+Мы писали `Display` и `From` руками. Это много одинакового кода. Два крейта делают это за тебя:
+- **thiserror** — для **своих** типов ошибок. Пишешь `enum`, а `Display`, `Error` и `From` генерируются атрибутами.
+- **anyhow** — для **приложений**. Это удобный `Box<dyn Error>` с добавлением контекста.
+
+В своём проекте их подключают в `Cargo.toml`. В Playground они уже есть.
+
+:: code
+thiserror: текст ошибки прямо над вариантом, `#[from]` — и `From` готов.
+```rust
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+enum AppError {
+    #[error("не число: {0}")]
+    NotNumber(#[from] std::num::ParseIntError),
+    #[error("отрицательное: {0}")]
+    Negative(i32),
+}
+
+fn read_positive(s: &str) -> Result<i32, AppError> {
+    let n: i32 = s.parse()?;
+    if n < 0 {
+        return Err(AppError::Negative(n));
+    }
+    Ok(n)
+}
+
+fn main() {
+    for s in ["7", "-1", "x"] {
+        match read_positive(s) {
+            Ok(n) => println!("ok {n}"),
+            Err(e) => println!("ошибка: {e}"),
+        }
+    }
+}
+```
+crates: yes
+```out
+ok 7
+ошибка: отрицательное: -1
+ошибка: не число: invalid digit found in string
+```
+Сравни с прошлым уроком: тот же результат, но втрое меньше кода.
+
+:: code
+anyhow: любая ошибка + понятный контекст.
+```rust
+use anyhow::{Context, Result, bail};
+
+fn parse_port(s: &str) -> Result<u16> {
+    let port: u16 = s.parse().context("порт должен быть числом")?;
+    if port < 1024 {
+        bail!("порт {port} зарезервирован");
+    }
+    Ok(port)
+}
+
+fn main() {
+    for s in ["8080", "80", "http"] {
+        match parse_port(s) {
+            Ok(p) => println!("порт {p}"),
+            Err(e) => println!("ошибка: {e:#}"),
+        }
+    }
+}
+```
+crates: yes
+```out
+порт 8080
+ошибка: порт 80 зарезервирован
+ошибка: порт должен быть числом: invalid digit found in string
+```
+- `.context("...")` — добавить пояснение сверху.
+- `bail!(...)` — сразу вернуть ошибку с текстом.
+- `{e:#}` — напечатать всю цепочку причин через двоеточие.
+
+:: quiz
+Ты пишешь консольную утилиту для себя. Ошибки нужно просто понятно напечатать. Что удобнее?
+[ ] thiserror => Он хорош, когда кто-то будет разбирать варианты ошибок.
+[x] anyhow => Верно. Минимум кода и понятный контекст.
+[ ] Свой `enum` руками => Можно, но долго и без пользы.
+
+:: text Правило на каждый день
+- Пишешь **библиотеку** → `thiserror`.
+- Пишешь **программу** → `anyhow`.
+- Часто их используют вместе: библиотека отдаёт `thiserror`-ошибки, а приложение заворачивает их в `anyhow` с контекстом.
+
+:: recap
+- `thiserror`: `#[derive(Error)]`, `#[error("...")]`, `#[from]`.
+- `anyhow`: `Result<T>`, `.context(...)`, `bail!`.
+- Библиотека — thiserror, приложение — anyhow.
+
+## LESSON a04-p | Практика: ошибки | 15 | practice
+:: goals
+- Построить систему ошибок для маленькой программы
+
+:: task
+Функция `withdraw` снимает деньги со счёта. Ошибки: `NotEnough { need, have }` и `Zero`. Допиши `Display`, чтобы вывод совпал.
+```rust
+use std::fmt;
+
+#[derive(Debug)]
+enum BankError {
+    Zero,
+    NotEnough { need: u32, have: u32 },
+}
+
+impl fmt::Display for BankError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // твой код
+    }
+}
+
+fn withdraw(balance: &mut u32, amount: u32) -> Result<(), BankError> {
+    if amount == 0 {
+        return Err(BankError::Zero);
+    }
+    if amount > *balance {
+        return Err(BankError::NotEnough { need: amount, have: *balance });
+    }
+    *balance -= amount;
+    Ok(())
+}
+
+fn main() {
+    let mut b = 100;
+    for a in [30, 0, 500] {
+        match withdraw(&mut b, a) {
+            Ok(()) => println!("сняли {a}, осталось {b}"),
+            Err(e) => println!("ошибка: {e}"),
+        }
+    }
+}
+```
+```solution
+use std::fmt;
+
+#[derive(Debug)]
+enum BankError {
+    Zero,
+    NotEnough { need: u32, have: u32 },
+}
+
+impl fmt::Display for BankError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BankError::Zero => write!(f, "сумма равна нулю"),
+            BankError::NotEnough { need, have } => write!(f, "нужно {need}, есть {have}"),
+        }
+    }
+}
+
+fn withdraw(balance: &mut u32, amount: u32) -> Result<(), BankError> {
+    if amount == 0 {
+        return Err(BankError::Zero);
+    }
+    if amount > *balance {
+        return Err(BankError::NotEnough { need: amount, have: *balance });
+    }
+    *balance -= amount;
+    Ok(())
+}
+
+fn main() {
+    let mut b = 100;
+    for a in [30, 0, 500] {
+        match withdraw(&mut b, a) {
+            Ok(()) => println!("сняли {a}, осталось {b}"),
+            Err(e) => println!("ошибка: {e}"),
+        }
+    }
+}
+```
+```expect
+сняли 30, осталось 70
+ошибка: сумма равна нулю
+ошибка: нужно 500, есть 70
+```
+hint: Вариант с полями разбирают так: `BankError::NotEnough { need, have } => write!(f, "нужно {need}, есть {have}")`.
+
+:: task
+Функция `parse_point` разбирает строку `"3,4"` в пару чисел. Ошибки: `NoComma` и `Num(ParseIntError)`. Сделай `From`, чтобы работал `?`.
+```rust
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum PointError {
+    NoComma,
+    Num(ParseIntError),
+}
+
+// твой код
+
+fn parse_point(s: &str) -> Result<(i32, i32), PointError> {
+    let (a, b) = s.split_once(',').ok_or(PointError::NoComma)?;
+    Ok((a.trim().parse()?, b.trim().parse()?))
+}
+
+fn main() {
+    println!("{:?}", parse_point("3, 4"));
+    println!("{:?}", parse_point("3 4"));
+    println!("{}", matches!(parse_point("3,x"), Err(PointError::Num(_))));
+}
+```
+```solution
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum PointError {
+    NoComma,
+    Num(ParseIntError),
+}
+
+impl From<ParseIntError> for PointError {
+    fn from(e: ParseIntError) -> Self {
+        PointError::Num(e)
+    }
+}
+
+fn parse_point(s: &str) -> Result<(i32, i32), PointError> {
+    let (a, b) = s.split_once(',').ok_or(PointError::NoComma)?;
+    Ok((a.trim().parse()?, b.trim().parse()?))
+}
+
+fn main() {
+    println!("{:?}", parse_point("3, 4"));
+    println!("{:?}", parse_point("3 4"));
+    println!("{}", matches!(parse_point("3,x"), Err(PointError::Num(_))));
+}
+```
+```expect
+Ok((3, 4))
+Err(NoComma)
+true
+```
+hint: `ok_or(...)` превращает `Option` в `Result`. А для `parse()?` нужен `impl From<ParseIntError> for PointError`.
+
+:: task
+Функция `total` складывает числа из списка строк и возвращает `Result<i32, Box<dyn Error>>`. Если сумма больше 1000 — ошибка `"переполнение лимита"`.
+```rust
+use std::error::Error;
+
+fn total(items: &[&str]) -> Result<i32, Box<dyn Error>> {
+    // твой код
+}
+
+fn main() {
+    println!("{:?}", total(&["10", "20"]).ok());
+    for bad in [&["10", "x"][..], &["999", "2"][..]] {
+        if let Err(e) = total(bad) {
+            println!("ошибка: {e}");
+        }
+    }
+}
+```
+```solution
+use std::error::Error;
+
+fn total(items: &[&str]) -> Result<i32, Box<dyn Error>> {
+    let mut sum = 0;
+    for s in items {
+        let n: i32 = s.parse()?;
+        sum += n;
+    }
+    if sum > 1000 {
+        return Err("переполнение лимита".into());
+    }
+    Ok(sum)
+}
+
+fn main() {
+    println!("{:?}", total(&["10", "20"]).ok());
+    for bad in [&["10", "x"][..], &["999", "2"][..]] {
+        if let Err(e) = total(bad) {
+            println!("ошибка: {e}");
+        }
+    }
+}
+```
+```expect
+Some(30)
+ошибка: invalid digit found in string
+ошибка: переполнение лимита
+```
+hint: Внутри цикла `let n: i32 = s.parse()?;` — ошибка разбора сама попадёт в коробку.
+hint: Текстовую ошибку делают так: `Err("переполнение лимита".into())`.
+
+:: recap
+- `enum` + `Display` + `From` — полная система ошибок.
+- `ok_or` превращает `Option` в `Result`, чтобы использовать `?`.
+- `Box<dyn Error>` принимает любые ошибки и даже строки.
