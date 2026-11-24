@@ -1,0 +1,535 @@
+# MODULE a10 | Macros, deeper | Fragments, repetition, recursion and derive
+
+## LESSON a10-1 | Fragments: what a macro can catch | 7
+:: goals
+- Know the main fragment kinds: `expr`, `ident`, `ty`, `literal`, `tt`
+- Write a macro that creates a function
+
+:: text A reminder
+A `macro_rules!` macro is "find the pattern, fill in the template". It works **before** compilation: it writes code for you.
+
+```rust
+macro_rules! square {
+    ($x:expr) => { $x * $x };
+}
+```
+`$x:expr` means "catch an expression and call it `$x`". The kind after the colon is called a **fragment**.
+
+> **Analogy:** a form with fields. "Name: ___ Age: ___". A fragment says what can go into the field: a name, a number, a date.
+
+:: text The most useful fragments
+- `expr` — an expression: `2 + 3`, `foo(x)`, `"text"`.
+- `ident` — a name: `count`, `my_function`.
+- `ty` — a type: `i32`, `Vec<String>`.
+- `literal` — a literal: `42`, `"hello"`, `true`.
+- `tt` — one "token" or a group in brackets. The most flexible.
+- `block` — a block `{ ... }`, `pat` — a pattern for `match`.
+
+:: code
+`ident` lets a macro **make up the name** of a function:
+```rust
+macro_rules! getter {
+    ($name:ident, $value:expr) => {
+        fn $name() -> i32 {
+            $value
+        }
+    };
+}
+
+getter!(answer, 42);
+getter!(year, 2015);
+
+fn main() {
+    println!("{} {}", answer(), year());
+}
+```
+```out
+42 2015
+```
+The macro wrote two functions. A plain function can't do that: it can't create another function named after an argument.
+
+:: quiz
+Which fragment catches the name of a variable or function?
+[ ] `expr` => `expr` is an expression. A name is an expression too, but you can't use it as the name of a new function.
+[x] `ident` => Right.
+[ ] `ty` => That's a type.
+
+:: fill
+Fill in the fragments: the macro creates a struct with one field of the given type.
+```rust
+macro_rules! wrapper {
+    ($name:___, $inner:___) => {
+        struct $name($inner);
+    };
+}
+
+wrapper!(Meters, f64);
+```
+= ident
+= ty
+explain: The struct name is an `ident`, the field type is a `ty`.
+
+:: task
+Write a macro `max_of!(a, b)` that returns the larger of two expressions.
+```rust
+macro_rules! max_of {
+    // your code
+}
+
+fn main() {
+    println!("{}", max_of!(3, 7));
+    println!("{}", max_of!(10 * 2, 15));
+}
+```
+```solution
+macro_rules! max_of {
+    ($a:expr, $b:expr) => {
+        if $a > $b { $a } else { $b }
+    };
+}
+
+fn main() {
+    println!("{}", max_of!(3, 7));
+    println!("{}", max_of!(10 * 2, 15));
+}
+```
+```expect
+7
+20
+```
+hint: `($a:expr, $b:expr) => { if $a > $b { $a } else { $b } };`.
+
+:: deep Why one variable is better
+In `max_of!` the expression `$a` is inserted **twice**. If it's a function call with a side effect (say, printing), it runs twice.
+
+A careful version:
+```rust
+($a:expr, $b:expr) => {{
+    let a = $a;
+    let b = $b;
+    if a > b { a } else { b }
+}};
+```
+Double braces `{{ }}` — the macro returns a **block** where you can declare variables. And these `a`, `b` won't mix with variables outside — that's the hygiene lesson.
+
+:: recap
+- A fragment is what `$x:...` catches: `expr`, `ident`, `ty`, `literal`, `tt`.
+- `ident` lets macros create functions and types with the names you want.
+- A macro works before compilation: it writes code.
+
+## LESSON a10-2 | Repetition | 8
+:: goals
+- Catch any number of arguments with `$( ... ),*`
+- Expand repetitions in the template
+
+:: text How vec! takes any number of things
+`vec![1, 2, 3]`, `vec![1]`, `vec![]` — one macro, different numbers of arguments. The secret is **repetition**:
+
+```rust
+$( $x:expr ),*
+```
+- `$( ... )` — a group that repeats;
+- `,` — the separator between repeats;
+- `*` — "zero or more times". There's also `+` — "one or more", and `?` — "zero or one".
+
+:: code
+```rust
+macro_rules! my_vec {
+    ( $( $x:expr ),* ) => {{
+        let mut v = Vec::new();
+        $( v.push($x); )*
+        v
+    }};
+}
+
+fn main() {
+    let a = my_vec![1, 2, 3];
+    let b: Vec<i32> = my_vec![];
+    println!("{a:?} {b:?}");
+}
+```
+```out
+[1, 2, 3] []
+```
+In the template, `$( v.push($x); )*` means "for every caught `$x`, write a `v.push(...)` line".
+
+> **Analogy:** a mail carrier with a stack of letters. One rule: "drop it in the box". As many letters, as many times.
+
+:: code
+You can catch **pairs**:
+```rust
+use std::collections::BTreeMap;
+
+macro_rules! map {
+    ( $( $k:expr => $v:expr ),* $(,)? ) => {{
+        let mut m = BTreeMap::new();
+        $( m.insert($k, $v); )*
+        m
+    }};
+}
+
+fn main() {
+    let ages = map! {
+        "Ann" => 30,
+        "Bob" => 25,
+    };
+    println!("{ages:?}");
+}
+```
+```out
+{"Ann": 30, "Bob": 25}
+```
+`$(,)?` at the end means "a trailing comma is allowed". Handy when writing in a column.
+
+:: quiz
+What does `+` mean in `$( $x:expr ),+`?
+[ ] The arguments get added => It's not addition, it's the number of repeats.
+[x] One or more arguments => Right. An empty call won't match.
+[ ] Zero or more => That's `*`.
+
+:: task
+Write a `sum!` macro that adds up any number of expressions (at least one).
+```rust
+macro_rules! sum {
+    // your code
+}
+
+fn main() {
+    println!("{}", sum!(1));
+    println!("{}", sum!(1, 2, 3, 4));
+}
+```
+```solution
+macro_rules! sum {
+    ( $( $x:expr ),+ ) => {
+        0 $( + $x )+
+    };
+}
+
+fn main() {
+    println!("{}", sum!(1));
+    println!("{}", sum!(1, 2, 3, 4));
+}
+```
+```expect
+1
+10
+```
+hint: The pattern: `( $( $x:expr ),+ )`.
+hint: The template: `0 $( + $x )+` — you get `0 + 1 + 2 + 3 + 4`.
+
+:: recap
+- `$( ... ),*` — repetition separated by commas, zero or more times.
+- `+` — one or more, `?` — zero or one.
+- In the template, `$( ... )*` repeats a piece of code for each caught item.
+
+## LESSON a10-3 | Several rules, recursion, hygiene | 8
+:: goals
+- Write a macro with several variants
+- See how a macro calls itself
+- Learn why a macro's variables don't interfere with yours
+
+:: text Several rules
+A macro can have several branches, like `match`. Rust tries them **top to bottom** and takes the first that fits.
+
+```rust
+macro_rules! greet {
+    () => { println!("Hi!") };
+    ($name:expr) => { println!("Hi, {}!", $name) };
+}
+```
+Both `greet!()` and `greet!("Ann")` work.
+
+:: text Recursion
+A macro can call **itself** with fewer arguments. That's how complex processing is done: "bite off the first one, hand the rest to yourself".
+
+:: code
+```rust
+macro_rules! count {
+    () => { 0usize };
+    ($head:tt $($tail:tt)*) => { 1usize + count!($($tail)*) };
+}
+
+fn main() {
+    println!("{}", count!());
+    println!("{}", count!(a b c));
+    println!("{}", count!(x y z w q));
+}
+```
+```out
+0
+3
+5
+```
+`count!(a b c)` → `1 + count!(b c)` → `1 + 1 + count!(c)` → `1 + 1 + 1 + count!()` → `1 + 1 + 1 + 0`.
+
+> **Analogy:** a nesting doll. Open one, and inside is the same, only smaller. All the way down to the tiniest.
+
+:: text Hygiene
+Variables that a macro declares **inside itself** aren't visible outside and don't get mixed up with yours. Even if the names match.
+
+```rust
+macro_rules! make_x {
+    () => { let x = 100; };
+}
+
+let x = 1;
+make_x!();
+println!("{x}"); // 1 — the macro had its own x
+```
+This is called **hygiene**. It protects against accidental name clashes. Want a macro to create a variable for you? Pass its name in through an `ident`.
+
+:: quiz
+`let total = 5;` and then a macro writes `let total = 0;` inside itself. What happens to your `total` after the call?
+[x] It stays 5 => Right. Hygiene keeps the macro's variables separate.
+[ ] It becomes 0 => That would happen in C, but not in Rust.
+[ ] A compile error => There's no conflict at all.
+
+:: task
+Write a `say!` macro with two rules: with no arguments it prints `...`, with one it prints it in angle quotes: `«text»`.
+```rust
+macro_rules! say {
+    // your code
+}
+
+fn main() {
+    say!();
+    say!("hello");
+}
+```
+```solution
+macro_rules! say {
+    () => {
+        println!("...")
+    };
+    ($msg:expr) => {
+        println!("«{}»", $msg)
+    };
+}
+
+fn main() {
+    say!();
+    say!("hello");
+}
+```
+```expect
+...
+«hello»
+```
+hint: Two rules separated by `;`: `() => { ... };` and `($msg:expr) => { ... };`.
+
+:: deep How to debug macros
+When a macro behaves strangely, it helps to see what it **expanded** into.
+
+- The `cargo expand` tool (installed separately: `cargo install cargo-expand`) shows the code after all macros are expanded.
+- Rust Playground has a menu item **Tools → Expand macros**.
+
+Another trick is to temporarily replace the body with `stringify!(...)`: the macro will print what it caught, as a string.
+
+:: recap
+- Several rules are tried top to bottom.
+- Recursion: handle the first, pass the rest to yourself.
+- Hygiene: a macro's variables don't mix with yours.
+
+## LESSON a10-4 | Procedural macros and derive | 7
+:: goals
+- See how a procedural macro differs from `macro_rules!`
+- Use `#[derive(Serialize)]` from serde
+
+:: text Two kinds of macros
+- `macro_rules!` — **by pattern**. Written right in your code, quick and simple.
+- **Procedural** — small Rust programs that receive code and return new code. They live in a separate crate. They can do much more.
+
+Procedural macros come in three kinds:
+- `#[derive(Name)]` over a struct — adds a trait implementation;
+- attributes, like `#[tokio::main]`;
+- function-like: `sql!(...)`.
+
+You've already used them: `#[derive(Debug)]`, `#[tokio::main]`, `#[derive(Error)]`.
+
+> **Analogy:** `macro_rules!` is a stencil. A procedural macro is a little robot that reads your blueprint and draws in the details itself.
+
+:: code
+serde is the best-known example. One `derive` line — and a struct can turn into JSON and back:
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Cat {
+    name: String,
+    age: u8,
+    toys: Vec<String>,
+}
+
+fn main() {
+    let c = Cat { name: String::from("Whiskers"), age: 3, toys: vec![String::from("mouse")] };
+    let json = serde_json::to_string(&c).unwrap();
+    println!("{json}");
+
+    let back: Cat = serde_json::from_str(r#"{"name":"Kitty","age":5,"toys":[]}"#).unwrap();
+    println!("{back:?}");
+}
+```
+crates: yes
+```out
+{"name":"Whiskers","age":3,"toys":["mouse"]}
+Cat { name: "Kitty", age: 5, toys: [] }
+```
+We wrote no JSON code at all. `derive` generated it.
+
+:: text Field attributes
+Procedural macros also read extra markers. serde has many:
+
+```rust
+#[derive(Serialize)]
+struct User {
+    #[serde(rename = "userName")]
+    name: String,
+    #[serde(skip)]
+    password: String,
+}
+```
+- `rename` — the field gets a different name in JSON;
+- `skip` — don't output the field at all.
+
+:: quiz
+Where does a procedural macro like `derive(Serialize)` live?
+[ ] Right in your file, like `macro_rules!` => Procedural macros are written in a separate crate.
+[x] In a separate crate of type `proc-macro` => Right. serde brings it in for you.
+[ ] Inside the Rust compiler => No, it's a regular crate.
+
+:: deep How to write your own derive
+Your own procedural macro is a crate with `proc-macro = true` in `Cargo.toml`. Inside is a function with an attribute:
+
+```rust
+#[proc_macro_derive(Hello)]
+pub fn hello(input: TokenStream) -> TokenStream { ... }
+```
+It receives the struct's code as a stream of tokens and returns new code. Two crates usually help:
+- `syn` — parses the tokens into a handy tree ("here's the struct, here are its fields");
+- `quote` — builds new code from a template: `quote! { impl Hello for #name { ... } }`.
+
+This is an advanced topic. A good start is "The Little Book of Rust Macros" and the macros chapter of the official book.
+
+:: recap
+- `macro_rules!` — by pattern; procedural macros are programs that write code.
+- `#[derive(...)]`, attributes and function-like macros — the three procedural kinds.
+- serde: `derive(Serialize, Deserialize)` + `serde_json`.
+
+## LESSON a10-p | Practice: macros | 14 | practice
+:: goals
+- Write a few useful macros with repetition
+
+:: task
+The `set!` macro creates a `BTreeSet` from the listed values (a trailing comma is allowed).
+```rust
+use std::collections::BTreeSet;
+
+macro_rules! set {
+    // your code
+}
+
+fn main() {
+    let s = set![3, 1, 2, 3,];
+    println!("{s:?}");
+}
+```
+```solution
+use std::collections::BTreeSet;
+
+macro_rules! set {
+    ( $( $x:expr ),* $(,)? ) => {{
+        let mut s = BTreeSet::new();
+        $( s.insert($x); )*
+        s
+    }};
+}
+
+fn main() {
+    let s = set![3, 1, 2, 3,];
+    println!("{s:?}");
+}
+```
+```expect
+{1, 2, 3}
+```
+hint: The same pattern as `my_vec!`, plus `$(,)?` for the trailing comma.
+hint: Inside: `let mut s = BTreeSet::new(); $( s.insert($x); )* s`.
+
+:: task
+The `make_struct!` macro creates a struct with `#[derive(Debug)]` and the given fields: `make_struct!(Point { x: i32, y: i32 })`.
+```rust
+macro_rules! make_struct {
+    // your code
+}
+
+make_struct!(Point { x: i32, y: i32 });
+
+fn main() {
+    let p = Point { x: 1, y: 2 };
+    println!("{p:?}");
+}
+```
+```solution
+macro_rules! make_struct {
+    ($name:ident { $( $field:ident : $ty:ty ),* $(,)? }) => {
+        #[derive(Debug)]
+        struct $name {
+            $( $field: $ty ),*
+        }
+    };
+}
+
+make_struct!(Point { x: i32, y: i32 });
+
+fn main() {
+    let p = Point { x: 1, y: 2 };
+    println!("{p:?}");
+}
+```
+```expect
+Point { x: 1, y: 2 }
+```
+hint: The struct name is `$name:ident`, the fields are a repetition `$( $field:ident : $ty:ty ),*`.
+hint: In the template: `struct $name { $( $field: $ty ),* }`.
+
+:: task
+The `check!` macro takes several conditions and prints each one that turned out false as `failed: <condition>`. Use `stringify!`.
+```rust
+macro_rules! check {
+    // your code
+}
+
+fn main() {
+    let age = 15;
+    let name = "Ada";
+    check!(age >= 18, name.len() > 2, 1 + 1 == 2);
+}
+```
+```solution
+macro_rules! check {
+    ( $( $cond:expr ),* ) => {
+        $(
+            if !$cond {
+                println!("failed: {}", stringify!($cond));
+            }
+        )*
+    };
+}
+
+fn main() {
+    let age = 15;
+    let name = "Ada";
+    check!(age >= 18, name.len() > 2, 1 + 1 == 2);
+}
+```
+```expect
+failed: age >= 18
+```
+hint: `stringify!($cond)` turns the condition's code into a string.
+hint: Repeat for each one: `$( if !$cond { println!(...); } )*`.
+
+:: recap
+- `$(,)?` — allow a trailing comma.
+- `ident` + `ty` in a repetition — generate struct fields.
+- `stringify!` — turn code into text for messages.
