@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://dinlemon.github.io/rust_uwu/"><strong>Начать учиться →</strong></a>
+  <a href="https://dinlemon.github.io/rust_uwu/#/base"><strong>Начать учиться →</strong></a>
   &nbsp;·&nbsp;
   <a href="#что-внутри">Что внутри</a>
   &nbsp;·&nbsp;
@@ -29,20 +29,47 @@
 </p>
 
 <p align="center">
-  20 модулей &nbsp;·&nbsp; 92 урока &nbsp;·&nbsp; 116 задач на каждом языке
+  3 уровня &nbsp;·&nbsp; 48 модулей &nbsp;·&nbsp; 232 урока &nbsp;·&nbsp; RU / EN
 </p>
 
 ## Что внутри
 
-**Rust UwU** — интерактивный курс на русском и английском для тех, кто никогда не программировал. Сначала разберёмся, как компьютер выполняет команды, а в конце соберём свой список дел на Rust.
+**Rust UwU** — интерактивный курс на русском и английском. Начни с первой программы, продолжи продвинутыми темами и дойди до мастерской со своими механизмами Rust. В трёх уровнях — 287 задач с проверкой и 13 домашних заданий на каждом языке.
+
+### Base · Основы
+
+[Открыть основы →](https://dinlemon.github.io/rust_uwu/#/base)
+
+20 модулей, 92 урока, 116 задач. Первая программа, типы, владение, заимствование, коллекции, ошибки и Cargo. Итоговый проект — список дел на Rust.
+
+### Pro · Продвинутый
+
+<p align="center">
+  <a href="https://dinlemon.github.io/rust_uwu/#/pro"><img src="assets/fox-pro-960.webp" alt="Лисёнок в очках пишет код на ноутбуке, крабик держит модуль для будущего крейта" width="440"></a>
+</p>
+
+[Открыть Pro →](https://dinlemon.github.io/rust_uwu/#/pro)
+
+14 модулей, 68 уроков, 77 задач. Трейты и времена жизни глубже, итераторы, ошибки в больших программах, потоки, async, макросы, unsafe, FFI и инструменты измерения скорости. Итоговый проект — анализатор логов.
+
+### Expert · Мастерская
+
+<p align="center">
+  <a href="https://dinlemon.github.io/rust_uwu/#/expert"><img src="assets/fox-expert-960.webp" alt="Лисёнок с чертежом и крабик с отвёрткой собирают механизм в мастерской" width="440"></a>
+</p>
+
+[Открыть Expert →](https://dinlemon.github.io/rust_uwu/#/expert)
+
+14 модулей, 72 урока, 94 задачи и 13 домашних заданий. Свой `Future` и исполнитель, аллокаторы, unsafe-коллекции, lock-free, `no_std`, CLI, базы данных, веб, WASM, тестирование свойств и собственный derive-макрос. Для домашних заданий нужен установленный Rust и Cargo. На сайте есть пункты самопроверки.
+
+Уровни открыты сразу. Можно перейти к знакомой теме, а прогресс хранится отдельно для каждого уровня и общий для обоих языков.
 
 <details>
 <summary><strong>Посмотреть программу курса</strong></summary>
 
-1. **Первые шаги.** Знакомство с программированием, переменные, типы, функции, условия, циклы и коллекции.
-2. **Данные в Rust.** Владение, заимствование, срезы, структуры, перечисления, `match` и обработка ошибок.
-3. **Свой проект.** Модули, Cargo, обобщения, трейты, времена жизни, замыкания, итераторы и тесты.
-4. **Темы посложнее.** Умные указатели, потоки, знакомство с `async` и макросами. В финале — приложение со списком дел.
+1. **Основы.** Знакомство с программированием, переменные, функции, владение, коллекции, трейты и тесты. Первый законченный проект.
+2. **Продвинутый уровень.** Более подробное устройство типов, памяти и конкурентного кода. Библиотеки, инструменты и анализатор логов.
+3. **Мастерская.** Реализация собственных механизмов, интеграция с вебом и базами данных, домашние проекты и проверки на своём компьютере.
 
 </details>
 
@@ -66,7 +93,7 @@
 
 ### Диплом на память
 
-После всех 92 уроков лисёнок и крабик вручат именной диплом. Введи имя, распечатай его или сохрани в PDF через окно печати.
+После завершения каждого уровня лисёнок и крабик вручат отдельный именной диплом. Введи имя, распечатай его или сохрани в PDF через окно печати. Ниже — образец диплома за основы.
 
 <p align="center">
   <a href="assets/screenshot-diploma.jpg"><img src="assets/screenshot-diploma.jpg" alt="Образец диплома Rust UwU с демонстрационным именем, лисёнком и крабиком" width="800"></a>
@@ -94,7 +121,9 @@
 
 ## Лисёнок и крабик
 
-На карте курса лисёнок разворачивает свиток, а крабик ставит флажок у следующего урока. В практических заданиях лисёнок приносит подсказки, а после зачёта всех уроков вместе с крабиком вручает именной диплом. Его можно открыть с главной, распечатать на альбомном A4 или сохранить в PDF через окно печати.
+На карте курса лисёнок разворачивает свиток, а крабик ставит флажок у следующего урока. У Pro и Expert свои иллюстрации и реакции по клику. В Pro маскоты собирают крейт и радуются пройденным тестам. В Expert проверяют механизм и встречают посетителя мастерской. Анимации можно выключить в настройках. Системное предпочтение уменьшенного движения тоже учитывается.
+
+В практических заданиях лисёнок приносит подсказки, а после зачёта всех уроков уровня вместе с крабиком вручает именной диплом. Его можно открыть с главной этого уровня, распечатать на альбомном A4 или сохранить в PDF через окно печати.
 
 ## Как открыть
 
@@ -111,9 +140,9 @@ cd rust_uwu
 
 ## English
 
-**Rust UwU** is an interactive course for first-time programmers. It takes you from your first line of code to a small to-do app in Rust. The course has 20 modules and 92 lessons, with 116 auto-checked tasks in each language.
+**Rust UwU** is a bilingual interactive Rust course with three open levels. **[Base](https://dinlemon.github.io/rust_uwu/#/base)** covers the basics in 92 lessons, **[Pro](https://dinlemon.github.io/rust_uwu/#/pro)** goes deeper in 68 lessons, and **[Expert](https://dinlemon.github.io/rust_uwu/#/expert)** offers a 72-lesson workshop. In total, there are 48 modules, 232 lessons, 287 checked coding tasks and 13 home assignments per language. Expert home assignments require a local Rust and Cargo installation.
 
-[Open the course](https://dinlemon.github.io/rust_uwu/) and choose **EN** in the top bar. Run code in the browser, take hints one at a time, and come back whenever you like. The browser saves your progress. The fox and crab mark your next lesson on the course map and award a printable diploma when you finish.
+[Open the course](https://dinlemon.github.io/rust_uwu/#/base) and choose **EN** in the top bar. Run code in the browser, take hints one at a time, and come back whenever you like. Progress is tracked by level and shared across languages. Pro and Expert have their own fox-and-crab scenes with click reactions. Each completed level awards a printable diploma.
 
 ## Для авторов курса
 
@@ -121,7 +150,7 @@ cd rust_uwu
 <summary><strong>Исходники, сборка и формат уроков</strong></summary>
 
 - [`course/ru/`](course/ru/) и [`course/en/`](course/en/) — исходники уроков и словарей. Порядок и типы карточек, ответы и число пропусков должны совпадать между языками. Так прогресс остаётся общим.
-- [`tools/build.py`](tools/build.py) проверяет структуру и пересобирает [`content/course-data.js`](content/course-data.js). Правки вноси в исходники уроков.
+- [`tools/build.py`](tools/build.py) проверяет структуру и собирает по отдельному файлу для каждого уровня и языка в [`content/`](content/), а также [`content/manifest.js`](content/manifest.js) с версиями данных. Уроки `m*.txt` относятся к Base, `a*.txt` — к Pro, `x*.txt` — к Expert. Правки вноси в исходники уроков.
 - [`tools/check_rust.py`](tools/check_rust.py) проверяет примеры и решения. Нужен `rustc` 1.85 или новее.
 - [`docs/research.md`](docs/research.md) — заметки о методике, программе и устройстве курса.
 

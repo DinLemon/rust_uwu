@@ -207,13 +207,26 @@
     cookie: { pose: "cookie", duration: 1160 },
     nap: { pose: "nap", duration: 1750 },
   };
+  const trackFoxReactions = {
+    pro: {
+      build: { duration: 1400 },
+      wave: { pose: "pro-wave", duration: 1100 },
+      celebrate: { pose: "pro-wave", duration: 1600 },
+    },
+    expert: {
+      inspect: { duration: 1600 },
+      wave: { pose: "expert-wave", duration: 1100 },
+      celebrate: { pose: "expert-wave", duration: 1800 },
+    },
+  };
 
   function bindHeroFox(fox) {
     const art = app.querySelector(".hero-art");
     const slot = art.querySelector(".fox-pose-slot");
     const response = app.querySelector(".fox-response");
     const poses = new Map();
-    const actions = Object.keys(foxReactions);
+    const reactions = trackFoxReactions[curTrack()] || foxReactions;
+    const actions = Object.keys(reactions);
     let settle, revision = 0, next = 0;
 
     function loadPose(src) {
@@ -233,8 +246,9 @@
     }
 
     // Первую позу грузим сразу, остальные — когда браузер свободен (или при наведении на лисёнка).
-    const preloadAll = () => actions.forEach((a) => foxReactions[a].pose && loadPose(foxReactions[a].pose));
-    loadPose(foxReactions.wave.pose);
+    const preloadAll = () => actions.forEach((a) => reactions[a].pose && loadPose(reactions[a].pose));
+    const firstPose = actions.find((action) => reactions[action].pose);
+    if (firstPose) loadPose(reactions[firstPose].pose);
     const saveData = navigator.connection && navigator.connection.saveData;
     if (!saveData) (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(preloadAll);
     const trigger = art.querySelector(".fox-trigger");
@@ -243,7 +257,7 @@
     trigger.addEventListener("click", async () => {
       const action = actions[next];
       next = (next + 1) % actions.length;
-      const reaction = foxReactions[action];
+      const reaction = reactions[action];
       const selected = ++revision;
       clearTimeout(settle);
       delete art.dataset.foxReaction;
@@ -300,7 +314,8 @@
     const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
     const cont = saved || n;
     const started = doneCount() > 0 || S.last;
-    const fox = T.fox?.prompt && T.fox;
+    const fox = trackText("fox");
+    const heroScene = isPro() ? curTrack() : "mascot";
     let html = `<div class="wrap-wide">
       <section class="hero">
         <div class="hero-grid">
@@ -320,8 +335,8 @@
             </div>
           </div>
           <div class="hero-companion">
-            <div class="hero-art">
-              <img class="hero-fox-idle" src="assets/fox-mascot-960.webp" srcset="${foxSet("mascot")}" sizes="(max-width: 600px) 19rem, 28rem" width="1374" height="1145" alt="" fetchpriority="high">
+            <div class="hero-art" data-hero-track="${curTrack()}">
+              <img class="hero-fox-idle" src="assets/fox-${heroScene}-960.webp" srcset="${foxSet(heroScene)}" sizes="(max-width: 600px) 19rem, 28rem" width="1374" height="1145" alt="" fetchpriority="high">
               <div class="fox-pose-slot" aria-hidden="true"></div>
               <svg class="fox-effects" viewBox="0 0 120 100" aria-hidden="true" focusable="false">
                 <g class="fox-wave-marks" fill="none" stroke="#ad70b8" stroke-width="1.8" stroke-linecap="round">
@@ -343,6 +358,19 @@
                 <g class="fox-nap-letters" fill="none" stroke="#bf9ae8" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M92 32h5l-5 5h5"/><path d="M100 20h7l-7 7h7"/><path d="M109 7h8l-8 8h8"/>
                 </g>
+                ${isPro() ? `<g class="track-packets" fill="#bce4d0" stroke="#628c79" stroke-width="1.2" stroke-linejoin="round">
+                  <g><path d="m95 22 6-3 6 3v7l-6 3-6-3Z"/><path d="m95 22 6 3 6-3m-6 3v7" fill="none"/></g>
+                  <g><path d="m104 43 5-2.5 5 2.5v6l-5 2.5-5-2.5Z"/><path d="m104 43 5 2.5 5-2.5m-5 2.5v6" fill="none"/></g>
+                </g>
+                <g class="track-mechanism" fill="none" stroke="#d2a24a" stroke-width="1.5" stroke-linecap="round">
+                  <g class="track-orbit"><circle cx="89" cy="27" r="8" stroke-dasharray="3 4"/><circle cx="89" cy="19" r="2" fill="#bca0d6" stroke="none"/></g>
+                  <path class="track-check" d="m83 28 4 4 8-10" stroke="#64a58a" stroke-width="2.5"/>
+                </g>
+                <g class="track-sparks" fill="#ffd578" stroke="#bc8443" stroke-width=".65">
+                  <path d="m18 24 2-5 2 5 5 2-5 2-2 5-2-5-5-2Z"/>
+                  <path d="m97 25 2-5 2 5 5 2-5 2-2 5-2-5-5-2Z"/>
+                  <path d="m105 53 1.5-4 1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5Z"/>
+                </g>` : ""}
               </svg>
               ${fox ? `<button type="button" class="fox-trigger" aria-label="${esc(fox.prompt)}"></button>` : ""}
             </div>

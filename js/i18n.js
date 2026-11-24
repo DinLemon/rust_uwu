@@ -59,6 +59,10 @@
         tabsLabel: "Уровни курса", tabDone: (d, n) => `${d} из ${n}`,
         crumb: "Уровень 2", docTitle: "Rust UwU — Уровень 2",
         heroTitle: "Rust глубже. Всё так же маленькими шагами.",
+        fox: {
+          prompt: "Нажми на лисёнка — соберём свой крейт.", loading: "Лисёнок готовит новую позу…",
+          actions: { build: "Крабик принёс модуль. Лисёнок собирает крейт.", wave: "Лапка на удачу перед сложной задачей.", celebrate: "Тесты прошли. Можно немного порадоваться." },
+        },
         heroText: "Для тех, кто прошёл основы. Трейты и обобщения, итераторы, время жизни, потоки, async, макросы, unsafe, скорость и свой крейт. Один урок — одна идея. Углубления, как и раньше, можно пропускать.",
         note: "Советую сначала пройти Уровень 1. Но ничего не заперто: если основы уже знакомы, начинай отсюда.",
         diploma: {
@@ -70,6 +74,10 @@
       expert: {
         label: "Уровень 3 · Мастерская", short: "ур. 3", crumb: "Уровень 3", docTitle: "Rust UwU — Уровень 3",
         heroTitle: "Мастерская. Много практики, глубокие темы.",
+        fox: {
+          prompt: "Нажми на лисёнка — заглянем в мастерскую.", loading: "Лисёнок готовит новую позу…",
+          actions: { inspect: "Проверим, как всё устроено внутри. Крабик держит инструмент.", wave: "Мастерская открыта. Лисёнок приветствует тебя лапкой.", celebrate: "Механизм работает. Ещё одна идея стала настоящей." },
+        },
         heroText: "Для тех, кто прошёл второй уровень. Тонкости типов и трейтов, свой Future и исполнитель, аллокаторы и небезопасные структуры, lock-free, no_std, веб, CLI, базы данных, WASM, тестирование свойств и свой derive-макрос. Часть заданий — домашние: их делают на своём компьютере с cargo.",
         note: "Советую сначала пройти Уровень 2: здесь он считается пройденным. Но ничего не заперто.",
         diploma: {
@@ -183,6 +191,10 @@
         tabsLabel: "Course levels", tabDone: (d, n) => `${d} of ${n}`,
         crumb: "Level 2", docTitle: "Rust UwU — Level 2",
         heroTitle: "Rust, deeper. Still in small steps.",
+        fox: {
+          prompt: "Click the fox to build a crate together.", loading: "The fox is getting ready…",
+          actions: { build: "The crab brought a module. The fox is building a crate.", wave: "A lucky paw before a tricky task.", celebrate: "The tests passed. Time for a little celebration." },
+        },
         heroText: "For people who finished the basics. Traits and generics, iterators, lifetimes, threads, async, macros, unsafe, speed and your own crate. One lesson, one idea. Deep dives can still be skipped.",
         note: "I suggest finishing Level 1 first. But nothing is locked: if the basics feel familiar, start here.",
         diploma: {
@@ -194,6 +206,10 @@
       expert: {
         label: "Level 3 · Workshop", short: "lvl 3", crumb: "Level 3", docTitle: "Rust UwU — Level 3",
         heroTitle: "The workshop. Lots of practice, deep topics.",
+        fox: {
+          prompt: "Click the fox to explore the workshop.", loading: "The fox is getting ready…",
+          actions: { inspect: "Let's see how it works inside. The crab is holding the tool.", wave: "The workshop is open. The fox waves hello.", celebrate: "The mechanism works. Another idea has come to life." },
+        },
         heroText: "For people who finished Level 2. Fine points of types and traits, your own Future and executor, allocators and unsafe data structures, lock-free code, no_std, web, CLI, databases, WASM, property testing and your own derive macro. Some tasks are home assignments: you do them on your own computer with cargo.",
         note: "I suggest finishing Level 2 first: this level assumes it. But nothing is locked.",
         diploma: {
