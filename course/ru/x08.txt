@@ -1,0 +1,733 @@
+# MODULE x08 | Lock-free и порядок памяти | Acquire/Release, свой спинлок, CAS-циклы, стек Трайбера, crossbeam и parking_lot
+
+## LESSON x08-1 | Acquire и Release на практике | 9
+:: goals
+- Передать данные между потоками через атомарный флаг
+- Понять, зачем нужна пара Release/Acquire
+
+:: text Задача: «данные готовы»
+Поток-писатель заполняет данные и поднимает флаг `ready`. Поток-читатель ждёт флаг и читает данные.
+
+Если флаг атомарный, но с `Relaxed`, процессор **может** переставить операции: читатель увидит `ready = true` раньше, чем сами данные. Чтобы этого не было:
+- писатель поднимает флаг с `Ordering::Release` — «всё, что я записал до этого, опубликовано»;
+- читатель проверяет флаг с `Ordering::Acquire` — «если я увидел флаг, я вижу и всё, что было до него».
+
+> **Аналогия:** курьер (Release) кладёт посылку в ящик и только потом поднимает флажок. Ты (Acquire), увидев флажок, точно найдёшь посылку внутри.
+
+:: code
+```rust
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::thread;
+
+static DATA: AtomicU64 = AtomicU64::new(0);
+static READY: AtomicBool = AtomicBool::new(false);
+
+fn main() {
+    thread::scope(|s| {
+        s.spawn(|| {
+            DATA.store(42, Ordering::Relaxed);
+            READY.store(true, Ordering::Release); // публикуем
+        });
+        s.spawn(|| {
+            while !READY.load(Ordering::Acquire) {
+                std::hint::spin_loop();
+            }
+            println!("данные: {}", DATA.load(Ordering::Relaxed));
+        });
+    });
+}
+```
+```out
+данные: 42
+```
+`DATA` можно писать и читать с `Relaxed`: порядок обеспечивает пара Release/Acquire на флаге.
+
+:: quiz
+Писатель ставит флаг с `Release`, читатель проверяет с `Relaxed`. Что не так?
+[x] Читатель может увидеть флаг, но старые данные: гарантия работает только в паре с `Acquire` => Верно.
+[ ] Ничего, одного `Release` достаточно => Нужна пара: Release на записи, Acquire на чтении.
+[ ] Код не скомпилируется => Скомпилируется — ошибка будет редкой и плавающей. Это хуже.
+
+:: text Когда что брать
+- Счётчик статистики — `Relaxed`.
+- Флаг «данные готовы», указатель на опубликованный объект — `Release` при записи, `Acquire` при чтении.
+- Захват и освобождение своего замка — `Acquire` при захвате, `Release` при освобождении.
+- Сомневаешься — `SeqCst`. Медленнее, но всегда безопасно.
+
+:: task
+Передай строку из потока-писателя без `Mutex` через `OnceLock<String>`. Писатель кладёт строку через `set`, читатель ждёт и печатает.
+```rust
+use std::sync::OnceLock;
+use std::thread;
+
+static MESSAGE: OnceLock<String> = OnceLock::new();
+
+fn main() {
+    thread::scope(|s| {
+        s.spawn(|| {
+            // твой код: положи "привет из потока"
+        });
+        s.spawn(|| {
+            // твой код: дождись и напечатай
+        });
+    });
+}
+```
+```solution
+use std::sync::OnceLock;
+use std::thread;
+
+static MESSAGE: OnceLock<String> = OnceLock::new();
+
+fn main() {
+    thread::scope(|s| {
+        s.spawn(|| {
+            MESSAGE.set(String::from("привет из потока")).unwrap();
+        });
+        s.spawn(|| {
+            let msg = loop {
+                if let Some(m) = MESSAGE.get() {
+                    break m;
+                }
+                std::hint::spin_loop();
+            };
+            println!("{msg}");
+        });
+    });
+}
+```
+```expect
+привет из потока
+```
+hint: `OnceLock` внутри уже использует Release/Acquire. Писатель: `MESSAGE.set(...)`.
+hint: Читатель: крутись в цикле, пока `MESSAGE.get()` не вернёт `Some`.
+
+:: recap
+- Release при публикации, Acquire при получении — данные видны целиком.
+- `Relaxed` — только для независимых счётчиков.
+- `OnceLock` и `Mutex` уже делают это правильно за тебя.
+
+## LESSON x08-2 | Свой спинлок | 10
+:: goals
+- Написать замок на одном `AtomicBool`
+- Сделать безопасную обёртку с guard и `UnsafeCell`
+
+:: text compare_exchange
+Главная операция lock-free кода — **сравнить и обменять** (CAS):
+
+```rust
+flag.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+```
+«Если там `false` — поставь `true` и верни `Ok`. Если там уже не `false` — ничего не меняй и верни `Err(текущее)`». Всё — за один неделимый шаг.
+
+Спинлок: крутимся, пока CAS не удался. Освобождаем — `store(false, Release)`.
+
+> **Аналогия:** табличка «занято» на двери. Ты переворачиваешь её только если там «свободно» — и одним движением, чтобы двое не перевернули одновременно.
+
+:: code
+```rust
+use std::cell::UnsafeCell;
+use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    value: UnsafeCell<T>,
+}
+
+// SAFETY: доступ к value только через guard, а guard один благодаря locked
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        SpinLock { locked: AtomicBool::new(false), value: UnsafeCell::new(value) }
+    }
+    pub fn lock(&self) -> Guard<'_, T> {
+        while self.locked.compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+            std::hint::spin_loop();
+        }
+        Guard { lock: self }
+    }
+}
+
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        // SAFETY: пока жив guard, замок наш
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<T> DerefMut for Guard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: пока жив guard, замок наш и других guard нет
+        unsafe { &mut *self.lock.value.get() }
+    }
+}
+
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+fn main() {
+    let total = SpinLock::new(Vec::new());
+    thread::scope(|s| {
+        for t in 0..4 {
+            let total = &total;
+            s.spawn(move || {
+                for i in 0..250 {
+                    total.lock().push(t * 1000 + i);
+                }
+            });
+        }
+    });
+    println!("элементов: {}", total.lock().len());
+}
+```
+```out
+элементов: 1000
+```
+Guard освобождает замок в `Drop` — забыть отпустить невозможно. Ровно как `MutexGuard`.
+
+:: text Почему не всегда спинлок
+Спинлок **крутится**, а не спит: пока ждёт, сжигает процессор. Хорош, когда замок держат очень коротко. Если ожидание долгое, `Mutex` лучше: он усыпляет поток через систему.
+
+:: quiz
+Зачем `UnsafeCell` внутри `SpinLock`?
+[x] Это единственный законный способ менять данные через `&self` => Верно. Все Cell, Mutex и атомики построены на нём.
+[ ] Чтобы ускорить доступ => Скорость тут ни при чём.
+[ ] Без него не будет `Send` => Дело во внутренней изменяемости, а не в `Send`.
+
+:: task
+Добавь в `SpinLock` метод `try_lock(&self) -> Option<Guard<T>>`: одна попытка CAS без ожидания.
+```rust
+use std::cell::UnsafeCell;
+use std::ops::Deref;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    value: UnsafeCell<T>,
+}
+
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        SpinLock { locked: AtomicBool::new(false), value: UnsafeCell::new(value) }
+    }
+    // твой код: try_lock
+}
+
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+fn main() {
+    let l = SpinLock::new(5);
+    let g = l.try_lock();
+    println!("{:?}", g.as_deref());
+    println!("{}", l.try_lock().is_none());
+    drop(g);
+    println!("{}", l.try_lock().is_some());
+}
+```
+```solution
+use std::cell::UnsafeCell;
+use std::ops::Deref;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    value: UnsafeCell<T>,
+}
+
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        SpinLock { locked: AtomicBool::new(false), value: UnsafeCell::new(value) }
+    }
+    pub fn try_lock(&self) -> Option<Guard<'_, T>> {
+        self.locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .ok()
+            .map(|_| Guard { lock: self })
+    }
+}
+
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+fn main() {
+    let l = SpinLock::new(5);
+    let g = l.try_lock();
+    println!("{:?}", g.as_deref());
+    println!("{}", l.try_lock().is_none());
+    drop(g);
+    println!("{}", l.try_lock().is_some());
+}
+```
+```expect
+Some(5)
+true
+true
+```
+hint: `compare_exchange(false, true, Acquire, Relaxed)` → `Result`. `.ok().map(|_| Guard { lock: self })`.
+
+:: recap
+- `compare_exchange` — неделимое «если так, то поменяй».
+- Спинлок: CAS в цикле на захват, `store(false, Release)` на освобождение.
+- `UnsafeCell` + `unsafe impl Sync` + guard с `Drop` — основа любого замка.
+
+## LESSON x08-3 | CAS-циклы и стек Трайбера | 10
+:: goals
+- Писать атомарные обновления «прочитал — посчитал — записал»
+- Сделать lock-free стек на `AtomicPtr`
+
+:: text CAS-цикл
+Не все операции есть готовыми (`fetch_add`, `fetch_max`…). Сложное обновление пишут **циклом**:
+1. прочитать текущее значение;
+2. посчитать новое;
+3. попробовать записать через `compare_exchange`;
+4. не вышло (кто-то успел раньше) — начать сначала.
+
+Для этого есть готовый помощник `fetch_update`.
+
+:: code
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+// Атомарно: умножить на 3 и прибавить 1, но не больше 1000
+fn bump(x: &AtomicU64) {
+    let _ = x.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+        let next = v * 3 + 1;
+        if next > 1000 { None } else { Some(next) }
+    });
+}
+
+fn main() {
+    let x = AtomicU64::new(1);
+    thread::scope(|s| {
+        for _ in 0..3 {
+            s.spawn(|| {
+                for _ in 0..5 {
+                    bump(&x);
+                }
+            });
+        }
+    });
+    println!("{}", x.load(Ordering::SeqCst));
+}
+```
+```out
+364
+```
+1 → 4 → 13 → 40 → 121 → 364 → (1093 > 1000, стоп). Сколько бы потоков ни толкалось, результат одинаковый.
+
+:: text Стек Трайбера
+Классический lock-free стек: голова — `AtomicPtr<Node>`.
+- **push**: новый узел указывает на текущую голову; CAS «голова ещё та же? — поставь новый узел».
+- **pop**: прочитать голову, CAS «голова ещё та же? — поставь её `next`».
+
+> **Аналогия:** стопка бумаги на общем столе. Кладёшь лист, только если стопка не изменилась, пока ты тянулся. Изменилась — тянешься снова.
+
+:: code
+```rust
+use std::ptr;
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::thread;
+
+struct Node<T> {
+    value: T,
+    next: *mut Node<T>,
+}
+
+pub struct TreiberStack<T> {
+    head: AtomicPtr<Node<T>>,
+}
+
+unsafe impl<T: Send> Sync for TreiberStack<T> {}
+
+impl<T> TreiberStack<T> {
+    pub fn new() -> Self {
+        TreiberStack { head: AtomicPtr::new(ptr::null_mut()) }
+    }
+    pub fn push(&self, value: T) {
+        let node = Box::into_raw(Box::new(Node { value, next: ptr::null_mut() }));
+        let mut head = self.head.load(Ordering::Relaxed);
+        loop {
+            // SAFETY: node — наш, ещё никому не опубликован
+            unsafe { (*node).next = head };
+            match self.head.compare_exchange_weak(head, node, Ordering::Release, Ordering::Relaxed) {
+                Ok(_) => return,
+                Err(actual) => head = actual, // кто-то успел — пробуем снова
+            }
+        }
+    }
+    // pop безопасен, только когда других потоков уже нет (см. «Углубиться»)
+    pub fn pop_exclusive(&mut self) -> Option<T> {
+        let head = *self.head.get_mut();
+        if head.is_null() {
+            return None;
+        }
+        // SAFETY: &mut self — других потоков нет; head создан через Box::into_raw
+        let node = unsafe { Box::from_raw(head) };
+        *self.head.get_mut() = node.next;
+        Some(node.value)
+    }
+}
+
+impl<T> Drop for TreiberStack<T> {
+    fn drop(&mut self) {
+        while self.pop_exclusive().is_some() {}
+    }
+}
+
+fn main() {
+    let stack = TreiberStack::new();
+    thread::scope(|s| {
+        for t in 0..4 {
+            let stack = &stack;
+            s.spawn(move || {
+                for i in 0..100 {
+                    stack.push(t * 100 + i);
+                }
+            });
+        }
+    });
+    let mut stack = stack;
+    let mut sum = 0;
+    let mut n = 0;
+    while let Some(v) = stack.pop_exclusive() {
+        sum += v;
+        n += 1;
+    }
+    println!("{n} элементов, сумма {sum}");
+}
+```
+```out
+400 элементов, сумма 79800
+```
+Четыре потока одновременно делают push — без единого замка, и ничего не потерялось.
+
+:: quiz
+Что делает `compare_exchange_weak`, если голова уже изменилась?
+[x] Ничего не записывает и возвращает `Err` с текущим значением => Верно. Тогда цикл пробует снова.
+[ ] Перезаписывает голову силой => Тогда узлы других потоков потерялись бы.
+[ ] Паникует => Это обычная ситуация, не ошибка.
+
+:: deep Почему lock-free pop так сложен
+Если несколько потоков одновременно делают `pop`, возникают две беды:
+- **освобождение во время чтения**: поток A прочитал `head`, поток B его снял и освободил, A читает `head.next` из уже освобождённой памяти;
+- **ABA**: голова была A, стала B, снова стала A (тот же адрес, переиспользованная память) — CAS думает «ничего не изменилось» и портит стек.
+
+Решения: **указатели-опасности** (hazard pointers) или **эпохи** (epoch-based reclamation). Крейт `crossbeam-epoch` реализует второе — на нём построены очереди и стеки `crossbeam`. Писать это самому в боевом коде не нужно: бери готовое.
+
+:: recap
+- CAS-цикл: прочитал → посчитал → `compare_exchange` → не вышло — заново. Помощник — `fetch_update`.
+- Стек Трайбера: push через CAS на голове.
+- Конкурентный pop требует защиты памяти — используй `crossbeam`.
+
+## LESSON x08-4 | crossbeam и parking_lot | 8
+:: goals
+- Знать, какие готовые инструменты брать вместо самописных
+- Использовать каналы crossbeam с `select!` и замки parking_lot
+
+:: text Не изобретай велосипед
+Самописные lock-free структуры — отличная учёба, но в работе берут проверенное:
+- **crossbeam** — каналы (быстрые, с `select!`, многие отправители и многие получатели), очереди, эпохи;
+- **parking_lot** — `Mutex` и `RwLock` поменьше и побыстрее стандартных, без «отравления» (`lock()` возвращает guard сразу, без `unwrap`);
+- **std** — с годами стандартные `Mutex` и `mpsc` сильно улучшились; для обычных задач их хватает.
+
+:: code
+```rust
+use crossbeam::channel;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (fast_tx, fast_rx) = channel::unbounded();
+    let (slow_tx, slow_rx) = channel::unbounded();
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(10));
+        fast_tx.send("быстрый").unwrap();
+    });
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(200));
+        slow_tx.send("медленный").unwrap();
+    });
+
+    channel::select! {
+        recv(fast_rx) -> msg => println!("первым пришёл: {}", msg.unwrap()),
+        recv(slow_rx) -> msg => println!("первым пришёл: {}", msg.unwrap()),
+    }
+}
+```
+crates: yes
+```out
+первым пришёл: быстрый
+```
+`select!` у crossbeam — как у tokio, только для обычных потоков.
+
+:: code
+```rust
+use parking_lot::Mutex;
+use std::thread;
+
+fn main() {
+    let total = Mutex::new(0u64);
+    thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| {
+                for _ in 0..1000 {
+                    *total.lock() += 1; // без .unwrap(): отравления нет
+                }
+            });
+        }
+    });
+    println!("{}", total.into_inner());
+}
+```
+crates: yes
+```out
+8000
+```
+
+:: quiz
+Чем `parking_lot::Mutex::lock()` удобнее стандартного?
+[x] Возвращает guard сразу, без `Result` и `unwrap`: «отравления» нет => Верно.
+[ ] Он не блокирует поток вообще => Блокирует — это же замок.
+[ ] Его можно использовать без `Sync` => Требования те же.
+
+:: recap
+- crossbeam: каналы с `select!`, очереди, эпохи.
+- parking_lot: компактные замки без отравления.
+- Свой lock-free код — для учёбы и особых случаев; в работе — готовые крейты.
+
+## LESSON x08-p | Практика: атомики | 25 | practice
+:: goals
+- Написать несколько lock-free примитивов
+
+:: task
+Атомарный максимум: каждый поток сообщает свои числа, а `AtomicU64` хранит наибольшее. Используй `fetch_max`.
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+fn main() {
+    let best = AtomicU64::new(0);
+    let data = [vec![3, 17, 5], vec![42, 8], vec![9, 41, 1]];
+    thread::scope(|s| {
+        for part in &data {
+            let best = &best;
+            s.spawn(move || {
+                // твой код
+            });
+        }
+    });
+    println!("{}", best.load(Ordering::SeqCst));
+}
+```
+```solution
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+fn main() {
+    let best = AtomicU64::new(0);
+    let data = [vec![3, 17, 5], vec![42, 8], vec![9, 41, 1]];
+    thread::scope(|s| {
+        for part in &data {
+            let best = &best;
+            s.spawn(move || {
+                for &x in part {
+                    best.fetch_max(x, Ordering::Relaxed);
+                }
+            });
+        }
+    });
+    println!("{}", best.load(Ordering::SeqCst));
+}
+```
+```expect
+42
+```
+hint: `best.fetch_max(x, Ordering::Relaxed)` для каждого числа.
+
+:: task
+Счётчик-«билетёр»: `next_ticket()` выдаёт уникальные номера из нескольких потоков. Собери все номера, отсортируй и проверь, что это ровно `0..400` без повторов.
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::thread;
+
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+fn next_ticket() -> usize {
+    // твой код
+}
+
+fn main() {
+    let got = Mutex::new(Vec::new());
+    thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                let mine: Vec<usize> = (0..100).map(|_| next_ticket()).collect();
+                got.lock().unwrap().extend(mine);
+            });
+        }
+    });
+    let mut all = got.into_inner().unwrap();
+    all.sort();
+    println!("{}", all == (0..400).collect::<Vec<_>>());
+}
+```
+```solution
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::thread;
+
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+fn next_ticket() -> usize {
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+fn main() {
+    let got = Mutex::new(Vec::new());
+    thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                let mine: Vec<usize> = (0..100).map(|_| next_ticket()).collect();
+                got.lock().unwrap().extend(mine);
+            });
+        }
+    });
+    let mut all = got.into_inner().unwrap();
+    all.sort();
+    println!("{}", all == (0..400).collect::<Vec<_>>());
+}
+```
+```expect
+true
+```
+hint: `fetch_add(1, ...)` возвращает **старое** значение — это и есть номер билета.
+
+:: task
+`OnceFlag`: `call_once(f)` выполняет `f` ровно один раз, сколько бы потоков ни звали. Используй `compare_exchange` на `AtomicBool`: кто первым поменял `false → true`, тот и вызывает.
+```rust
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::thread;
+
+struct OnceFlag {
+    done: AtomicBool,
+}
+
+impl OnceFlag {
+    fn call_once(&self, f: impl FnOnce()) {
+        // твой код
+    }
+}
+
+static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn main() {
+    let once = OnceFlag { done: AtomicBool::new(false) };
+    thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| once.call_once(|| { CALLS.fetch_add(1, Ordering::SeqCst); }));
+        }
+    });
+    println!("вызовов: {}", CALLS.load(Ordering::SeqCst));
+}
+```
+```solution
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::thread;
+
+struct OnceFlag {
+    done: AtomicBool,
+}
+
+impl OnceFlag {
+    fn call_once(&self, f: impl FnOnce()) {
+        if self.done.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok() {
+            f();
+        }
+    }
+}
+
+static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn main() {
+    let once = OnceFlag { done: AtomicBool::new(false) };
+    thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| once.call_once(|| { CALLS.fetch_add(1, Ordering::SeqCst); }));
+        }
+    });
+    println!("вызовов: {}", CALLS.load(Ordering::SeqCst));
+}
+```
+```expect
+вызовов: 1
+```
+hint: `if self.done.compare_exchange(false, true, ...).is_ok() { f(); }`.
+hint: Настоящий `std::sync::Once` ещё заставляет остальных **ждать**, пока `f` закончит. Здесь — упрощённо.
+
+:: homework Бенчмарк замков
+Сравни замки на своём компьютере.
+
+1. Создай проект и добавь крейты:
+```sh
+cargo new lock-bench
+cd lock-bench
+cargo add parking_lot crossbeam
+```
+2. Напиши программу: 8 потоков по 1 000 000 раз увеличивают общий счётчик. Варианты: `std::sync::Mutex<u64>`, `parking_lot::Mutex<u64>`, свой `SpinLock<u64>` из урока, `AtomicU64::fetch_add`.
+3. Замерь время каждого варианта через `Instant`, запуск только в `--release`.
+4. Повтори с 2 потоками и с 32.
+[ ] Все четыре варианта дают одинаковый итог: 8 000 000
+[ ] Таблица времени для 2, 8 и 32 потоков записана
+[ ] Видно, как спинлок ведёт себя при большом числе потоков, и есть объяснение почему
+
+:: recap
+- `fetch_max`, `fetch_add` — готовые атомарные операции.
+- `compare_exchange` на флаге — «кто первый, тот и делает».
+- Измеряй замки на своём железе: результаты зависят от числа ядер.

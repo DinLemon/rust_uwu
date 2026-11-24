@@ -1,0 +1,733 @@
+# MODULE x08 | Lock-free code and memory ordering | Acquire/Release, your own spinlock, CAS loops, a Treiber stack, crossbeam and parking_lot
+
+## LESSON x08-1 | Acquire and Release in practice | 9
+:: goals
+- Pass data between threads through an atomic flag
+- See why the Release/Acquire pair is needed
+
+:: text The task: "data is ready"
+A writer thread fills in the data and raises a `ready` flag. A reader thread waits for the flag and reads the data.
+
+If the flag is atomic but uses `Relaxed`, the processor **may** reorder operations: the reader sees `ready = true` before the data itself. To prevent that:
+- the writer raises the flag with `Ordering::Release` — "everything I wrote before this is published";
+- the reader checks the flag with `Ordering::Acquire` — "if I saw the flag, I also see everything that came before it".
+
+> **Analogy:** a courier (Release) puts the parcel in the box and only then raises the flag. You (Acquire), seeing the flag, will definitely find the parcel inside.
+
+:: code
+```rust
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::thread;
+
+static DATA: AtomicU64 = AtomicU64::new(0);
+static READY: AtomicBool = AtomicBool::new(false);
+
+fn main() {
+    thread::scope(|s| {
+        s.spawn(|| {
+            DATA.store(42, Ordering::Relaxed);
+            READY.store(true, Ordering::Release); // publish
+        });
+        s.spawn(|| {
+            while !READY.load(Ordering::Acquire) {
+                std::hint::spin_loop();
+            }
+            println!("data: {}", DATA.load(Ordering::Relaxed));
+        });
+    });
+}
+```
+```out
+data: 42
+```
+`DATA` can be written and read with `Relaxed`: the Release/Acquire pair on the flag provides the order.
+
+:: quiz
+The writer sets the flag with `Release`, the reader checks it with `Relaxed`. What's wrong?
+[x] The reader may see the flag but stale data: the guarantee works only together with `Acquire` => Right.
+[ ] Nothing, one `Release` is enough => You need the pair: Release on write, Acquire on read.
+[ ] The code won't compile => It compiles — the bug will be rare and flaky. That's worse.
+
+:: text What to use when
+- A statistics counter — `Relaxed`.
+- A "data ready" flag, a pointer to a published object — `Release` on write, `Acquire` on read.
+- Taking and releasing your own lock — `Acquire` on take, `Release` on release.
+- Unsure — `SeqCst`. Slower, but always safe.
+
+:: task
+Pass a string from a writer thread without a `Mutex`, through a `OnceLock<String>`. The writer stores the string with `set`, the reader waits and prints it.
+```rust
+use std::sync::OnceLock;
+use std::thread;
+
+static MESSAGE: OnceLock<String> = OnceLock::new();
+
+fn main() {
+    thread::scope(|s| {
+        s.spawn(|| {
+            // your code: store "hello from a thread"
+        });
+        s.spawn(|| {
+            // your code: wait and print
+        });
+    });
+}
+```
+```solution
+use std::sync::OnceLock;
+use std::thread;
+
+static MESSAGE: OnceLock<String> = OnceLock::new();
+
+fn main() {
+    thread::scope(|s| {
+        s.spawn(|| {
+            MESSAGE.set(String::from("hello from a thread")).unwrap();
+        });
+        s.spawn(|| {
+            let msg = loop {
+                if let Some(m) = MESSAGE.get() {
+                    break m;
+                }
+                std::hint::spin_loop();
+            };
+            println!("{msg}");
+        });
+    });
+}
+```
+```expect
+hello from a thread
+```
+hint: `OnceLock` already uses Release/Acquire inside. The writer: `MESSAGE.set(...)`.
+hint: The reader: spin in a loop until `MESSAGE.get()` returns `Some`.
+
+:: recap
+- Release when publishing, Acquire when receiving — the data is seen in full.
+- `Relaxed` — only for independent counters.
+- `OnceLock` and `Mutex` already do this correctly for you.
+
+## LESSON x08-2 | Your own spinlock | 10
+:: goals
+- Write a lock on a single `AtomicBool`
+- Make a safe wrapper with a guard and `UnsafeCell`
+
+:: text compare_exchange
+The main operation of lock-free code is **compare and swap** (CAS):
+
+```rust
+flag.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+```
+"If it holds `false`, put `true` and return `Ok`. If it's no longer `false`, change nothing and return `Err(current)`". All in one indivisible step.
+
+A spinlock: spin until the CAS succeeds. To release — `store(false, Release)`.
+
+> **Analogy:** a "busy" sign on a door. You flip it only if it says "free" — and in one motion, so two people can't flip it at once.
+
+:: code
+```rust
+use std::cell::UnsafeCell;
+use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    value: UnsafeCell<T>,
+}
+
+// SAFETY: value is only accessed through a guard, and there's one guard thanks to locked
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        SpinLock { locked: AtomicBool::new(false), value: UnsafeCell::new(value) }
+    }
+    pub fn lock(&self) -> Guard<'_, T> {
+        while self.locked.compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+            std::hint::spin_loop();
+        }
+        Guard { lock: self }
+    }
+}
+
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        // SAFETY: while the guard lives, the lock is ours
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<T> DerefMut for Guard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: while the guard lives, the lock is ours and there are no other guards
+        unsafe { &mut *self.lock.value.get() }
+    }
+}
+
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+fn main() {
+    let total = SpinLock::new(Vec::new());
+    thread::scope(|s| {
+        for t in 0..4 {
+            let total = &total;
+            s.spawn(move || {
+                for i in 0..250 {
+                    total.lock().push(t * 1000 + i);
+                }
+            });
+        }
+    });
+    println!("items: {}", total.lock().len());
+}
+```
+```out
+items: 1000
+```
+The guard releases the lock in `Drop` — you can't forget to let go. Exactly like `MutexGuard`.
+
+:: text Why not always a spinlock
+A spinlock **spins** instead of sleeping: while waiting, it burns CPU. It's good when the lock is held very briefly. If the wait is long, a `Mutex` is better: it puts the thread to sleep through the OS.
+
+:: quiz
+Why is there an `UnsafeCell` inside `SpinLock`?
+[x] It's the only legal way to change data through `&self` => Right. Every Cell, Mutex and atomic is built on it.
+[ ] To speed up access => Speed has nothing to do with it.
+[ ] Without it there's no `Send` => It's about interior mutability, not `Send`.
+
+:: task
+Add a `try_lock(&self) -> Option<Guard<T>>` method to `SpinLock`: one CAS attempt, no waiting.
+```rust
+use std::cell::UnsafeCell;
+use std::ops::Deref;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    value: UnsafeCell<T>,
+}
+
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        SpinLock { locked: AtomicBool::new(false), value: UnsafeCell::new(value) }
+    }
+    // your code: try_lock
+}
+
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+fn main() {
+    let l = SpinLock::new(5);
+    let g = l.try_lock();
+    println!("{:?}", g.as_deref());
+    println!("{}", l.try_lock().is_none());
+    drop(g);
+    println!("{}", l.try_lock().is_some());
+}
+```
+```solution
+use std::cell::UnsafeCell;
+use std::ops::Deref;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    value: UnsafeCell<T>,
+}
+
+unsafe impl<T: Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        SpinLock { locked: AtomicBool::new(false), value: UnsafeCell::new(value) }
+    }
+    pub fn try_lock(&self) -> Option<Guard<'_, T>> {
+        self.locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .ok()
+            .map(|_| Guard { lock: self })
+    }
+}
+
+pub struct Guard<'a, T> {
+    lock: &'a SpinLock<T>,
+}
+
+impl<T> Deref for Guard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        unsafe { &*self.lock.value.get() }
+    }
+}
+
+impl<T> Drop for Guard<'_, T> {
+    fn drop(&mut self) {
+        self.lock.locked.store(false, Ordering::Release);
+    }
+}
+
+fn main() {
+    let l = SpinLock::new(5);
+    let g = l.try_lock();
+    println!("{:?}", g.as_deref());
+    println!("{}", l.try_lock().is_none());
+    drop(g);
+    println!("{}", l.try_lock().is_some());
+}
+```
+```expect
+Some(5)
+true
+true
+```
+hint: `compare_exchange(false, true, Acquire, Relaxed)` → a `Result`. `.ok().map(|_| Guard { lock: self })`.
+
+:: recap
+- `compare_exchange` — an indivisible "if it's this, change it".
+- A spinlock: CAS in a loop to take it, `store(false, Release)` to release it.
+- `UnsafeCell` + `unsafe impl Sync` + a guard with `Drop` — the base of any lock.
+
+## LESSON x08-3 | CAS loops and a Treiber stack | 10
+:: goals
+- Write atomic "read — compute — write" updates
+- Build a lock-free stack on `AtomicPtr`
+
+:: text A CAS loop
+Not every operation comes ready-made (`fetch_add`, `fetch_max`…). A complex update is written as a **loop**:
+1. read the current value;
+2. compute the new one;
+3. try to write it with `compare_exchange`;
+4. didn't work (someone got there first) — start over.
+
+There's a ready helper for this: `fetch_update`.
+
+:: code
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+// Atomically: multiply by 3 and add 1, but no more than 1000
+fn bump(x: &AtomicU64) {
+    let _ = x.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+        let next = v * 3 + 1;
+        if next > 1000 { None } else { Some(next) }
+    });
+}
+
+fn main() {
+    let x = AtomicU64::new(1);
+    thread::scope(|s| {
+        for _ in 0..3 {
+            s.spawn(|| {
+                for _ in 0..5 {
+                    bump(&x);
+                }
+            });
+        }
+    });
+    println!("{}", x.load(Ordering::SeqCst));
+}
+```
+```out
+364
+```
+1 → 4 → 13 → 40 → 121 → 364 → (1093 > 1000, stop). However the threads jostle, the result is the same.
+
+:: text A Treiber stack
+The classic lock-free stack: the head is an `AtomicPtr<Node>`.
+- **push**: the new node points at the current head; CAS "is the head still the same? — put the new node there".
+- **pop**: read the head, CAS "is the head still the same? — put its `next` there".
+
+> **Analogy:** a pile of paper on a shared desk. You put a sheet down only if the pile didn't change while you were reaching. It changed — reach again.
+
+:: code
+```rust
+use std::ptr;
+use std::sync::atomic::{AtomicPtr, Ordering};
+use std::thread;
+
+struct Node<T> {
+    value: T,
+    next: *mut Node<T>,
+}
+
+pub struct TreiberStack<T> {
+    head: AtomicPtr<Node<T>>,
+}
+
+unsafe impl<T: Send> Sync for TreiberStack<T> {}
+
+impl<T> TreiberStack<T> {
+    pub fn new() -> Self {
+        TreiberStack { head: AtomicPtr::new(ptr::null_mut()) }
+    }
+    pub fn push(&self, value: T) {
+        let node = Box::into_raw(Box::new(Node { value, next: ptr::null_mut() }));
+        let mut head = self.head.load(Ordering::Relaxed);
+        loop {
+            // SAFETY: node is ours and hasn't been published to anyone yet
+            unsafe { (*node).next = head };
+            match self.head.compare_exchange_weak(head, node, Ordering::Release, Ordering::Relaxed) {
+                Ok(_) => return,
+                Err(actual) => head = actual, // someone got there first — try again
+            }
+        }
+    }
+    // pop is safe only when no other threads remain (see "Go deeper")
+    pub fn pop_exclusive(&mut self) -> Option<T> {
+        let head = *self.head.get_mut();
+        if head.is_null() {
+            return None;
+        }
+        // SAFETY: &mut self — no other threads; head was created by Box::into_raw
+        let node = unsafe { Box::from_raw(head) };
+        *self.head.get_mut() = node.next;
+        Some(node.value)
+    }
+}
+
+impl<T> Drop for TreiberStack<T> {
+    fn drop(&mut self) {
+        while self.pop_exclusive().is_some() {}
+    }
+}
+
+fn main() {
+    let stack = TreiberStack::new();
+    thread::scope(|s| {
+        for t in 0..4 {
+            let stack = &stack;
+            s.spawn(move || {
+                for i in 0..100 {
+                    stack.push(t * 100 + i);
+                }
+            });
+        }
+    });
+    let mut stack = stack;
+    let mut sum = 0;
+    let mut n = 0;
+    while let Some(v) = stack.pop_exclusive() {
+        sum += v;
+        n += 1;
+    }
+    println!("{n} items, sum {sum}");
+}
+```
+```out
+400 items, sum 79800
+```
+Four threads push at the same time — without a single lock, and nothing got lost.
+
+:: quiz
+What does `compare_exchange_weak` do if the head has already changed?
+[x] Writes nothing and returns `Err` with the current value => Right. Then the loop tries again.
+[ ] Overwrites the head by force => Then other threads' nodes would be lost.
+[ ] Panics => It's a normal situation, not an error.
+
+:: deep Why a lock-free pop is so hard
+If several threads `pop` at once, two problems appear:
+- **freeing while reading**: thread A read `head`, thread B removed and freed it, A reads `head.next` from freed memory;
+- **ABA**: the head was A, became B, became A again (same address, reused memory) — the CAS thinks "nothing changed" and corrupts the stack.
+
+Solutions: **hazard pointers** or **epoch-based reclamation**. The `crossbeam-epoch` crate implements the latter — `crossbeam`'s queues and stacks are built on it. You don't need to write this yourself in production code: use the ready-made one.
+
+:: recap
+- A CAS loop: read → compute → `compare_exchange` → didn't work — again. The helper is `fetch_update`.
+- A Treiber stack: push via CAS on the head.
+- A concurrent pop needs memory protection — use `crossbeam`.
+
+## LESSON x08-4 | crossbeam and parking_lot | 8
+:: goals
+- Know which ready-made tools to use instead of home-made ones
+- Use crossbeam channels with `select!` and parking_lot locks
+
+:: text Don't reinvent the wheel
+Home-made lock-free structures are great for learning, but at work people use proven ones:
+- **crossbeam** — channels (fast, with `select!`, many senders and many receivers), queues, epochs;
+- **parking_lot** — `Mutex` and `RwLock` that are smaller and faster than the standard ones, with no "poisoning" (`lock()` returns the guard right away, no `unwrap`);
+- **std** — over the years the standard `Mutex` and `mpsc` have improved a lot; for ordinary tasks they're enough.
+
+:: code
+```rust
+use crossbeam::channel;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (fast_tx, fast_rx) = channel::unbounded();
+    let (slow_tx, slow_rx) = channel::unbounded();
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(10));
+        fast_tx.send("fast").unwrap();
+    });
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(200));
+        slow_tx.send("slow").unwrap();
+    });
+
+    channel::select! {
+        recv(fast_rx) -> msg => println!("arrived first: {}", msg.unwrap()),
+        recv(slow_rx) -> msg => println!("arrived first: {}", msg.unwrap()),
+    }
+}
+```
+crates: yes
+```out
+arrived first: fast
+```
+crossbeam's `select!` is like tokio's, only for ordinary threads.
+
+:: code
+```rust
+use parking_lot::Mutex;
+use std::thread;
+
+fn main() {
+    let total = Mutex::new(0u64);
+    thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| {
+                for _ in 0..1000 {
+                    *total.lock() += 1; // no .unwrap(): no poisoning
+                }
+            });
+        }
+    });
+    println!("{}", total.into_inner());
+}
+```
+crates: yes
+```out
+8000
+```
+
+:: quiz
+Why is `parking_lot::Mutex::lock()` handier than the standard one?
+[x] It returns the guard right away, without a `Result` and `unwrap`: no "poisoning" => Right.
+[ ] It doesn't block the thread at all => It does — it's a lock.
+[ ] It can be used without `Sync` => The requirements are the same.
+
+:: recap
+- crossbeam: channels with `select!`, queues, epochs.
+- parking_lot: compact locks without poisoning.
+- Your own lock-free code is for learning and special cases; at work — ready-made crates.
+
+## LESSON x08-p | Practice: atomics | 25 | practice
+:: goals
+- Write a few lock-free primitives
+
+:: task
+An atomic maximum: each thread reports its numbers, and an `AtomicU64` keeps the largest. Use `fetch_max`.
+```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+fn main() {
+    let best = AtomicU64::new(0);
+    let data = [vec![3, 17, 5], vec![42, 8], vec![9, 41, 1]];
+    thread::scope(|s| {
+        for part in &data {
+            let best = &best;
+            s.spawn(move || {
+                // your code
+            });
+        }
+    });
+    println!("{}", best.load(Ordering::SeqCst));
+}
+```
+```solution
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+fn main() {
+    let best = AtomicU64::new(0);
+    let data = [vec![3, 17, 5], vec![42, 8], vec![9, 41, 1]];
+    thread::scope(|s| {
+        for part in &data {
+            let best = &best;
+            s.spawn(move || {
+                for &x in part {
+                    best.fetch_max(x, Ordering::Relaxed);
+                }
+            });
+        }
+    });
+    println!("{}", best.load(Ordering::SeqCst));
+}
+```
+```expect
+42
+```
+hint: `best.fetch_max(x, Ordering::Relaxed)` for each number.
+
+:: task
+A "ticket dispenser": `next_ticket()` hands out unique numbers to several threads. Collect all the numbers, sort them and check that they're exactly `0..400` without repeats.
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::thread;
+
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+fn next_ticket() -> usize {
+    // your code
+}
+
+fn main() {
+    let got = Mutex::new(Vec::new());
+    thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                let mine: Vec<usize> = (0..100).map(|_| next_ticket()).collect();
+                got.lock().unwrap().extend(mine);
+            });
+        }
+    });
+    let mut all = got.into_inner().unwrap();
+    all.sort();
+    println!("{}", all == (0..400).collect::<Vec<_>>());
+}
+```
+```solution
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::thread;
+
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+fn next_ticket() -> usize {
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+fn main() {
+    let got = Mutex::new(Vec::new());
+    thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                let mine: Vec<usize> = (0..100).map(|_| next_ticket()).collect();
+                got.lock().unwrap().extend(mine);
+            });
+        }
+    });
+    let mut all = got.into_inner().unwrap();
+    all.sort();
+    println!("{}", all == (0..400).collect::<Vec<_>>());
+}
+```
+```expect
+true
+```
+hint: `fetch_add(1, ...)` returns the **old** value — that's the ticket number.
+
+:: task
+`OnceFlag`: `call_once(f)` runs `f` exactly once, however many threads call it. Use `compare_exchange` on an `AtomicBool`: whoever switched `false → true` first is the one who calls.
+```rust
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::thread;
+
+struct OnceFlag {
+    done: AtomicBool,
+}
+
+impl OnceFlag {
+    fn call_once(&self, f: impl FnOnce()) {
+        // your code
+    }
+}
+
+static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn main() {
+    let once = OnceFlag { done: AtomicBool::new(false) };
+    thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| once.call_once(|| { CALLS.fetch_add(1, Ordering::SeqCst); }));
+        }
+    });
+    println!("calls: {}", CALLS.load(Ordering::SeqCst));
+}
+```
+```solution
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::thread;
+
+struct OnceFlag {
+    done: AtomicBool,
+}
+
+impl OnceFlag {
+    fn call_once(&self, f: impl FnOnce()) {
+        if self.done.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok() {
+            f();
+        }
+    }
+}
+
+static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn main() {
+    let once = OnceFlag { done: AtomicBool::new(false) };
+    thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| once.call_once(|| { CALLS.fetch_add(1, Ordering::SeqCst); }));
+        }
+    });
+    println!("calls: {}", CALLS.load(Ordering::SeqCst));
+}
+```
+```expect
+calls: 1
+```
+hint: `if self.done.compare_exchange(false, true, ...).is_ok() { f(); }`.
+hint: The real `std::sync::Once` also makes the others **wait** until `f` finishes. This one is simplified.
+
+:: homework Benchmark the locks
+Compare locks on your own computer.
+
+1. Create a project and add the crates:
+```sh
+cargo new lock-bench
+cd lock-bench
+cargo add parking_lot crossbeam
+```
+2. Write a program: 8 threads each increment a shared counter 1,000,000 times. Variants: `std::sync::Mutex<u64>`, `parking_lot::Mutex<u64>`, your own `SpinLock<u64>` from the lesson, `AtomicU64::fetch_add`.
+3. Time each variant with `Instant`, running only in `--release`.
+4. Repeat with 2 threads and with 32.
+[ ] All four variants give the same total: 8,000,000
+[ ] A timing table for 2, 8 and 32 threads is written down
+[ ] You can see how the spinlock behaves with many threads, and there's an explanation why
+
+:: recap
+- `fetch_max`, `fetch_add` — ready-made atomic operations.
+- `compare_exchange` on a flag — "whoever's first does it".
+- Measure locks on your own hardware: results depend on the number of cores.
