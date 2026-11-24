@@ -1,0 +1,838 @@
+# MODULE x05 | Your own iterator adapters | Wrapper adapters, double-ended iterators, tree traversal, from_fn, successors and itertools
+
+## LESSON x05-1 | Your own adapter | 9
+:: goals
+- Write an adapter — an iterator that wraps another iterator
+- Add it to every iterator through an extension trait
+
+:: text An adapter is a wrapper
+`map`, `filter`, `take` are **adapters**: structs that hold an inner iterator and call its `next` from their own `next`.
+
+Your own adapter is built the same way:
+1. A struct with an `inner: I` field, where `I: Iterator`.
+2. `impl Iterator` for it: `next` takes values from `inner` and does something with them.
+3. An extension trait, so you can write `.my_adapter()` on any iterator.
+
+> **Analogy:** a faucet attachment. Same water, but it comes out as a shower, a jet or drops.
+
+:: code
+An `every(n)` adapter: lets through every n-th item, starting with the first.
+```rust
+struct Every<I> {
+    inner: I,
+    n: usize,
+}
+
+impl<I: Iterator> Iterator for Every<I> {
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        let item = self.inner.next()?;
+        for _ in 1..self.n {
+            self.inner.next(); // skip n-1 items
+        }
+        Some(item)
+    }
+}
+
+trait EveryExt: Iterator + Sized {
+    fn every(self, n: usize) -> Every<Self> {
+        assert!(n > 0, "n must be greater than zero");
+        Every { inner: self, n }
+    }
+}
+
+impl<I: Iterator> EveryExt for I {}
+
+fn main() {
+    let v: Vec<i32> = (1..=10).every(3).collect();
+    println!("{v:?}");
+    let s: String = "abcdefg".chars().every(2).collect();
+    println!("{s}");
+}
+```
+```out
+[1, 4, 7, 10]
+aceg
+```
+Our `every` works with **any** iterator: numbers, characters, anything.
+
+:: quiz
+What does an adapter like `Filter` hold inside?
+[x] The inner iterator and its own closure => Right.
+[ ] All the items in advance => No, adapters are lazy and store nothing up front.
+[ ] Just the number of items => An adapter doesn't know the count in advance.
+
+:: task
+Write a `Dedup` adapter: it skips consecutive equal items (like `uniq` in a terminal). Items must be `PartialEq + Clone`.
+```rust
+struct Dedup<I: Iterator> {
+    inner: I,
+    last: Option<I::Item>,
+}
+
+impl<I> Iterator for Dedup<I>
+where
+    I: Iterator,
+    I::Item: PartialEq + Clone,
+{
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        // your code
+    }
+}
+
+trait DedupExt: Iterator + Sized {
+    fn dedup(self) -> Dedup<Self> {
+        Dedup { inner: self, last: None }
+    }
+}
+impl<I: Iterator> DedupExt for I {}
+
+fn main() {
+    let v: Vec<i32> = vec![1, 1, 2, 2, 2, 3, 1, 1].into_iter().dedup().collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Dedup<I: Iterator> {
+    inner: I,
+    last: Option<I::Item>,
+}
+
+impl<I> Iterator for Dedup<I>
+where
+    I: Iterator,
+    I::Item: PartialEq + Clone,
+{
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        loop {
+            let x = self.inner.next()?;
+            if self.last.as_ref() != Some(&x) {
+                self.last = Some(x.clone());
+                return Some(x);
+            }
+        }
+    }
+}
+
+trait DedupExt: Iterator + Sized {
+    fn dedup(self) -> Dedup<Self> {
+        Dedup { inner: self, last: None }
+    }
+}
+impl<I: Iterator> DedupExt for I {}
+
+fn main() {
+    let v: Vec<i32> = vec![1, 1, 2, 2, 2, 3, 1, 1].into_iter().dedup().collect();
+    println!("{v:?}");
+}
+```
+```expect
+[1, 2, 3, 1]
+```
+hint: In a loop, take the next item. If it isn't equal to `last`, remember a copy and return it.
+hint: Comparing `Option`s: `self.last.as_ref() != Some(&x)`.
+
+:: task
+An `Interleave` adapter alternates the items of two iterators: `a1, b1, a2, b2...`. When one runs out, it continues with the other.
+```rust
+struct Interleave<A, B> {
+    a: A,
+    b: B,
+    take_a: bool,
+}
+
+impl<A, B> Iterator for Interleave<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+{
+    type Item = A::Item;
+    fn next(&mut self) -> Option<A::Item> {
+        // your code
+    }
+}
+
+fn interleave<A, B>(a: A, b: B) -> Interleave<A, B> {
+    Interleave { a, b, take_a: true }
+}
+
+fn main() {
+    let v: Vec<i32> = interleave(vec![1, 3, 5, 7].into_iter(), vec![2, 4].into_iter()).collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Interleave<A, B> {
+    a: A,
+    b: B,
+    take_a: bool,
+}
+
+impl<A, B> Iterator for Interleave<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+{
+    type Item = A::Item;
+    fn next(&mut self) -> Option<A::Item> {
+        self.take_a = !self.take_a;
+        if !self.take_a {
+            self.a.next().or_else(|| self.b.next())
+        } else {
+            self.b.next().or_else(|| self.a.next())
+        }
+    }
+}
+
+fn interleave<A, B>(a: A, b: B) -> Interleave<A, B> {
+    Interleave { a, b, take_a: true }
+}
+
+fn main() {
+    let v: Vec<i32> = interleave(vec![1, 3, 5, 7].into_iter(), vec![2, 4].into_iter()).collect();
+    println!("{v:?}");
+}
+```
+```expect
+[1, 2, 3, 4, 5, 7]
+```
+hint: Flip the flag on every step. If the iterator you need is empty — `or_else(|| other.next())`.
+
+:: recap
+- Adapter = a struct with an inner iterator + `impl Iterator`.
+- An extension trait with a blanket impl gives `.my_adapter()` to every iterator.
+- Adapters are lazy: they work only while being pulled.
+
+## LESSON x05-2 | Double-ended and exact-size iterators | 8
+:: goals
+- Implement `DoubleEndedIterator` so `rev()` works
+- Implement `ExactSizeIterator` so `len()` works
+
+:: text Extra iterator traits
+Besides `Iterator` there are "superpower" traits:
+- `DoubleEndedIterator` — can do `next_back()`: take from the end. Unlocks `rev()`, `rfind()`, a faster `last()`.
+- `ExactSizeIterator` — knows exactly how many are left: `len()`.
+- `FusedIterator` — after the first `None`, always `None`.
+
+Standard iterators (`Vec::iter`, ranges) have them all. Yours only if you implement them.
+
+> **Analogy:** a line you can join at either end. And a board saying "5 people left".
+
+:: code
+```rust
+struct Span {
+    lo: u32,
+    hi: u32, // exclusive
+}
+
+impl Iterator for Span {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.lo >= self.hi {
+            return None;
+        }
+        self.lo += 1;
+        Some(self.lo - 1)
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = (self.hi - self.lo) as usize;
+        (n, Some(n))
+    }
+}
+
+impl DoubleEndedIterator for Span {
+    fn next_back(&mut self) -> Option<u32> {
+        if self.lo >= self.hi {
+            return None;
+        }
+        self.hi -= 1;
+        Some(self.hi)
+    }
+}
+
+impl ExactSizeIterator for Span {}
+
+fn main() {
+    let back: Vec<u32> = Span { lo: 1, hi: 5 }.rev().collect();
+    println!("{back:?}");
+    let mut s = Span { lo: 0, hi: 10 };
+    s.next();
+    s.next_back();
+    println!("{} left", s.len());
+}
+```
+```out
+[4, 3, 2, 1]
+8 left
+```
+`ExactSizeIterator` is empty: `len()` comes from `size_hint`, which we made exact.
+
+:: quiz
+What do you implement to make `.rev()` work on your iterator?
+[ ] `ExactSizeIterator` => That's for `len()`.
+[x] `DoubleEndedIterator` with a `next_back` method => Right.
+[ ] Nothing, every iterator has `rev` => Only double-ended ones.
+
+:: task
+The `Chars2` iterator walks the characters of a string. Implement `DoubleEndedIterator` for it so the palindrome check through `rev()` works.
+```rust
+struct Chars2 {
+    chars: Vec<char>,
+    front: usize,
+    back: usize,
+}
+
+impl Chars2 {
+    fn new(s: &str) -> Self {
+        let chars: Vec<char> = s.chars().collect();
+        let back = chars.len();
+        Chars2 { chars, front: 0, back }
+    }
+}
+
+impl Iterator for Chars2 {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.front += 1;
+        Some(self.chars[self.front - 1])
+    }
+}
+
+// your code
+
+fn is_palindrome(s: &str) -> bool {
+    Chars2::new(s).eq(Chars2::new(s).rev())
+}
+
+fn main() {
+    println!("{}", is_palindrome("racecar"));
+    println!("{}", is_palindrome("crab"));
+}
+```
+```solution
+struct Chars2 {
+    chars: Vec<char>,
+    front: usize,
+    back: usize,
+}
+
+impl Chars2 {
+    fn new(s: &str) -> Self {
+        let chars: Vec<char> = s.chars().collect();
+        let back = chars.len();
+        Chars2 { chars, front: 0, back }
+    }
+}
+
+impl Iterator for Chars2 {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.front += 1;
+        Some(self.chars[self.front - 1])
+    }
+}
+
+impl DoubleEndedIterator for Chars2 {
+    fn next_back(&mut self) -> Option<char> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.back -= 1;
+        Some(self.chars[self.back])
+    }
+}
+
+fn is_palindrome(s: &str) -> bool {
+    Chars2::new(s).eq(Chars2::new(s).rev())
+}
+
+fn main() {
+    println!("{}", is_palindrome("racecar"));
+    println!("{}", is_palindrome("crab"));
+}
+```
+```expect
+true
+false
+```
+hint: `next_back` mirrors `next`: decrement `back` and return `chars[back]`.
+
+:: recap
+- `DoubleEndedIterator::next_back` — take from the end; `rev()` works.
+- `ExactSizeIterator` — an exact `len()`; it needs an exact `size_hint`.
+- A double-ended iterator keeps two "cursors": front and back.
+
+## LESSON x05-3 | Walking a tree with an iterator | 9
+:: goals
+- Write an iterator over a tree without recursion
+- Use an explicit stack
+
+:: text Turn recursion into a stack
+Walking a tree with a recursive function is easy. But an iterator can't work that way: `next` must return **one** value and remember where it stopped.
+
+The fix is an **explicit stack**: it holds the nodes you still need to come back to. Each `next` pops a node, pushes its children and returns the value.
+
+> **Analogy:** bookmarks in a maze. You go down the left corridor and leave a marker at the fork, so you can come back for the right one.
+
+:: code
+Depth-first traversal (the node first, then the children left to right):
+```rust
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct DepthFirst<'a> {
+    stack: Vec<&'a Node>,
+}
+
+impl<'a> Iterator for DepthFirst<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let node = self.stack.pop()?;
+        for child in node.children.iter().rev() {
+            self.stack.push(child); // rev — so the left child comes out first
+        }
+        Some(node.name)
+    }
+}
+
+impl Node {
+    fn iter(&self) -> DepthFirst<'_> {
+        DepthFirst { stack: vec![self] }
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "src",
+        children: vec![
+            Node { name: "main.rs", children: vec![] },
+            Node { name: "net", children: vec![Node { name: "tcp.rs", children: vec![] }] },
+            Node { name: "lib.rs", children: vec![] },
+        ],
+    };
+    let all: Vec<&str> = tree.iter().collect();
+    println!("{all:?}");
+    println!(".rs files: {}", tree.iter().filter(|n| n.ends_with(".rs")).count());
+}
+```
+```out
+["src", "main.rs", "net", "tcp.rs", "lib.rs"]
+.rs files: 3
+```
+Since it's an ordinary `Iterator`, `filter`, `count` and everything else work right away.
+
+:: quiz
+Why are the children pushed onto the stack in **reverse** order?
+[x] A stack returns the last pushed item first; reverse order makes the left child come out first => Right.
+[ ] To make the traversal faster => The speed is the same.
+[ ] Without `rev` it won't compile => It compiles, the order is just different.
+
+:: task
+Make a **breadth-first** iterator (level by level): a `VecDeque` queue instead of a stack. For the same tree the order is `src, main.rs, net, lib.rs, tcp.rs`.
+```rust
+use std::collections::VecDeque;
+
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct BreadthFirst<'a> {
+    queue: VecDeque<&'a Node>,
+}
+
+impl<'a> Iterator for BreadthFirst<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        // your code
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "src",
+        children: vec![
+            Node { name: "main.rs", children: vec![] },
+            Node { name: "net", children: vec![Node { name: "tcp.rs", children: vec![] }] },
+            Node { name: "lib.rs", children: vec![] },
+        ],
+    };
+    let it = BreadthFirst { queue: VecDeque::from([&tree]) };
+    println!("{:?}", it.collect::<Vec<_>>());
+}
+```
+```solution
+use std::collections::VecDeque;
+
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct BreadthFirst<'a> {
+    queue: VecDeque<&'a Node>,
+}
+
+impl<'a> Iterator for BreadthFirst<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let node = self.queue.pop_front()?;
+        self.queue.extend(node.children.iter());
+        Some(node.name)
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "src",
+        children: vec![
+            Node { name: "main.rs", children: vec![] },
+            Node { name: "net", children: vec![Node { name: "tcp.rs", children: vec![] }] },
+            Node { name: "lib.rs", children: vec![] },
+        ],
+    };
+    let it = BreadthFirst { queue: VecDeque::from([&tree]) };
+    println!("{:?}", it.collect::<Vec<_>>());
+}
+```
+```expect
+["src", "main.rs", "net", "lib.rs", "tcp.rs"]
+```
+hint: `pop_front` takes from the front of the queue, `extend(node.children.iter())` adds the children at the back.
+
+:: recap
+- A tree iterator — an explicit stack (depth-first) or a queue (breadth-first).
+- Each `next`: take a node, add its children, return the value.
+- The result is an ordinary iterator with every adapter.
+
+## LESSON x05-4 | from_fn, successors and itertools | 8
+:: goals
+- Make iterators without your own struct
+- Know the most useful methods of the itertools crate
+
+:: text An iterator from a closure
+You don't always need your own struct. The standard library has:
+- `std::iter::from_fn(|| ...)` — an iterator from a closure that returns an `Option`;
+- `std::iter::successors(first, |prev| next)` — each next item is computed from the previous one;
+- `std::iter::repeat_with(|| ...)` — call a closure forever.
+
+:: code
+```rust
+fn main() {
+    // powers of two up to 64
+    let pows: Vec<u32> = std::iter::successors(Some(1u32), |&x| if x < 64 { Some(x * 2) } else { None }).collect();
+    println!("{pows:?}");
+
+    // Collatz: from n until we reach 1
+    let collatz: Vec<u64> = std::iter::successors(Some(6u64), |&n| match n {
+        1 => None,
+        n if n % 2 == 0 => Some(n / 2),
+        n => Some(3 * n + 1),
+    })
+    .collect();
+    println!("{collatz:?}");
+
+    // from_fn with its own state
+    let mut a = 0;
+    let mut b = 1;
+    let fib: Vec<u32> = std::iter::from_fn(|| {
+        let r = a;
+        (a, b) = (b, a + b);
+        Some(r)
+    })
+    .take(8)
+    .collect();
+    println!("{fib:?}");
+}
+```
+```out
+[1, 2, 4, 8, 16, 32, 64]
+[6, 3, 10, 5, 16, 8, 4, 2, 1]
+[0, 1, 1, 2, 3, 5, 8, 13]
+```
+
+:: text itertools
+The **itertools** crate adds dozens of methods to iterators. The most useful:
+- `tuple_windows()` — windows as tuples: `(a, b)`, `(b, c)`;
+- `chunk_by(|x| key)` — groups of consecutive items with the same key;
+- `join(", ")` — glue into a string;
+- `sorted_by_key(...)`, `unique()`, `counts()`, `cartesian_product(...)`.
+
+You bring it in with one line: `use itertools::Itertools;`.
+
+:: code
+```rust
+use itertools::Itertools;
+
+fn main() {
+    let temps = [3, 5, 4, 8, 10];
+    let rises = temps.iter().tuple_windows().filter(|(a, b)| b > a).count();
+    println!("it got warmer {rises} times");
+
+    let words = ["cat", "cow", "fox", "fig", "ox"];
+    for (letter, group) in &words.iter().chunk_by(|w| w.chars().next().unwrap()) {
+        println!("{letter}: {}", group.join(", "));
+    }
+
+    println!("{}", (1..=3).cartesian_product(['a', 'b']).map(|(n, c)| format!("{n}{c}")).join(" "));
+}
+```
+crates: yes
+```out
+it got warmer 3 times
+c: cat, cow
+f: fox, fig
+o: ox
+1a 1b 2a 2b 3a 3b
+```
+
+:: quiz
+Which tool fits a sequence where "each next item is computed from the previous one" best?
+[ ] `repeat_with` => It doesn't see the previous value.
+[x] `successors` => Right.
+[ ] `chain` => That glues two iterators together.
+
+:: task
+Use `from_fn` to make an iterator that reads numbers from the string `"10 20 x 30"` one by one and **stops** at the first non-number.
+```rust
+fn main() {
+    let text = "10 20 x 30";
+    let mut parts = text.split(' ');
+    // your code: let nums: Vec<i32> = std::iter::from_fn(...).collect();
+    println!("{nums:?}");
+}
+```
+```solution
+fn main() {
+    let text = "10 20 x 30";
+    let mut parts = text.split(' ');
+    let nums: Vec<i32> = std::iter::from_fn(|| parts.next()?.parse().ok()).collect();
+    println!("{nums:?}");
+}
+```
+```expect
+[10, 20]
+```
+hint: The closure: `|| parts.next()?.parse().ok()` — the first `None` stops the iterator.
+
+:: recap
+- `from_fn` — an iterator from a closure; `successors` — from the previous value.
+- itertools: `tuple_windows`, `chunk_by`, `join`, `cartesian_product`.
+- You need your own struct when you need `DoubleEnded` or complex state.
+
+## LESSON x05-p | Practice: iterators | 25 | practice
+:: goals
+- Solve tasks on your own adapters and generators
+
+:: task
+Run-length encoding: `"aaabccdddd"` → `[('a', 3), ('b', 1), ('c', 2), ('d', 4)]`. Use `peekable` or `fold`.
+```rust
+fn rle(s: &str) -> Vec<(char, usize)> {
+    // your code
+}
+
+fn main() {
+    println!("{:?}", rle("aaabccdddd"));
+    println!("{:?}", rle(""));
+}
+```
+```solution
+fn rle(s: &str) -> Vec<(char, usize)> {
+    let mut out: Vec<(char, usize)> = Vec::new();
+    for c in s.chars() {
+        match out.last_mut() {
+            Some((last, n)) if *last == c => *n += 1,
+            _ => out.push((c, 1)),
+        }
+    }
+    out
+}
+
+fn main() {
+    println!("{:?}", rle("aaabccdddd"));
+    println!("{:?}", rle(""));
+}
+```
+```expect
+[('a', 3), ('b', 1), ('c', 2), ('d', 4)]
+[]
+```
+hint: Look at the last element of the result through `last_mut()`. Same character — bump the counter, otherwise push `(c, 1)`.
+
+:: task
+A `Batched` adapter collects items into a `Vec` of `n` (the last one may be shorter). Make an extension trait `.batched(n)`.
+```rust
+struct Batched<I> {
+    inner: I,
+    n: usize,
+}
+
+impl<I: Iterator> Iterator for Batched<I> {
+    type Item = Vec<I::Item>;
+    fn next(&mut self) -> Option<Vec<I::Item>> {
+        // your code
+    }
+}
+
+trait BatchedExt: Iterator + Sized {
+    fn batched(self, n: usize) -> Batched<Self> {
+        Batched { inner: self, n }
+    }
+}
+impl<I: Iterator> BatchedExt for I {}
+
+fn main() {
+    for b in (1..=7).batched(3) {
+        println!("{b:?}");
+    }
+}
+```
+```solution
+struct Batched<I> {
+    inner: I,
+    n: usize,
+}
+
+impl<I: Iterator> Iterator for Batched<I> {
+    type Item = Vec<I::Item>;
+    fn next(&mut self) -> Option<Vec<I::Item>> {
+        let batch: Vec<I::Item> = self.inner.by_ref().take(self.n).collect();
+        if batch.is_empty() { None } else { Some(batch) }
+    }
+}
+
+trait BatchedExt: Iterator + Sized {
+    fn batched(self, n: usize) -> Batched<Self> {
+        Batched { inner: self, n }
+    }
+}
+impl<I: Iterator> BatchedExt for I {}
+
+fn main() {
+    for b in (1..=7).batched(3) {
+        println!("{b:?}");
+    }
+}
+```
+```expect
+[1, 2, 3]
+[4, 5, 6]
+[7]
+```
+hint: `self.inner.by_ref().take(self.n).collect()` — take up to `n` items without giving away the iterator itself.
+hint: An empty batch means everything has run out: `None`.
+
+:: task
+A tree iterator with depth: yield `(depth, name)` pairs and print the tree with 2 spaces of indentation per level.
+```rust
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct WithDepth<'a> {
+    stack: Vec<(usize, &'a Node)>,
+}
+
+impl<'a> Iterator for WithDepth<'a> {
+    type Item = (usize, &'a str);
+    fn next(&mut self) -> Option<(usize, &'a str)> {
+        // your code
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "root",
+        children: vec![
+            Node { name: "a", children: vec![Node { name: "a1", children: vec![] }] },
+            Node { name: "b", children: vec![] },
+        ],
+    };
+    for (d, name) in (WithDepth { stack: vec![(0, &tree)] }) {
+        println!("{}{name}", "  ".repeat(d));
+    }
+}
+```
+```solution
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct WithDepth<'a> {
+    stack: Vec<(usize, &'a Node)>,
+}
+
+impl<'a> Iterator for WithDepth<'a> {
+    type Item = (usize, &'a str);
+    fn next(&mut self) -> Option<(usize, &'a str)> {
+        let (d, node) = self.stack.pop()?;
+        for child in node.children.iter().rev() {
+            self.stack.push((d + 1, child));
+        }
+        Some((d, node.name))
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "root",
+        children: vec![
+            Node { name: "a", children: vec![Node { name: "a1", children: vec![] }] },
+            Node { name: "b", children: vec![] },
+        ],
+    };
+    for (d, name) in (WithDepth { stack: vec![(0, &tree)] }) {
+        println!("{}{name}", "  ".repeat(d));
+    }
+}
+```
+```expect
+root
+  a
+    a1
+  b
+```
+hint: Keep `(depth, node)` pairs on the stack. Children get depth `d + 1`.
+
+:: task
+Using `successors`, find how many steps the Collatz sequence from 27 takes to reach 1, and the largest number along the way.
+```rust
+fn main() {
+    // your code
+}
+```
+```solution
+fn main() {
+    let seq: Vec<u64> = std::iter::successors(Some(27u64), |&n| match n {
+        1 => None,
+        n if n % 2 == 0 => Some(n / 2),
+        n => Some(3 * n + 1),
+    })
+    .collect();
+    println!("steps: {}", seq.len() - 1);
+    println!("max: {}", seq.iter().max().unwrap());
+}
+```
+```expect
+steps: 111
+max: 9232
+```
+hint: The number of steps is the length of the sequence minus 1 (the start itself isn't a step).
+
+:: recap
+- `last_mut()` — handy for grouping consecutive items.
+- `by_ref().take(n)` — take a piece without giving away the iterator.
+- A stack with depth — a tree with indentation.
+- `successors` — sequences "from the previous one".

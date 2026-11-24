@@ -1,0 +1,838 @@
+# MODULE x05 | Свои адаптеры итераторов | Адаптер-обёртка, двусторонние итераторы, обход дерева, from_fn, successors и itertools
+
+## LESSON x05-1 | Свой адаптер | 9
+:: goals
+- Написать адаптер — итератор, который оборачивает другой итератор
+- Добавить его ко всем итераторам через трейт-расширение
+
+:: text Адаптер — это обёртка
+`map`, `filter`, `take` — это **адаптеры**: структуры, которые хранят внутренний итератор и в своём `next` вызывают его `next`.
+
+Свой адаптер устроен так же:
+1. Структура с полем `inner: I`, где `I: Iterator`.
+2. `impl Iterator` для неё: `next` берёт значения из `inner` и что-то с ними делает.
+3. Трейт-расширение, чтобы писать `.my_adapter()` у любого итератора.
+
+> **Аналогия:** насадка на кран. Вода та же, но выходит душем, струёй или каплями.
+
+:: code
+Адаптер `every(n)`: пропускает каждый n-й элемент, начиная с первого.
+```rust
+struct Every<I> {
+    inner: I,
+    n: usize,
+}
+
+impl<I: Iterator> Iterator for Every<I> {
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        let item = self.inner.next()?;
+        for _ in 1..self.n {
+            self.inner.next(); // пропустить n-1 элементов
+        }
+        Some(item)
+    }
+}
+
+trait EveryExt: Iterator + Sized {
+    fn every(self, n: usize) -> Every<Self> {
+        assert!(n > 0, "n должно быть больше нуля");
+        Every { inner: self, n }
+    }
+}
+
+impl<I: Iterator> EveryExt for I {}
+
+fn main() {
+    let v: Vec<i32> = (1..=10).every(3).collect();
+    println!("{v:?}");
+    let s: String = "абвгдеж".chars().every(2).collect();
+    println!("{s}");
+}
+```
+```out
+[1, 4, 7, 10]
+авдж
+```
+Наш `every` работает с **любым** итератором: числа, символы, что угодно.
+
+:: quiz
+Что хранит внутри себя адаптер вроде `Filter`?
+[x] Внутренний итератор и своё замыкание => Верно.
+[ ] Все элементы заранее => Нет, адаптеры ленивые и ничего не копят.
+[ ] Только количество элементов => Адаптер не знает количества заранее.
+
+:: task
+Напиши адаптер `Dedup`: пропускает подряд идущие одинаковые элементы (как `uniq` в терминале). Элементы должны быть `PartialEq + Clone`.
+```rust
+struct Dedup<I: Iterator> {
+    inner: I,
+    last: Option<I::Item>,
+}
+
+impl<I> Iterator for Dedup<I>
+where
+    I: Iterator,
+    I::Item: PartialEq + Clone,
+{
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        // твой код
+    }
+}
+
+trait DedupExt: Iterator + Sized {
+    fn dedup(self) -> Dedup<Self> {
+        Dedup { inner: self, last: None }
+    }
+}
+impl<I: Iterator> DedupExt for I {}
+
+fn main() {
+    let v: Vec<i32> = vec![1, 1, 2, 2, 2, 3, 1, 1].into_iter().dedup().collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Dedup<I: Iterator> {
+    inner: I,
+    last: Option<I::Item>,
+}
+
+impl<I> Iterator for Dedup<I>
+where
+    I: Iterator,
+    I::Item: PartialEq + Clone,
+{
+    type Item = I::Item;
+    fn next(&mut self) -> Option<I::Item> {
+        loop {
+            let x = self.inner.next()?;
+            if self.last.as_ref() != Some(&x) {
+                self.last = Some(x.clone());
+                return Some(x);
+            }
+        }
+    }
+}
+
+trait DedupExt: Iterator + Sized {
+    fn dedup(self) -> Dedup<Self> {
+        Dedup { inner: self, last: None }
+    }
+}
+impl<I: Iterator> DedupExt for I {}
+
+fn main() {
+    let v: Vec<i32> = vec![1, 1, 2, 2, 2, 3, 1, 1].into_iter().dedup().collect();
+    println!("{v:?}");
+}
+```
+```expect
+[1, 2, 3, 1]
+```
+hint: В цикле берёшь следующий элемент. Если он не равен `last` — запомни копию и верни его.
+hint: Сравнение `Option`: `self.last.as_ref() != Some(&x)`.
+
+:: task
+Адаптер `Interleave`: чередует элементы двух итераторов: `a1, b1, a2, b2...`. Когда один кончился — продолжает другим.
+```rust
+struct Interleave<A, B> {
+    a: A,
+    b: B,
+    take_a: bool,
+}
+
+impl<A, B> Iterator for Interleave<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+{
+    type Item = A::Item;
+    fn next(&mut self) -> Option<A::Item> {
+        // твой код
+    }
+}
+
+fn interleave<A, B>(a: A, b: B) -> Interleave<A, B> {
+    Interleave { a, b, take_a: true }
+}
+
+fn main() {
+    let v: Vec<i32> = interleave(vec![1, 3, 5, 7].into_iter(), vec![2, 4].into_iter()).collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Interleave<A, B> {
+    a: A,
+    b: B,
+    take_a: bool,
+}
+
+impl<A, B> Iterator for Interleave<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+{
+    type Item = A::Item;
+    fn next(&mut self) -> Option<A::Item> {
+        self.take_a = !self.take_a;
+        if !self.take_a {
+            self.a.next().or_else(|| self.b.next())
+        } else {
+            self.b.next().or_else(|| self.a.next())
+        }
+    }
+}
+
+fn interleave<A, B>(a: A, b: B) -> Interleave<A, B> {
+    Interleave { a, b, take_a: true }
+}
+
+fn main() {
+    let v: Vec<i32> = interleave(vec![1, 3, 5, 7].into_iter(), vec![2, 4].into_iter()).collect();
+    println!("{v:?}");
+}
+```
+```expect
+[1, 2, 3, 4, 5, 7]
+```
+hint: Переключай флаг на каждом шаге. Если нужный итератор пуст — `or_else(|| другой.next())`.
+
+:: recap
+- Адаптер = структура с внутренним итератором + `impl Iterator`.
+- Трейт-расширение с blanket impl даёт `.мой_адаптер()` всем итераторам.
+- Адаптеры ленивые: работают, только пока их тянут.
+
+## LESSON x05-2 | Двусторонние и точные итераторы | 8
+:: goals
+- Реализовать `DoubleEndedIterator`, чтобы работал `rev()`
+- Реализовать `ExactSizeIterator`, чтобы работал `len()`
+
+:: text Дополнительные трейты итераторов
+Кроме `Iterator` есть трейты-«суперспособности»:
+- `DoubleEndedIterator` — умеет `next_back()`: брать с конца. Открывает `rev()`, `rfind()`, `last()` быстрее.
+- `ExactSizeIterator` — точно знает, сколько осталось: `len()`.
+- `FusedIterator` — после первого `None` всегда `None`.
+
+Стандартные итераторы (`Vec::iter`, диапазоны) умеют их все. Свои — только если реализуешь.
+
+> **Аналогия:** очередь, в которую можно встать и с головы, и с хвоста. И табло «осталось 5 человек».
+
+:: code
+```rust
+struct Span {
+    lo: u32,
+    hi: u32, // не включая
+}
+
+impl Iterator for Span {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.lo >= self.hi {
+            return None;
+        }
+        self.lo += 1;
+        Some(self.lo - 1)
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = (self.hi - self.lo) as usize;
+        (n, Some(n))
+    }
+}
+
+impl DoubleEndedIterator for Span {
+    fn next_back(&mut self) -> Option<u32> {
+        if self.lo >= self.hi {
+            return None;
+        }
+        self.hi -= 1;
+        Some(self.hi)
+    }
+}
+
+impl ExactSizeIterator for Span {}
+
+fn main() {
+    let back: Vec<u32> = Span { lo: 1, hi: 5 }.rev().collect();
+    println!("{back:?}");
+    let mut s = Span { lo: 0, hi: 10 };
+    s.next();
+    s.next_back();
+    println!("осталось {}", s.len());
+}
+```
+```out
+[4, 3, 2, 1]
+осталось 8
+```
+`ExactSizeIterator` пустой: `len()` берётся из `size_hint`, который мы сделали точным.
+
+:: quiz
+Что нужно реализовать, чтобы у своего итератора заработал `.rev()`?
+[ ] `ExactSizeIterator` => Это для `len()`.
+[x] `DoubleEndedIterator` с методом `next_back` => Верно.
+[ ] Ничего, `rev` есть у всех итераторов => Только у двусторонних.
+
+:: task
+Итератор `Chars2` идёт по символам строки. Реализуй для него `DoubleEndedIterator`, чтобы проверка палиндрома через `rev()` заработала.
+```rust
+struct Chars2 {
+    chars: Vec<char>,
+    front: usize,
+    back: usize,
+}
+
+impl Chars2 {
+    fn new(s: &str) -> Self {
+        let chars: Vec<char> = s.chars().collect();
+        let back = chars.len();
+        Chars2 { chars, front: 0, back }
+    }
+}
+
+impl Iterator for Chars2 {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.front += 1;
+        Some(self.chars[self.front - 1])
+    }
+}
+
+// твой код
+
+fn is_palindrome(s: &str) -> bool {
+    Chars2::new(s).eq(Chars2::new(s).rev())
+}
+
+fn main() {
+    println!("{}", is_palindrome("шалаш"));
+    println!("{}", is_palindrome("краб"));
+}
+```
+```solution
+struct Chars2 {
+    chars: Vec<char>,
+    front: usize,
+    back: usize,
+}
+
+impl Chars2 {
+    fn new(s: &str) -> Self {
+        let chars: Vec<char> = s.chars().collect();
+        let back = chars.len();
+        Chars2 { chars, front: 0, back }
+    }
+}
+
+impl Iterator for Chars2 {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.front += 1;
+        Some(self.chars[self.front - 1])
+    }
+}
+
+impl DoubleEndedIterator for Chars2 {
+    fn next_back(&mut self) -> Option<char> {
+        if self.front >= self.back {
+            return None;
+        }
+        self.back -= 1;
+        Some(self.chars[self.back])
+    }
+}
+
+fn is_palindrome(s: &str) -> bool {
+    Chars2::new(s).eq(Chars2::new(s).rev())
+}
+
+fn main() {
+    println!("{}", is_palindrome("шалаш"));
+    println!("{}", is_palindrome("краб"));
+}
+```
+```expect
+true
+false
+```
+hint: `next_back` — зеркало `next`: уменьши `back` и верни `chars[back]`.
+
+:: recap
+- `DoubleEndedIterator::next_back` — брать с конца, работает `rev()`.
+- `ExactSizeIterator` — точный `len()`; нужен точный `size_hint`.
+- Двусторонний итератор хранит два «курсора»: спереди и сзади.
+
+## LESSON x05-3 | Обход дерева итератором | 9
+:: goals
+- Написать итератор по дереву без рекурсии
+- Использовать явный стек
+
+:: text Рекурсию превращаем в стек
+Обойти дерево рекурсивной функцией легко. Но итератор так не умеет: `next` должен вернуть **одно** значение и запомнить, где остановился.
+
+Решение — **явный стек**: в нём лежат узлы, к которым надо вернуться. Каждый `next` снимает узел со стека, кладёт его детей и возвращает значение.
+
+> **Аналогия:** закладки в лабиринте. Пошёл в левый коридор — оставил закладку у развилки, чтобы потом вернуться в правый.
+
+:: code
+Обход в глубину (сначала узел, потом дети слева направо):
+```rust
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct DepthFirst<'a> {
+    stack: Vec<&'a Node>,
+}
+
+impl<'a> Iterator for DepthFirst<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let node = self.stack.pop()?;
+        for child in node.children.iter().rev() {
+            self.stack.push(child); // rev — чтобы левый ребёнок вышел первым
+        }
+        Some(node.name)
+    }
+}
+
+impl Node {
+    fn iter(&self) -> DepthFirst<'_> {
+        DepthFirst { stack: vec![self] }
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "src",
+        children: vec![
+            Node { name: "main.rs", children: vec![] },
+            Node { name: "net", children: vec![Node { name: "tcp.rs", children: vec![] }] },
+            Node { name: "lib.rs", children: vec![] },
+        ],
+    };
+    let all: Vec<&str> = tree.iter().collect();
+    println!("{all:?}");
+    println!("файлов .rs: {}", tree.iter().filter(|n| n.ends_with(".rs")).count());
+}
+```
+```out
+["src", "main.rs", "net", "tcp.rs", "lib.rs"]
+файлов .rs: 3
+```
+Раз это обычный `Iterator`, к нему сразу подходят `filter`, `count` и всё остальное.
+
+:: quiz
+Зачем при обходе дети кладутся в стек в **обратном** порядке?
+[x] Стек выдаёт последнего положенного первым; обратный порядок даёт левого ребёнка первым => Верно.
+[ ] Чтобы обход был быстрее => Скорость та же.
+[ ] Без `rev` будет ошибка компиляции => Скомпилируется, просто порядок другой.
+
+:: task
+Сделай итератор **в ширину** (по уровням): вместо стека — очередь `VecDeque`. Для того же дерева порядок будет `src, main.rs, net, lib.rs, tcp.rs`.
+```rust
+use std::collections::VecDeque;
+
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct BreadthFirst<'a> {
+    queue: VecDeque<&'a Node>,
+}
+
+impl<'a> Iterator for BreadthFirst<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        // твой код
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "src",
+        children: vec![
+            Node { name: "main.rs", children: vec![] },
+            Node { name: "net", children: vec![Node { name: "tcp.rs", children: vec![] }] },
+            Node { name: "lib.rs", children: vec![] },
+        ],
+    };
+    let it = BreadthFirst { queue: VecDeque::from([&tree]) };
+    println!("{:?}", it.collect::<Vec<_>>());
+}
+```
+```solution
+use std::collections::VecDeque;
+
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct BreadthFirst<'a> {
+    queue: VecDeque<&'a Node>,
+}
+
+impl<'a> Iterator for BreadthFirst<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let node = self.queue.pop_front()?;
+        self.queue.extend(node.children.iter());
+        Some(node.name)
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "src",
+        children: vec![
+            Node { name: "main.rs", children: vec![] },
+            Node { name: "net", children: vec![Node { name: "tcp.rs", children: vec![] }] },
+            Node { name: "lib.rs", children: vec![] },
+        ],
+    };
+    let it = BreadthFirst { queue: VecDeque::from([&tree]) };
+    println!("{:?}", it.collect::<Vec<_>>());
+}
+```
+```expect
+["src", "main.rs", "net", "lib.rs", "tcp.rs"]
+```
+hint: `pop_front` — взять из начала очереди, `extend(node.children.iter())` — добавить детей в конец.
+
+:: recap
+- Итератор по дереву — явный стек (в глубину) или очередь (в ширину).
+- Каждый `next`: взять узел, положить детей, вернуть значение.
+- Результат — обычный итератор со всеми адаптерами.
+
+## LESSON x05-4 | from_fn, successors и itertools | 8
+:: goals
+- Делать итераторы без своей структуры
+- Знать самые полезные методы крейта itertools
+
+:: text Итератор из замыкания
+Не всегда нужна своя структура. В стандартной библиотеке есть:
+- `std::iter::from_fn(|| ...)` — итератор из замыкания, которое возвращает `Option`;
+- `std::iter::successors(первый, |prev| следующий)` — каждый следующий считается из предыдущего;
+- `std::iter::repeat_with(|| ...)` — бесконечно вызывать замыкание.
+
+:: code
+```rust
+fn main() {
+    // степени двойки до 100
+    let pows: Vec<u32> = std::iter::successors(Some(1u32), |&x| if x < 64 { Some(x * 2) } else { None }).collect();
+    println!("{pows:?}");
+
+    // Коллатц: из n, пока не дойдём до 1
+    let collatz: Vec<u64> = std::iter::successors(Some(6u64), |&n| match n {
+        1 => None,
+        n if n % 2 == 0 => Some(n / 2),
+        n => Some(3 * n + 1),
+    })
+    .collect();
+    println!("{collatz:?}");
+
+    // from_fn со своим состоянием
+    let mut a = 0;
+    let mut b = 1;
+    let fib: Vec<u32> = std::iter::from_fn(|| {
+        let r = a;
+        (a, b) = (b, a + b);
+        Some(r)
+    })
+    .take(8)
+    .collect();
+    println!("{fib:?}");
+}
+```
+```out
+[1, 2, 4, 8, 16, 32, 64]
+[6, 3, 10, 5, 16, 8, 4, 2, 1]
+[0, 1, 1, 2, 3, 5, 8, 13]
+```
+
+:: text itertools
+Крейт **itertools** добавляет итераторам десятки методов. Самые полезные:
+- `tuple_windows()` — окна в виде кортежей: `(a, b)`, `(b, c)`;
+- `chunk_by(|x| ключ)` — группы подряд идущих с одним ключом;
+- `join(", ")` — склеить в строку;
+- `sorted_by_key(...)`, `unique()`, `counts()`, `cartesian_product(...)`.
+
+Подключается одной строкой: `use itertools::Itertools;`.
+
+:: code
+```rust
+use itertools::Itertools;
+
+fn main() {
+    let temps = [3, 5, 4, 8, 10];
+    let rises = temps.iter().tuple_windows().filter(|(a, b)| b > a).count();
+    println!("потеплело {rises} раза");
+
+    let words = ["кот", "кит", "лис", "лев", "ёж"];
+    for (letter, group) in &words.iter().chunk_by(|w| w.chars().next().unwrap()) {
+        println!("{letter}: {}", group.join(", "));
+    }
+
+    println!("{}", (1..=3).cartesian_product(['a', 'b']).map(|(n, c)| format!("{n}{c}")).join(" "));
+}
+```
+crates: yes
+```out
+потеплело 3 раза
+к: кот, кит
+л: лис, лев
+ё: ёж
+1a 1b 2a 2b 3a 3b
+```
+
+:: quiz
+Какой инструмент лучше всего подходит для последовательности «каждый следующий считается из предыдущего»?
+[ ] `repeat_with` => Он не видит предыдущее значение.
+[x] `successors` => Верно.
+[ ] `chain` => Это склейка двух итераторов.
+
+:: task
+Через `from_fn` сделай итератор, который читает числа из строки `"10 20 x 30"` по одному и **останавливается** на первом не-числе.
+```rust
+fn main() {
+    let text = "10 20 x 30";
+    let mut parts = text.split(' ');
+    // твой код: let nums: Vec<i32> = std::iter::from_fn(...).collect();
+    println!("{nums:?}");
+}
+```
+```solution
+fn main() {
+    let text = "10 20 x 30";
+    let mut parts = text.split(' ');
+    let nums: Vec<i32> = std::iter::from_fn(|| parts.next()?.parse().ok()).collect();
+    println!("{nums:?}");
+}
+```
+```expect
+[10, 20]
+```
+hint: Замыкание: `|| parts.next()?.parse().ok()` — первое `None` остановит итератор.
+
+:: recap
+- `from_fn` — итератор из замыкания, `successors` — из предыдущего значения.
+- itertools: `tuple_windows`, `chunk_by`, `join`, `cartesian_product`.
+- Своя структура нужна, когда нужен `DoubleEnded` или сложное состояние.
+
+## LESSON x05-p | Практика: итераторы | 25 | practice
+:: goals
+- Решить задачи на свои адаптеры и генераторы
+
+:: task
+Кодирование длин серий: `"aaabccdddd"` → `[('a', 3), ('b', 1), ('c', 2), ('d', 4)]`. Используй `peekable` или `fold`.
+```rust
+fn rle(s: &str) -> Vec<(char, usize)> {
+    // твой код
+}
+
+fn main() {
+    println!("{:?}", rle("aaabccdddd"));
+    println!("{:?}", rle(""));
+}
+```
+```solution
+fn rle(s: &str) -> Vec<(char, usize)> {
+    let mut out: Vec<(char, usize)> = Vec::new();
+    for c in s.chars() {
+        match out.last_mut() {
+            Some((last, n)) if *last == c => *n += 1,
+            _ => out.push((c, 1)),
+        }
+    }
+    out
+}
+
+fn main() {
+    println!("{:?}", rle("aaabccdddd"));
+    println!("{:?}", rle(""));
+}
+```
+```expect
+[('a', 3), ('b', 1), ('c', 2), ('d', 4)]
+[]
+```
+hint: Смотри на последний элемент результата через `last_mut()`. Тот же символ — увеличь счётчик, иначе добавь `(c, 1)`.
+
+:: task
+Адаптер `Batched`: собирает элементы в `Vec` по `n` штук (последний может быть короче). Сделай трейт-расширение `.batched(n)`.
+```rust
+struct Batched<I> {
+    inner: I,
+    n: usize,
+}
+
+impl<I: Iterator> Iterator for Batched<I> {
+    type Item = Vec<I::Item>;
+    fn next(&mut self) -> Option<Vec<I::Item>> {
+        // твой код
+    }
+}
+
+trait BatchedExt: Iterator + Sized {
+    fn batched(self, n: usize) -> Batched<Self> {
+        Batched { inner: self, n }
+    }
+}
+impl<I: Iterator> BatchedExt for I {}
+
+fn main() {
+    for b in (1..=7).batched(3) {
+        println!("{b:?}");
+    }
+}
+```
+```solution
+struct Batched<I> {
+    inner: I,
+    n: usize,
+}
+
+impl<I: Iterator> Iterator for Batched<I> {
+    type Item = Vec<I::Item>;
+    fn next(&mut self) -> Option<Vec<I::Item>> {
+        let batch: Vec<I::Item> = self.inner.by_ref().take(self.n).collect();
+        if batch.is_empty() { None } else { Some(batch) }
+    }
+}
+
+trait BatchedExt: Iterator + Sized {
+    fn batched(self, n: usize) -> Batched<Self> {
+        Batched { inner: self, n }
+    }
+}
+impl<I: Iterator> BatchedExt for I {}
+
+fn main() {
+    for b in (1..=7).batched(3) {
+        println!("{b:?}");
+    }
+}
+```
+```expect
+[1, 2, 3]
+[4, 5, 6]
+[7]
+```
+hint: `self.inner.by_ref().take(self.n).collect()` — взять до `n` штук, не забирая сам итератор.
+hint: Пустая пачка — значит, всё кончилось: `None`.
+
+:: task
+Итератор по дереву с глубиной: выдавай пары `(глубина, имя)` и напечатай дерево с отступами по 2 пробела на уровень.
+```rust
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct WithDepth<'a> {
+    stack: Vec<(usize, &'a Node)>,
+}
+
+impl<'a> Iterator for WithDepth<'a> {
+    type Item = (usize, &'a str);
+    fn next(&mut self) -> Option<(usize, &'a str)> {
+        // твой код
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "корень",
+        children: vec![
+            Node { name: "а", children: vec![Node { name: "а1", children: vec![] }] },
+            Node { name: "б", children: vec![] },
+        ],
+    };
+    for (d, name) in (WithDepth { stack: vec![(0, &tree)] }) {
+        println!("{}{name}", "  ".repeat(d));
+    }
+}
+```
+```solution
+struct Node {
+    name: &'static str,
+    children: Vec<Node>,
+}
+
+struct WithDepth<'a> {
+    stack: Vec<(usize, &'a Node)>,
+}
+
+impl<'a> Iterator for WithDepth<'a> {
+    type Item = (usize, &'a str);
+    fn next(&mut self) -> Option<(usize, &'a str)> {
+        let (d, node) = self.stack.pop()?;
+        for child in node.children.iter().rev() {
+            self.stack.push((d + 1, child));
+        }
+        Some((d, node.name))
+    }
+}
+
+fn main() {
+    let tree = Node {
+        name: "корень",
+        children: vec![
+            Node { name: "а", children: vec![Node { name: "а1", children: vec![] }] },
+            Node { name: "б", children: vec![] },
+        ],
+    };
+    for (d, name) in (WithDepth { stack: vec![(0, &tree)] }) {
+        println!("{}{name}", "  ".repeat(d));
+    }
+}
+```
+```expect
+корень
+  а
+    а1
+  б
+```
+hint: Храни в стеке пары `(глубина, узел)`. Детям — глубина `d + 1`.
+
+:: task
+Через `successors` найди, за сколько шагов последовательность Коллатца из 27 доходит до 1, и самое большое число на пути.
+```rust
+fn main() {
+    // твой код
+}
+```
+```solution
+fn main() {
+    let seq: Vec<u64> = std::iter::successors(Some(27u64), |&n| match n {
+        1 => None,
+        n if n % 2 == 0 => Some(n / 2),
+        n => Some(3 * n + 1),
+    })
+    .collect();
+    println!("шагов: {}", seq.len() - 1);
+    println!("максимум: {}", seq.iter().max().unwrap());
+}
+```
+```expect
+шагов: 111
+максимум: 9232
+```
+hint: Число шагов — это длина последовательности минус 1 (сам старт — не шаг).
+
+:: recap
+- `last_mut()` — удобно для группировки подряд идущих.
+- `by_ref().take(n)` — взять кусок, не отдавая итератор.
+- Стек с глубиной — дерево с отступами.
+- `successors` — последовательности «из предыдущего».
