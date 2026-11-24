@@ -1,0 +1,576 @@
+# MODULE a03 | Замыкания глубже | Fn, FnMut, FnOnce, move и функции, которые возвращают функции
+
+## LESSON a03-1 | Три вида замыканий | 8
+:: goals
+- Понять, чем отличаются `Fn`, `FnMut` и `FnOnce`
+- Угадывать, какой из них получится
+
+:: text Замыкание что-то берёт из окружения
+Замыкание может пользоваться переменными снаружи. **Как** оно ими пользуется — от этого зависит его вид:
+
+- `Fn` — только **смотрит**. Можно вызывать сколько угодно.
+- `FnMut` — **меняет**. Тоже можно вызывать много раз, но само замыкание должно быть `mut`.
+- `FnOnce` — **забирает** себе (съедает). Можно вызвать только один раз.
+
+> **Аналогия:** гость в доме. `Fn` — смотрит на картины. `FnMut` — переставляет мебель. `FnOnce` — уносит торт с собой. Второй раз торт не унести.
+
+:: code
+```rust
+fn main() {
+    let name = String::from("Аня");
+
+    // Fn: только читает name
+    let greet = || println!("Привет, {name}");
+    greet();
+    greet();
+
+    // FnMut: меняет count
+    let mut count = 0;
+    let mut tick = || count += 1;
+    tick();
+    tick();
+    println!("тиков: {count}");
+
+    // FnOnce: забирает name и отдаёт наружу
+    let take = || name;
+    let got = take();
+    println!("забрали: {got}");
+}
+```
+```out
+Привет, Аня
+Привет, Аня
+тиков: 2
+забрали: Аня
+```
+Попробуй вызвать `take()` второй раз. Компилятор скажет: замыкание уже «съедено».
+
+:: text Это ещё и требования
+`Fn`, `FnMut`, `FnOnce` — трейты. Функция может сказать, **какое** замыкание она примет:
+
+```rust
+fn twice<F: Fn()>(f: F) { f(); f(); }
+fn twice_mut<F: FnMut()>(mut f: F) { f(); f(); }
+fn once<F: FnOnce()>(f: F) { f(); }
+```
+- `FnOnce` — самое мягкое требование: подойдёт **любое** замыкание.
+- `Fn` — самое строгое: подойдёт только «смотрящее».
+
+:: quiz
+Замыкание `|| v.push(1)`, где `v` — вектор снаружи. Какой это вид?
+[ ] `Fn` => `push` меняет вектор, одного взгляда мало.
+[x] `FnMut` => Верно. Оно меняет `v`.
+[ ] `FnOnce` => Оно не забирает `v` себе, только меняет.
+
+:: quiz
+Функция просит `F: FnOnce()`. Можно ли передать ей замыкание вида `Fn`?
+[x] Да => Верно. Кто умеет вызываться много раз, тот справится и один раз.
+[ ] Нет => `FnOnce` — самое мягкое требование, подходит всё.
+
+:: task
+Функция `apply_n` должна вызвать замыкание `n` раз. Подбери правильное требование, чтобы счётчик работал.
+```rust
+fn apply_n<F: Fn()>(n: u32, f: F) {
+    for _ in 0..n {
+        f();
+    }
+}
+
+fn main() {
+    let mut total = 0;
+    apply_n(4, || total += 5);
+    println!("{total}");
+}
+```
+```solution
+fn apply_n<F: FnMut()>(n: u32, mut f: F) {
+    for _ in 0..n {
+        f();
+    }
+}
+
+fn main() {
+    let mut total = 0;
+    apply_n(4, || total += 5);
+    println!("{total}");
+}
+```
+```expect
+20
+```
+hint: Замыкание меняет `total`. Значит, это `FnMut`.
+hint: Не забудь `mut f: F` — вызывать `FnMut` можно только через изменяемую переменную.
+
+:: deep Как компилятор выбирает вид
+Компилятор сам смотрит, что замыкание делает с каждой захваченной переменной, и выбирает **самый мягкий** способ захвата:
+- только читает — захватит по `&`;
+- меняет — по `&mut`;
+- отдаёт наружу или передаёт кому-то по значению — заберёт себе.
+
+Получившееся замыкание реализует сразу несколько трейтов. Каждое `Fn` — это ещё и `FnMut`, а каждое `FnMut` — ещё и `FnOnce`. Как матрёшка: `Fn` ⊂ `FnMut` ⊂ `FnOnce`.
+
+Под капотом замыкание — это безымянная структура. Её поля — захваченные переменные (или ссылки на них). А вызов — метод этой структуры.
+
+:: recap
+- `Fn` — смотрит, `FnMut` — меняет, `FnOnce` — забирает.
+- Как требование: `FnOnce` подходит всем, `Fn` — самое строгое.
+- `FnMut` вызывают через `mut` переменную.
+
+## LESSON a03-2 | move: забрать с собой | 6
+:: goals
+- Понять, зачем писать `move` перед замыканием
+- Знать, где `move` обязателен
+
+:: text Что делает move
+Обычно замыкание **одалживает** переменные снаружи. `move` заставляет его **забрать** их себе (переместить внутрь).
+
+```rust
+let name = String::from("Боря");
+let f = move || println!("{name}");
+// name здесь больше нет: он внутри f
+```
+Важно: `move` меняет способ **захвата**, но не обязательно делает замыкание `FnOnce`. Это `f` всё ещё только читает `name`, поэтому оно `Fn`, и вызывать его можно много раз.
+
+:: text Где move нужен
+Когда замыкание **живёт дольше**, чем переменные вокруг него:
+- его отдают в другой поток (`thread::spawn`);
+- его возвращают из функции;
+- его кладут в структуру, которая уйдёт далеко.
+
+Без `move` замыкание держало бы ссылки на переменные, которые скоро исчезнут. Rust такого не разрешит.
+
+> **Аналогия:** уходишь из дома надолго — берёшь вещи с собой, а не записку «зонтик в шкафу».
+
+:: code
+```rust
+use std::thread;
+
+fn main() {
+    let data = vec![1, 2, 3];
+    let handle = thread::spawn(move || {
+        let sum: i32 = data.iter().sum();
+        println!("сумма в потоке: {sum}");
+    });
+    handle.join().unwrap();
+}
+```
+```out
+сумма в потоке: 6
+```
+Убери `move` и запусти. Компилятор скажет, что поток может пережить `data`.
+
+:: text move и копируемые типы
+Если захваченная переменная `Copy` (числа, `bool`, `char`), `move` просто кладёт внутрь **копию**. Снаружи переменная остаётся.
+
+```rust
+let x = 5;
+let f = move || x + 1;
+println!("{x} {}", f()); // 5 6 — x жив
+```
+
+:: quiz
+Нужно ли `move` в `thread::spawn(|| println!("{v:?}"))`, где `v` — вектор из `main`?
+[x] Да => Верно. Поток может жить дольше `main`, поэтому ему нужны свои данные.
+[ ] Нет, `println!` ничего не меняет => Дело не в изменении, а во времени жизни.
+[ ] Только если `v` пустой => Пустота вектора тут ни при чём.
+
+:: recap
+- `move` — забрать захваченное внутрь замыкания.
+- Нужен, когда замыкание переживает своё окружение: потоки, возврат из функции.
+- `Copy`-значения при `move` копируются.
+
+## LESSON a03-3 | Вернуть замыкание | 7
+:: goals
+- Написать функцию, которая возвращает функцию
+- Выбирать между `impl Fn` и `Box<dyn Fn>`
+
+:: text Фабрика функций
+Функция может **создать** и вернуть замыкание:
+
+```rust
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + n
+}
+```
+`make_adder(5)` — это новая функция «прибавь 5».
+
+> **Аналогия:** штамп. Ты настраиваешь его один раз («5»), а потом штампуешь сколько угодно.
+
+:: code
+```rust
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + n
+}
+
+fn make_greeter(greeting: &str) -> impl Fn(&str) -> String {
+    let g = greeting.to_string();
+    move |name| format!("{g}, {name}!")
+}
+
+fn main() {
+    let add5 = make_adder(5);
+    let add10 = make_adder(10);
+    println!("{} {}", add5(1), add10(1));
+
+    let hi = make_greeter("Привет");
+    println!("{}", hi("Вика"));
+}
+```
+```out
+6 11
+Привет, Вика!
+```
+`move` тут обязателен: `n` и `g` умрут, когда функция закончится, а замыкание продолжит жить.
+
+:: text Когда нужен Box<dyn Fn>
+`impl Fn` значит «один конкретный тип». А если функция возвращает **разные** замыкания в разных ветках?
+
+```rust
+fn op(name: &str) -> Box<dyn Fn(i32, i32) -> i32> {
+    match name {
+        "+" => Box::new(|a, b| a + b),
+        "*" => Box::new(|a, b| a * b),
+        _ => Box::new(|_, _| 0),
+    }
+}
+```
+У каждого замыкания свой тип, даже если они выглядят одинаково. Поэтому — коробка с `dyn`, как в модуле про трейты.
+
+:: code
+```rust
+fn op(name: &str) -> Box<dyn Fn(i32, i32) -> i32> {
+    match name {
+        "+" => Box::new(|a, b| a + b),
+        "*" => Box::new(|a, b| a * b),
+        _ => Box::new(|_, _| 0),
+    }
+}
+
+fn main() {
+    for name in ["+", "*", "?"] {
+        let f = op(name);
+        println!("6 {name} 7 = {}", f(6, 7));
+    }
+}
+```
+```out
+6 + 7 = 13
+6 * 7 = 42
+6 ? 7 = 0
+```
+
+:: quiz
+Функция в одной ветке `if` возвращает `|x| x + 1`, а в другой `|x| x * 2`. Что писать в типе результата?
+[ ] `impl Fn(i32) -> i32` => Это два разных типа, `impl` их не объединит.
+[x] `Box<dyn Fn(i32) -> i32>` => Верно.
+[ ] `Fn(i32) -> i32` => Без `impl` или `dyn` так писать нельзя.
+
+:: text Обычные функции тоже подходят
+Тип `fn(i32) -> i32` (с маленькой `f`) — **указатель на функцию**. Это обычная функция или замыкание, которое ничего не захватывает.
+
+```rust
+fn double(x: i32) -> i32 { x * 2 }
+let f: fn(i32) -> i32 = double;
+let v: Vec<i32> = [1, 2].iter().map(|&x| f(x)).collect();
+```
+Обычную функцию можно передать везде, где ждут `Fn`: `.map(double)` тоже работает.
+
+:: task
+Напиши `make_multiplier(k)`, которая возвращает замыкание «умножь на k».
+```rust
+fn make_multiplier(k: i32) -> impl Fn(i32) -> i32 {
+    // твой код
+}
+
+fn main() {
+    let triple = make_multiplier(3);
+    println!("{}", triple(7));
+    let v: Vec<i32> = vec![1, 2, 3].into_iter().map(make_multiplier(10)).collect();
+    println!("{v:?}");
+}
+```
+```solution
+fn make_multiplier(k: i32) -> impl Fn(i32) -> i32 {
+    move |x| x * k
+}
+
+fn main() {
+    let triple = make_multiplier(3);
+    println!("{}", triple(7));
+    let v: Vec<i32> = vec![1, 2, 3].into_iter().map(make_multiplier(10)).collect();
+    println!("{v:?}");
+}
+```
+```expect
+21
+[10, 20, 30]
+```
+hint: Тело — одна строка: `move |x| x * k`.
+
+:: recap
+- `-> impl Fn(A) -> B` — вернуть одно замыкание. Почти всегда с `move`.
+- Разные замыкания в разных ветках — `Box<dyn Fn(A) -> B>`.
+- `fn(A) -> B` — указатель на обычную функцию.
+
+## LESSON a03-4 | Замыкания в структурах | 7
+:: goals
+- Хранить замыкание в поле структуры
+- Сделать простую систему обработчиков событий
+
+:: text Поле-функция
+Замыкание можно положить в структуру. Два способа:
+
+```rust
+struct Button<F: Fn()> {
+    on_click: F,                 // один конкретный тип, быстро
+}
+
+struct Menu {
+    actions: Vec<Box<dyn Fn()>>, // много разных замыканий
+}
+```
+Второй способ нужен, когда обработчиков много и они разные.
+
+:: code
+```rust
+struct EventBus {
+    handlers: Vec<Box<dyn Fn(&str)>>,
+}
+
+impl EventBus {
+    fn new() -> Self {
+        EventBus { handlers: Vec::new() }
+    }
+    fn subscribe(&mut self, f: impl Fn(&str) + 'static) {
+        self.handlers.push(Box::new(f));
+    }
+    fn emit(&self, event: &str) {
+        for h in &self.handlers {
+            h(event);
+        }
+    }
+}
+
+fn main() {
+    let mut bus = EventBus::new();
+    bus.subscribe(|e| println!("лог: {e}"));
+    let prefix = String::from(">>");
+    bus.subscribe(move |e| println!("{prefix} {}", e.to_uppercase()));
+    bus.emit("save");
+}
+```
+```out
+лог: save
+>> SAVE
+```
+`+ 'static` значит: «замыкание не держит ссылок на временные вещи». Поэтому для `prefix` нужен `move`.
+
+:: text Вызвать поле
+Если замыкание лежит в поле, вызов пишут в скобках:
+
+```rust
+(self.on_click)();
+```
+Без скобок `self.on_click()` Rust будет искать **метод** `on_click`, а не поле.
+
+:: fill
+Заполни пропуски, чтобы кнопка вызвала свой обработчик.
+```rust
+struct Button<F: Fn()> {
+    on_click: F,
+}
+
+impl<F: Fn()> Button<F> {
+    fn press(&self) {
+        ___self.on_click___();
+    }
+}
+```
+= (
+= )
+explain: `(self.on_click)()` — сначала достать поле, потом вызвать его.
+
+:: task
+Сделай `Counter`, который хранит шаг как замыкание `Box<dyn Fn(i32) -> i32>` и применяет его в методе `next`. Начни с 1, шаг — умножить на 3. Напечатай три значения.
+```rust
+struct Counter {
+    value: i32,
+    step: Box<dyn Fn(i32) -> i32>,
+}
+
+impl Counter {
+    fn next(&mut self) -> i32 {
+        // твой код
+    }
+}
+
+fn main() {
+    let mut c = Counter { value: 1, step: Box::new(|x| x * 3) };
+    println!("{}", c.next());
+    println!("{}", c.next());
+    println!("{}", c.next());
+}
+```
+```solution
+struct Counter {
+    value: i32,
+    step: Box<dyn Fn(i32) -> i32>,
+}
+
+impl Counter {
+    fn next(&mut self) -> i32 {
+        self.value = (self.step)(self.value);
+        self.value
+    }
+}
+
+fn main() {
+    let mut c = Counter { value: 1, step: Box::new(|x| x * 3) };
+    println!("{}", c.next());
+    println!("{}", c.next());
+    println!("{}", c.next());
+}
+```
+```expect
+3
+9
+27
+```
+hint: Вызов поля — в скобках: `(self.step)(self.value)`.
+
+:: recap
+- Замыкание в поле: `F: Fn()` (один тип) или `Box<dyn Fn()>` (разные).
+- Вызывать поле: `(self.f)(аргументы)`.
+- `+ 'static` — замыкание не держит временных ссылок.
+
+## LESSON a03-p | Практика: замыкания | 14 | practice
+:: goals
+- Применить все три вида замыканий и вернуть замыкание из функции
+
+:: task
+Функция `compose(f, g)` возвращает новую функцию «сначала `f`, потом `g`». Допиши её.
+```rust
+fn compose(f: impl Fn(i32) -> i32, g: impl Fn(i32) -> i32) -> impl Fn(i32) -> i32 {
+    // твой код
+}
+
+fn main() {
+    let inc_then_double = compose(|x| x + 1, |x| x * 2);
+    println!("{}", inc_then_double(5));
+}
+```
+```solution
+fn compose(f: impl Fn(i32) -> i32, g: impl Fn(i32) -> i32) -> impl Fn(i32) -> i32 {
+    move |x| g(f(x))
+}
+
+fn main() {
+    let inc_then_double = compose(|x| x + 1, |x| x * 2);
+    println!("{}", inc_then_double(5));
+}
+```
+```expect
+12
+```
+hint: Новое замыкание забирает `f` и `g` себе: `move |x| ...`.
+hint: Сначала `f(x)`, потом результат в `g`: `g(f(x))`.
+
+:: task
+Функция `run_once` принимает `FnOnce() -> String` и печатает результат. Передай ей замыкание, которое **отдаёт** строку `report` наружу.
+```rust
+fn run_once<F: FnOnce() -> String>(f: F) {
+    println!("{}", f());
+}
+
+fn main() {
+    let report = String::from("отчёт готов");
+    // твой код
+}
+```
+```solution
+fn run_once<F: FnOnce() -> String>(f: F) {
+    println!("{}", f());
+}
+
+fn main() {
+    let report = String::from("отчёт готов");
+    run_once(move || report);
+}
+```
+```expect
+отчёт готов
+```
+hint: Замыкание просто возвращает `report`: `|| report`. `move` можно добавить для ясности.
+
+:: task
+Собери «калькулятор»: `Vec<(&str, Box<dyn Fn(i32, i32) -> i32>)>` с операциями `+`, `-`, `max`. Примени каждую к числам 8 и 3 и выведи `имя: результат`.
+```rust
+fn main() {
+    let a = 8;
+    let b = 3;
+    // твой код
+}
+```
+```solution
+fn main() {
+    let a = 8;
+    let b = 3;
+    let ops: Vec<(&str, Box<dyn Fn(i32, i32) -> i32>)> = vec![
+        ("+", Box::new(|x, y| x + y)),
+        ("-", Box::new(|x, y| x - y)),
+        ("max", Box::new(|x: i32, y| x.max(y))),
+    ];
+    for (name, f) in &ops {
+        println!("{name}: {}", f(a, b));
+    }
+}
+```
+```expect
++: 11
+-: 5
+max: 8
+```
+hint: Каждый элемент — пара `("имя", Box::new(|x, y| ...))`.
+hint: Для `max` компилятору может понадобиться тип: `|x: i32, y| x.max(y)`.
+
+:: task
+Функция `memo_square` возвращает замыкание `FnMut(u64)`, которое считает квадрат и **считает свои вызовы**. Напечатай результат и число вызовов после трёх вызовов.
+```rust
+fn memo_square() -> impl FnMut(u64) -> (u64, u32) {
+    // твой код
+}
+
+fn main() {
+    let mut sq = memo_square();
+    sq(2);
+    sq(3);
+    let (v, calls) = sq(4);
+    println!("{v} {calls}");
+}
+```
+```solution
+fn memo_square() -> impl FnMut(u64) -> (u64, u32) {
+    let mut calls = 0;
+    move |x| {
+        calls += 1;
+        (x * x, calls)
+    }
+}
+
+fn main() {
+    let mut sq = memo_square();
+    sq(2);
+    sq(3);
+    let (v, calls) = sq(4);
+    println!("{v} {calls}");
+}
+```
+```expect
+16 3
+```
+hint: Заведи `let mut calls = 0;` и верни `move |x| { calls += 1; (x * x, calls) }`.
+
+:: recap
+- Комбинировать функции — вернуть `move |x| g(f(x))`.
+- Замыкание со своим состоянием — `FnMut` + `move`.
+- Список разных операций — `Vec<Box<dyn Fn(...)>>`.

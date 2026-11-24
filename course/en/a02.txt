@@ -1,0 +1,627 @@
+# MODULE a02 | Iterators from the inside | Your own iterator, IntoIterator, fold, collect into anything
+
+## LESSON a02-1 | Your own iterator | 7
+:: goals
+- Write a type that can do `next()`
+- Get every iterator method for free
+
+:: text An iterator is just next
+To become an iterator, a type implements **one** method:
+
+```rust
+fn next(&mut self) -> Option<Self::Item>
+```
+- More values left — return `Some(value)`.
+- Out of values — return `None`.
+
+Everything else (`map`, `filter`, `sum`, `collect`…) is a default method. They appear by themselves.
+
+> **Analogy:** a napkin dispenser. Pull and you get a napkin. Empty, and nothing comes out.
+
+:: code
+```rust
+struct Countdown {
+    n: u32,
+}
+
+impl Iterator for Countdown {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            Some(self.n + 1)
+        }
+    }
+}
+
+fn main() {
+    for x in (Countdown { n: 3 }) {
+        println!("{x}");
+    }
+    println!("liftoff!");
+}
+```
+```out
+3
+2
+1
+liftoff!
+```
+Why `&mut self`? The iterator **remembers where it stopped** and updates that state on every step.
+
+:: code
+Your own iterator can already do everything normal ones can:
+```rust
+struct Countdown {
+    n: u32,
+}
+
+impl Iterator for Countdown {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            Some(self.n + 1)
+        }
+    }
+}
+
+fn main() {
+    let total: u32 = Countdown { n: 5 }.filter(|x| x % 2 == 1).sum();
+    println!("{total}");
+}
+```
+```out
+9
+```
+5 + 3 + 1 = 9. We wrote only `next`, and `filter` and `sum` came for free.
+
+:: quiz
+Which method must you implement for a type to become an iterator?
+[ ] `iter` => That's a collection method, not an iterator one.
+[x] `next` => Right. Everything else is a default.
+[ ] `map` and `filter` => They are already in the trait.
+
+:: text Endless iterators
+`next` may **never** return `None`. That's fine — just take as many as you need with `take`.
+
+```rust
+struct Fib { a: u64, b: u64 }
+
+impl Iterator for Fib {
+    type Item = u64;
+    fn next(&mut self) -> Option<u64> {
+        let r = self.a;
+        self.a = self.b;
+        self.b += r;
+        Some(r)
+    }
+}
+```
+`Fib { a: 0, b: 1 }.take(10)` gives the first 10 Fibonacci numbers.
+
+:: task
+Finish the `Fib` iterator and print the first 8 Fibonacci numbers on one line by collecting into a `Vec`.
+```rust
+struct Fib {
+    a: u64,
+    b: u64,
+}
+
+impl Iterator for Fib {
+    type Item = u64;
+    fn next(&mut self) -> Option<u64> {
+        // your code
+    }
+}
+
+fn main() {
+    let v: Vec<u64> = Fib { a: 0, b: 1 }.take(8).collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Fib {
+    a: u64,
+    b: u64,
+}
+
+impl Iterator for Fib {
+    type Item = u64;
+    fn next(&mut self) -> Option<u64> {
+        let r = self.a;
+        self.a = self.b;
+        self.b += r;
+        Some(r)
+    }
+}
+
+fn main() {
+    let v: Vec<u64> = Fib { a: 0, b: 1 }.take(8).collect();
+    println!("{v:?}");
+}
+```
+```expect
+[0, 1, 1, 2, 3, 5, 8, 13]
+```
+hint: Remember the current `a`, then shift: `a` becomes `b`, and `b` becomes the sum of the old ones.
+hint: `let r = self.a; self.a = self.b; self.b += r; Some(r)`.
+
+:: deep Where the state lives
+Every iterator has its own state: a counter, a position in an array, the last two Fibonacci numbers.
+
+When you write `v.iter().map(f).filter(g)`, you get a **nesting doll** of structs: `Filter<Map<Iter<i32>, F>, G>`. Each one holds the inner one and its own closure. Calling `next` on the outer one calls `next` on the inner one.
+
+The compiler can flatten this doll into a simple loop. That's why an iterator chain in Rust is usually as fast as a hand-written `for` loop. This is called a **zero-cost abstraction**.
+
+:: recap
+- Iterator = `type Item` + `fn next(&mut self) -> Option<Item>`.
+- `None` means the end. You may never end and use `take(n)`.
+- All adapters (`map`, `filter`, `sum`…) come for free.
+
+## LESSON a02-2 | IntoIterator: how for works | 7
+:: goals
+- See that `for` calls `into_iter()`
+- Tell apart `iter()`, `iter_mut()`, `into_iter()`
+
+:: text What for really does
+The line `for x in collection` turns into roughly this:
+
+```rust
+let mut it = collection.into_iter();
+while let Some(x) = it.next() {
+    // loop body
+}
+```
+`into_iter()` is a method of the `IntoIterator` trait: "how to make an iterator out of me".
+
+:: text Three ways to walk a Vec
+- `for x in v.iter()` (or `for x in &v`) — `x` is `&T`. We look.
+- `for x in v.iter_mut()` (or `for x in &mut v`) — `x` is `&mut T`. We change.
+- `for x in v` (or `v.into_iter()`) — `x` is `T`. We take. After the loop `v` is gone.
+
+> **Analogy:** a box of candy. Look at each one, rearrange each one, or eat them all. After the third, the box is empty.
+
+:: code
+```rust
+fn main() {
+    let mut v = vec![1, 2, 3];
+    for x in &mut v {
+        *x *= 10;
+    }
+    for x in &v {
+        print!("{x} ");
+    }
+    println!();
+    let total: i32 = v.into_iter().sum();
+    println!("{total}");
+}
+```
+```out
+10 20 30
+60
+```
+`*x *= 10` — the star is needed because `x` is a reference here, and we change the number itself.
+
+:: quiz
+After `for s in names { ... }` where `names: Vec<String>` — can you still use `names`?
+[ ] Yes, the loop changes nothing => The loop took ownership.
+[x] No, a by-value `for` took the vector => Right. Write `for s in &names` if you still need the vector.
+[ ] Yes, but only `names.len()` => Not even that.
+
+:: text Your own type in for
+Want to write `for x in &my_list`? Implement `IntoIterator` for `&MyList`. The easiest way is to hand out the inner vector's iterator:
+
+```rust
+struct Playlist { songs: Vec<String> }
+
+impl<'a> IntoIterator for &'a Playlist {
+    type Item = &'a String;
+    type IntoIter = std::slice::Iter<'a, String>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.songs.iter()
+    }
+}
+```
+`'a` is a lifetime: the items live as long as the playlist. More in the lifetimes module.
+
+:: code
+```rust
+struct Playlist {
+    songs: Vec<String>,
+}
+
+impl<'a> IntoIterator for &'a Playlist {
+    type Item = &'a String;
+    type IntoIter = std::slice::Iter<'a, String>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.songs.iter()
+    }
+}
+
+fn main() {
+    let p = Playlist { songs: vec![String::from("Intro"), String::from("Outro")] };
+    for s in &p {
+        println!("♪ {s}");
+    }
+    println!("total: {}", p.songs.len());
+}
+```
+```out
+♪ Intro
+♪ Outro
+total: 2
+```
+
+:: fill
+Fill in the blanks: double each number in place, then print the vector.
+```rust
+fn main() {
+    let mut v = vec![1, 2, 3];
+    for x in v.___() {
+        ___x *= 2;
+    }
+    println!("{v:?}");
+}
+```
+= iter_mut
+= *
+explain: `iter_mut()` gives `&mut i32`, and `*x` is the number itself that we change.
+
+:: recap
+- `for x in c` = `c.into_iter()` + `next()` in a loop.
+- `&v` → `&T`, `&mut v` → `&mut T`, `v` → `T` (the vector is eaten).
+- Your type in `for` — implement `IntoIterator`.
+
+## LESSON a02-3 | Adapters people forget | 8
+:: goals
+- Meet `zip`, `chain`, `windows`, `flat_map`, `take_while`
+- Build short pipelines instead of loops
+
+:: text Pair up and join
+- `a.zip(b)` — walk two iterators **in pairs**: `(a1, b1)`, `(a2, b2)`… It ends when the shorter one ends.
+- `a.chain(b)` — all of `a`, then all of `b`.
+- `enumerate()` — add a number: `(0, x)`, `(1, y)`…
+
+:: code
+```rust
+fn main() {
+    let names = ["Ann", "Bob", "Vicky"];
+    let scores = [90, 75, 82];
+    for (n, s) in names.iter().zip(scores.iter()) {
+        println!("{n}: {s}");
+    }
+    let all: Vec<i32> = (1..3).chain(7..9).collect();
+    println!("{all:?}");
+}
+```
+```out
+Ann: 90
+Bob: 75
+Vicky: 82
+[1, 2, 7, 8]
+```
+
+:: text Windows and chunks (on slices)
+- `v.windows(2)` — a sliding window: `[a,b]`, `[b,c]`, `[c,d]`…
+- `v.chunks(2)` — slicing without overlap: `[a,b]`, `[c,d]`, `[e]`.
+
+> **Analogy:** `windows` is looking out of a train window: each frame is a bit shifted. `chunks` is slicing a loaf of bread.
+
+:: code
+```rust
+fn main() {
+    let temps = [3, 5, 4, 8, 10];
+    let rises = temps.windows(2).filter(|w| w[1] > w[0]).count();
+    println!("it got warmer {rises} times");
+
+    for part in [1, 2, 3, 4, 5].chunks(2) {
+        println!("{part:?}");
+    }
+}
+```
+```out
+it got warmer 3 times
+[1, 2]
+[3, 4]
+[5]
+```
+
+:: text Stop and skip
+- `take_while(condition)` — take **while** the condition is true. First "false" — stop.
+- `skip_while(condition)` — skip while true, then take everything.
+- `step_by(n)` — every n-th one.
+- `rev()` — backwards.
+
+:: text Unfold nested things
+`flat_map` is like `map`, but each item turns into **several**, and everything is glued into one stream.
+
+```rust
+let words = ["cat", "dog"];
+let letters: Vec<char> = words.iter().flat_map(|w| w.chars()).collect();
+// ['c', 'a', 't', 'd', 'o', 'g']
+```
+If the items are already iterators or `Vec`s, `flatten()` is enough.
+
+:: quiz
+What does `[1, 2, 3, 10, 4].iter().take_while(|&&x| x < 5).count()` return?
+[ ] 4 => `take_while` stops at the first non-match, and the `4` after `10` isn't counted.
+[x] 3 => Right. `1, 2, 3`, then `10` — stop.
+[ ] 5 => Not all items are below 5.
+
+:: task
+Count how many times two neighboring numbers in the list are **equal**. Use `windows(2)`.
+```rust
+fn main() {
+    let v = [1, 1, 2, 3, 3, 3, 4];
+    // your code
+}
+```
+```solution
+fn main() {
+    let v = [1, 1, 2, 3, 3, 3, 4];
+    let pairs = v.windows(2).filter(|w| w[0] == w[1]).count();
+    println!("{pairs}");
+}
+```
+```expect
+3
+```
+hint: `v.windows(2)` gives slices of two items: `w[0]` and `w[1]`.
+
+:: recap
+- `zip` — in pairs, `chain` — one after another, `enumerate` — with a number.
+- `windows` — a sliding window, `chunks` — pieces.
+- `take_while`, `skip_while`, `step_by`, `rev` — steer the stream.
+- `flat_map`/`flatten` — unfold nested things.
+
+## LESSON a02-4 | fold and collect into anything | 8
+:: goals
+- Fold a stream into one value with `fold`
+- Collect into `String`, `HashMap`, `Result<Vec>`
+
+:: text fold — roll everything into one
+`fold(start, |accumulated, x| new_accumulated)`.
+
+```rust
+let sum = [1, 2, 3].iter().fold(0, |acc, x| acc + x); // 6
+```
+`sum`, `count`, `max` are special cases of `fold`. When there's no ready-made method, use `fold`.
+
+> **Analogy:** a snowball. Roll it through the snow and with every step it picks up a bit more.
+
+:: code
+```rust
+fn main() {
+    let words = ["rust", "is", "delightful"];
+    let longest = words.iter().fold("", |best, &w| {
+        if w.chars().count() > best.chars().count() { w } else { best }
+    });
+    println!("{longest}");
+
+    let sentence = words.iter().fold(String::new(), |mut s, w| {
+        if !s.is_empty() { s.push(' '); }
+        s.push_str(w);
+        s
+    });
+    println!("{sentence}");
+}
+```
+```out
+delightful
+rust is delightful
+```
+
+:: text collect can do a lot
+`collect()` looks at the **type** you ask for and builds it:
+- `Vec<T>` — a list.
+- `String` — from chars or strings.
+- `HashMap<K, V>` or `BTreeMap<K, V>` — from `(key, value)` pairs.
+- `Result<Vec<T>, E>` — from a stream of `Result`s. The first error makes the whole result `Err`.
+
+:: code
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let s: String = ['R', 'u', 's', 't'].iter().collect();
+    println!("{s}");
+
+    let ages: BTreeMap<&str, u32> = [("Ann", 30), ("Bob", 25)].into_iter().collect();
+    println!("{ages:?}");
+
+    let good: Result<Vec<i32>, _> = ["1", "2", "3"].iter().map(|x| x.parse::<i32>()).collect();
+    println!("{good:?}");
+
+    let bad: Result<Vec<i32>, _> = ["1", "cat", "3"].iter().map(|x| x.parse::<i32>()).collect();
+    println!("{}", bad.is_err());
+}
+```
+```out
+Rust
+{"Ann": 30, "Bob": 25}
+Ok([1, 2, 3])
+true
+```
+`BTreeMap` keeps keys in order. So the output is always the same — handy for examples.
+
+:: quiz
+What do you get if you collect `["4", "x", "6"]` into `Result<Vec<i32>, _>` with `parse`?
+[ ] `Ok([4, 6])` => Errors aren't silently dropped.
+[x] `Err(...)` => Right. One error and the whole result is an error.
+[ ] `Ok([4, 0, 6])` => Rust doesn't put in a zero by itself.
+
+:: text peekable — peek at the next one
+Sometimes you need to look at the next item **without taking** it. That's `peekable()`:
+
+```rust
+let mut it = [1, 2, 3].iter().peekable();
+if let Some(&&next) = it.peek() {
+    // next == 1, but it's still in the iterator
+}
+```
+Useful when parsing text: "is the next char a digit? then keep reading the number".
+
+:: task
+Count how many times each word appears. Collect into a `BTreeMap<&str, u32>` and print it.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "cat dog cat fish cat dog";
+    let mut counts: BTreeMap<&str, u32> = BTreeMap::new();
+    // your code
+    println!("{counts:?}");
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let text = "cat dog cat fish cat dog";
+    let mut counts: BTreeMap<&str, u32> = BTreeMap::new();
+    for w in text.split_whitespace() {
+        *counts.entry(w).or_insert(0) += 1;
+    }
+    println!("{counts:?}");
+}
+```
+```expect
+{"cat": 3, "dog": 2, "fish": 1}
+```
+hint: `text.split_whitespace()` gives the words.
+hint: `*counts.entry(w).or_insert(0) += 1;` — bump the word's counter, creating it the first time.
+
+:: recap
+- `fold(start, |acc, x| ...)` — roll into one value.
+- `collect` builds the type you asked for.
+- `Result<Vec<_>, _>` via `collect` — stop at the first error.
+- `peekable` — look at the next one without taking it.
+
+## LESSON a02-p | Practice: iterators | 15 | practice
+:: goals
+- Write your own iterator and a couple of pipelines
+
+:: task
+The `Steps` iterator yields numbers from `start` to `end` inclusive with a `step`. Finish `next`.
+```rust
+struct Steps {
+    cur: u32,
+    end: u32,
+    step: u32,
+}
+
+impl Iterator for Steps {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        // your code
+    }
+}
+
+fn main() {
+    let v: Vec<u32> = Steps { cur: 2, end: 11, step: 3 }.collect();
+    println!("{v:?}");
+}
+```
+```solution
+struct Steps {
+    cur: u32,
+    end: u32,
+    step: u32,
+}
+
+impl Iterator for Steps {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.cur > self.end {
+            return None;
+        }
+        let r = self.cur;
+        self.cur += self.step;
+        Some(r)
+    }
+}
+
+fn main() {
+    let v: Vec<u32> = Steps { cur: 2, end: 11, step: 3 }.collect();
+    println!("{v:?}");
+}
+```
+```expect
+[2, 5, 8, 11]
+```
+hint: If `cur` is already past `end` — `None`. Otherwise remember `cur`, add `step` and return the remembered value.
+
+:: task
+You have names and scores. Print only those above 80, as `name — score`. Use `zip` and `filter`.
+```rust
+fn main() {
+    let names = ["Ann", "Bob", "Vicky", "Greg"];
+    let scores = [95, 70, 88, 80];
+    // your code
+}
+```
+```solution
+fn main() {
+    let names = ["Ann", "Bob", "Vicky", "Greg"];
+    let scores = [95, 70, 88, 80];
+    for (n, s) in names.iter().zip(scores.iter()).filter(|(_, s)| **s > 80) {
+        println!("{n} — {s}");
+    }
+}
+```
+```expect
+Ann — 95
+Vicky — 88
+```
+hint: `names.iter().zip(scores.iter())` gives pairs `(&name, &score)`.
+hint: `filter` gets a reference to the pair, so `**s > 80`.
+
+:: task
+Turn the string `"3,8,x,1"` into the sum of its numbers, **skipping** whatever isn't a number. Use `filter_map`.
+```rust
+fn main() {
+    let line = "3,8,x,1";
+    // your code
+}
+```
+```solution
+fn main() {
+    let line = "3,8,x,1";
+    let sum: i32 = line.split(',').filter_map(|p| p.parse::<i32>().ok()).sum();
+    println!("{sum}");
+}
+```
+```expect
+12
+```
+hint: `filter_map` keeps only the `Some`s. And `.ok()` turns a `Result` into an `Option`.
+
+:: task
+Use `fold` to find the minimum and the maximum of the list at the same time and print `min 2, max 9`.
+```rust
+fn main() {
+    let v = [5, 2, 9, 4];
+    // your code
+}
+```
+```solution
+fn main() {
+    let v = [5, 2, 9, 4];
+    let (lo, hi) = v.iter().fold((i32::MAX, i32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+    println!("min {lo}, max {hi}");
+}
+```
+```expect
+min 2, max 9
+```
+hint: The accumulated value can be a pair: `(minimum, maximum)`.
+hint: Start with `(i32::MAX, i32::MIN)`, and on each step `(lo.min(x), hi.max(x))`.
+
+:: recap
+- Your own iterator — just `next`.
+- `zip` + `filter`, `filter_map` + `ok()`, `fold` with a pair are common tricks.

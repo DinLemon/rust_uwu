@@ -1,0 +1,576 @@
+# MODULE a03 | Closures, deeper | Fn, FnMut, FnOnce, move, and functions that return functions
+
+## LESSON a03-1 | Three kinds of closures | 8
+:: goals
+- See how `Fn`, `FnMut` and `FnOnce` differ
+- Guess which one you'll get
+
+:: text A closure takes something from around it
+A closure can use variables from outside. **How** it uses them decides its kind:
+
+- `Fn` — only **looks**. You can call it as often as you like.
+- `FnMut` — **changes** things. Can also be called many times, but the closure itself must be `mut`.
+- `FnOnce` — **takes** things for itself (eats them). It can be called only once.
+
+> **Analogy:** a guest in your home. `Fn` looks at the paintings. `FnMut` moves the furniture around. `FnOnce` takes the cake home. You can't take the cake twice.
+
+:: code
+```rust
+fn main() {
+    let name = String::from("Ann");
+
+    // Fn: only reads name
+    let greet = || println!("Hi, {name}");
+    greet();
+    greet();
+
+    // FnMut: changes count
+    let mut count = 0;
+    let mut tick = || count += 1;
+    tick();
+    tick();
+    println!("ticks: {count}");
+
+    // FnOnce: takes name and hands it out
+    let take = || name;
+    let got = take();
+    println!("taken: {got}");
+}
+```
+```out
+Hi, Ann
+Hi, Ann
+ticks: 2
+taken: Ann
+```
+Try calling `take()` a second time. The compiler will say the closure has already been "eaten".
+
+:: text They are also requirements
+`Fn`, `FnMut`, `FnOnce` are traits. A function can say **which** closure it accepts:
+
+```rust
+fn twice<F: Fn()>(f: F) { f(); f(); }
+fn twice_mut<F: FnMut()>(mut f: F) { f(); f(); }
+fn once<F: FnOnce()>(f: F) { f(); }
+```
+- `FnOnce` is the loosest requirement: **any** closure fits.
+- `Fn` is the strictest: only a "looking" closure fits.
+
+:: quiz
+The closure `|| v.push(1)`, where `v` is a vector outside. Which kind is it?
+[ ] `Fn` => `push` changes the vector, looking is not enough.
+[x] `FnMut` => Right. It changes `v`.
+[ ] `FnOnce` => It doesn't take `v`, it only changes it.
+
+:: quiz
+A function asks for `F: FnOnce()`. Can you pass it an `Fn` closure?
+[x] Yes => Right. Something that can be called many times can be called once.
+[ ] No => `FnOnce` is the loosest requirement, anything fits.
+
+:: task
+The function `apply_n` must call the closure `n` times. Pick the right requirement so the counter works.
+```rust
+fn apply_n<F: Fn()>(n: u32, f: F) {
+    for _ in 0..n {
+        f();
+    }
+}
+
+fn main() {
+    let mut total = 0;
+    apply_n(4, || total += 5);
+    println!("{total}");
+}
+```
+```solution
+fn apply_n<F: FnMut()>(n: u32, mut f: F) {
+    for _ in 0..n {
+        f();
+    }
+}
+
+fn main() {
+    let mut total = 0;
+    apply_n(4, || total += 5);
+    println!("{total}");
+}
+```
+```expect
+20
+```
+hint: The closure changes `total`. So it's `FnMut`.
+hint: Don't forget `mut f: F` — an `FnMut` can only be called through a mutable variable.
+
+:: deep How the compiler picks the kind
+The compiler looks at what the closure does with each captured variable and picks the **gentlest** way to capture it:
+- only reads — captures by `&`;
+- changes — by `&mut`;
+- hands it out or passes it to someone by value — takes it.
+
+The resulting closure implements several traits at once. Every `Fn` is also an `FnMut`, and every `FnMut` is also an `FnOnce`. Like nesting dolls: `Fn` ⊂ `FnMut` ⊂ `FnOnce`.
+
+Under the hood a closure is a nameless struct. Its fields are the captured variables (or references to them). And calling it is a method on that struct.
+
+:: recap
+- `Fn` looks, `FnMut` changes, `FnOnce` takes.
+- As a requirement: `FnOnce` accepts everything, `Fn` is the strictest.
+- Call an `FnMut` through a `mut` variable.
+
+## LESSON a03-2 | move: take it with you | 6
+:: goals
+- See why you write `move` before a closure
+- Know where `move` is required
+
+:: text What move does
+Normally a closure **borrows** outside variables. `move` makes it **take** them (move them inside).
+
+```rust
+let name = String::from("Bob");
+let f = move || println!("{name}");
+// name is gone here: it's inside f
+```
+Note: `move` changes how things are **captured**, but doesn't necessarily make the closure `FnOnce`. This `f` still only reads `name`, so it's `Fn`, and you can call it many times.
+
+:: text Where move is needed
+When the closure **lives longer** than the variables around it:
+- it's handed to another thread (`thread::spawn`);
+- it's returned from a function;
+- it's put into a struct that will travel far.
+
+Without `move`, the closure would hold references to variables that are about to disappear. Rust won't allow that.
+
+> **Analogy:** leaving home for a long time, you take your things with you, not a note saying "umbrella's in the closet".
+
+:: code
+```rust
+use std::thread;
+
+fn main() {
+    let data = vec![1, 2, 3];
+    let handle = thread::spawn(move || {
+        let sum: i32 = data.iter().sum();
+        println!("sum in the thread: {sum}");
+    });
+    handle.join().unwrap();
+}
+```
+```out
+sum in the thread: 6
+```
+Remove `move` and run it. The compiler will say the thread may outlive `data`.
+
+:: text move and copyable types
+If the captured variable is `Copy` (numbers, `bool`, `char`), `move` simply puts a **copy** inside. The outside variable stays.
+
+```rust
+let x = 5;
+let f = move || x + 1;
+println!("{x} {}", f()); // 5 6 — x is alive
+```
+
+:: quiz
+Do you need `move` in `thread::spawn(|| println!("{v:?}"))`, where `v` is a vector from `main`?
+[x] Yes => Right. The thread may live longer than `main`, so it needs its own data.
+[ ] No, `println!` doesn't change anything => It's not about changing, it's about lifetime.
+[ ] Only if `v` is empty => Whether the vector is empty doesn't matter.
+
+:: recap
+- `move` — take the captured things into the closure.
+- Needed when the closure outlives its surroundings: threads, returning from a function.
+- `Copy` values are copied by `move`.
+
+## LESSON a03-3 | Return a closure | 7
+:: goals
+- Write a function that returns a function
+- Choose between `impl Fn` and `Box<dyn Fn>`
+
+:: text A function factory
+A function can **create** and return a closure:
+
+```rust
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + n
+}
+```
+`make_adder(5)` is a new function "add 5".
+
+> **Analogy:** a rubber stamp. You set it once ("5"), then stamp as often as you like.
+
+:: code
+```rust
+fn make_adder(n: i32) -> impl Fn(i32) -> i32 {
+    move |x| x + n
+}
+
+fn make_greeter(greeting: &str) -> impl Fn(&str) -> String {
+    let g = greeting.to_string();
+    move |name| format!("{g}, {name}!")
+}
+
+fn main() {
+    let add5 = make_adder(5);
+    let add10 = make_adder(10);
+    println!("{} {}", add5(1), add10(1));
+
+    let hi = make_greeter("Hello");
+    println!("{}", hi("Vicky"));
+}
+```
+```out
+6 11
+Hello, Vicky!
+```
+`move` is required here: `n` and `g` die when the function ends, but the closure keeps living.
+
+:: text When you need Box<dyn Fn>
+`impl Fn` means "one concrete type". What if a function returns **different** closures in different branches?
+
+```rust
+fn op(name: &str) -> Box<dyn Fn(i32, i32) -> i32> {
+    match name {
+        "+" => Box::new(|a, b| a + b),
+        "*" => Box::new(|a, b| a * b),
+        _ => Box::new(|_, _| 0),
+    }
+}
+```
+Each closure has its own type, even if they look alike. So — a box with `dyn`, like in the traits module.
+
+:: code
+```rust
+fn op(name: &str) -> Box<dyn Fn(i32, i32) -> i32> {
+    match name {
+        "+" => Box::new(|a, b| a + b),
+        "*" => Box::new(|a, b| a * b),
+        _ => Box::new(|_, _| 0),
+    }
+}
+
+fn main() {
+    for name in ["+", "*", "?"] {
+        let f = op(name);
+        println!("6 {name} 7 = {}", f(6, 7));
+    }
+}
+```
+```out
+6 + 7 = 13
+6 * 7 = 42
+6 ? 7 = 0
+```
+
+:: quiz
+A function returns `|x| x + 1` in one `if` branch and `|x| x * 2` in the other. What goes in the return type?
+[ ] `impl Fn(i32) -> i32` => These are two different types, `impl` can't unite them.
+[x] `Box<dyn Fn(i32) -> i32>` => Right.
+[ ] `Fn(i32) -> i32` => You can't write it without `impl` or `dyn`.
+
+:: text Plain functions fit too
+The type `fn(i32) -> i32` (lowercase `f`) is a **function pointer**. It's a plain function, or a closure that captures nothing.
+
+```rust
+fn double(x: i32) -> i32 { x * 2 }
+let f: fn(i32) -> i32 = double;
+let v: Vec<i32> = [1, 2].iter().map(|&x| f(x)).collect();
+```
+A plain function can go anywhere an `Fn` is expected: `.map(double)` works too.
+
+:: task
+Write `make_multiplier(k)`, which returns a closure "multiply by k".
+```rust
+fn make_multiplier(k: i32) -> impl Fn(i32) -> i32 {
+    // your code
+}
+
+fn main() {
+    let triple = make_multiplier(3);
+    println!("{}", triple(7));
+    let v: Vec<i32> = vec![1, 2, 3].into_iter().map(make_multiplier(10)).collect();
+    println!("{v:?}");
+}
+```
+```solution
+fn make_multiplier(k: i32) -> impl Fn(i32) -> i32 {
+    move |x| x * k
+}
+
+fn main() {
+    let triple = make_multiplier(3);
+    println!("{}", triple(7));
+    let v: Vec<i32> = vec![1, 2, 3].into_iter().map(make_multiplier(10)).collect();
+    println!("{v:?}");
+}
+```
+```expect
+21
+[10, 20, 30]
+```
+hint: The body is one line: `move |x| x * k`.
+
+:: recap
+- `-> impl Fn(A) -> B` — return one closure. Almost always with `move`.
+- Different closures in different branches — `Box<dyn Fn(A) -> B>`.
+- `fn(A) -> B` — a pointer to a plain function.
+
+## LESSON a03-4 | Closures in structs | 7
+:: goals
+- Store a closure in a struct field
+- Build a simple event handler system
+
+:: text A function field
+You can put a closure into a struct. Two ways:
+
+```rust
+struct Button<F: Fn()> {
+    on_click: F,                 // one concrete type, fast
+}
+
+struct Menu {
+    actions: Vec<Box<dyn Fn()>>, // many different closures
+}
+```
+The second way is for when there are many handlers and they differ.
+
+:: code
+```rust
+struct EventBus {
+    handlers: Vec<Box<dyn Fn(&str)>>,
+}
+
+impl EventBus {
+    fn new() -> Self {
+        EventBus { handlers: Vec::new() }
+    }
+    fn subscribe(&mut self, f: impl Fn(&str) + 'static) {
+        self.handlers.push(Box::new(f));
+    }
+    fn emit(&self, event: &str) {
+        for h in &self.handlers {
+            h(event);
+        }
+    }
+}
+
+fn main() {
+    let mut bus = EventBus::new();
+    bus.subscribe(|e| println!("log: {e}"));
+    let prefix = String::from(">>");
+    bus.subscribe(move |e| println!("{prefix} {}", e.to_uppercase()));
+    bus.emit("save");
+}
+```
+```out
+log: save
+>> SAVE
+```
+`+ 'static` means "the closure holds no references to temporary things". That's why `prefix` needs `move`.
+
+:: text Calling a field
+If a closure sits in a field, the call goes in parentheses:
+
+```rust
+(self.on_click)();
+```
+Without them, `self.on_click()` makes Rust look for a **method** `on_click`, not the field.
+
+:: fill
+Fill in the blanks so the button calls its handler.
+```rust
+struct Button<F: Fn()> {
+    on_click: F,
+}
+
+impl<F: Fn()> Button<F> {
+    fn press(&self) {
+        ___self.on_click___();
+    }
+}
+```
+= (
+= )
+explain: `(self.on_click)()` — first get the field, then call it.
+
+:: task
+Make a `Counter` that stores its step as a closure `Box<dyn Fn(i32) -> i32>` and applies it in the `next` method. Start at 1, the step multiplies by 3. Print three values.
+```rust
+struct Counter {
+    value: i32,
+    step: Box<dyn Fn(i32) -> i32>,
+}
+
+impl Counter {
+    fn next(&mut self) -> i32 {
+        // your code
+    }
+}
+
+fn main() {
+    let mut c = Counter { value: 1, step: Box::new(|x| x * 3) };
+    println!("{}", c.next());
+    println!("{}", c.next());
+    println!("{}", c.next());
+}
+```
+```solution
+struct Counter {
+    value: i32,
+    step: Box<dyn Fn(i32) -> i32>,
+}
+
+impl Counter {
+    fn next(&mut self) -> i32 {
+        self.value = (self.step)(self.value);
+        self.value
+    }
+}
+
+fn main() {
+    let mut c = Counter { value: 1, step: Box::new(|x| x * 3) };
+    println!("{}", c.next());
+    println!("{}", c.next());
+    println!("{}", c.next());
+}
+```
+```expect
+3
+9
+27
+```
+hint: Calling a field goes in parentheses: `(self.step)(self.value)`.
+
+:: recap
+- A closure in a field: `F: Fn()` (one type) or `Box<dyn Fn()>` (different ones).
+- Call a field: `(self.f)(args)`.
+- `+ 'static` — the closure holds no temporary references.
+
+## LESSON a03-p | Practice: closures | 14 | practice
+:: goals
+- Use all three kinds of closures and return a closure from a function
+
+:: task
+The function `compose(f, g)` returns a new function "first `f`, then `g`". Finish it.
+```rust
+fn compose(f: impl Fn(i32) -> i32, g: impl Fn(i32) -> i32) -> impl Fn(i32) -> i32 {
+    // your code
+}
+
+fn main() {
+    let inc_then_double = compose(|x| x + 1, |x| x * 2);
+    println!("{}", inc_then_double(5));
+}
+```
+```solution
+fn compose(f: impl Fn(i32) -> i32, g: impl Fn(i32) -> i32) -> impl Fn(i32) -> i32 {
+    move |x| g(f(x))
+}
+
+fn main() {
+    let inc_then_double = compose(|x| x + 1, |x| x * 2);
+    println!("{}", inc_then_double(5));
+}
+```
+```expect
+12
+```
+hint: The new closure takes `f` and `g` with it: `move |x| ...`.
+hint: First `f(x)`, then pass the result to `g`: `g(f(x))`.
+
+:: task
+The function `run_once` takes an `FnOnce() -> String` and prints the result. Pass it a closure that **hands out** the `report` string.
+```rust
+fn run_once<F: FnOnce() -> String>(f: F) {
+    println!("{}", f());
+}
+
+fn main() {
+    let report = String::from("report ready");
+    // your code
+}
+```
+```solution
+fn run_once<F: FnOnce() -> String>(f: F) {
+    println!("{}", f());
+}
+
+fn main() {
+    let report = String::from("report ready");
+    run_once(move || report);
+}
+```
+```expect
+report ready
+```
+hint: The closure just returns `report`: `|| report`. You can add `move` for clarity.
+
+:: task
+Build a "calculator": a `Vec<(&str, Box<dyn Fn(i32, i32) -> i32>)>` with the operations `+`, `-`, `max`. Apply each to 8 and 3 and print `name: result`.
+```rust
+fn main() {
+    let a = 8;
+    let b = 3;
+    // your code
+}
+```
+```solution
+fn main() {
+    let a = 8;
+    let b = 3;
+    let ops: Vec<(&str, Box<dyn Fn(i32, i32) -> i32>)> = vec![
+        ("+", Box::new(|x, y| x + y)),
+        ("-", Box::new(|x, y| x - y)),
+        ("max", Box::new(|x: i32, y| x.max(y))),
+    ];
+    for (name, f) in &ops {
+        println!("{name}: {}", f(a, b));
+    }
+}
+```
+```expect
++: 11
+-: 5
+max: 8
+```
+hint: Each item is a pair `("name", Box::new(|x, y| ...))`.
+hint: For `max` the compiler may need a type: `|x: i32, y| x.max(y)`.
+
+:: task
+The function `memo_square` returns an `FnMut(u64)` closure that computes a square and **counts its calls**. Print the result and the call count after three calls.
+```rust
+fn memo_square() -> impl FnMut(u64) -> (u64, u32) {
+    // your code
+}
+
+fn main() {
+    let mut sq = memo_square();
+    sq(2);
+    sq(3);
+    let (v, calls) = sq(4);
+    println!("{v} {calls}");
+}
+```
+```solution
+fn memo_square() -> impl FnMut(u64) -> (u64, u32) {
+    let mut calls = 0;
+    move |x| {
+        calls += 1;
+        (x * x, calls)
+    }
+}
+
+fn main() {
+    let mut sq = memo_square();
+    sq(2);
+    sq(3);
+    let (v, calls) = sq(4);
+    println!("{v} {calls}");
+}
+```
+```expect
+16 3
+```
+hint: Make `let mut calls = 0;` and return `move |x| { calls += 1; (x * x, calls) }`.
+
+:: recap
+- Combine functions — return `move |x| g(f(x))`.
+- A closure with its own state — `FnMut` + `move`.
+- A list of different operations — `Vec<Box<dyn Fn(...)>>`.
