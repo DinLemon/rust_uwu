@@ -1,2 +1,2 @@
 // Сгенерировано tools/build.py: какие файлы курса есть и их версии (для сброса кэша).
-window.RK_MANIFEST = {"files": {"base-ru": "1ba53082", "base-en": "620014cd", "pro-ru": "4291cf1e", "pro-en": "53ab6c30", "expert-ru": "e23afd62", "expert-en": "34508790"}, "lessons": {"base": 92, "pro": 68, "expert": 34}};
+window.RK_MANIFEST = {"files": {"base-ru": "1ba53082", "base-en": "620014cd", "pro-ru": "4291cf1e", "pro-en": "53ab6c30", "expert-ru": "32bca992", "expert-en": "fc9d031a"}, "lessons": {"base": 92, "pro": 68, "expert": 39}};

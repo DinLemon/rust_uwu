@@ -1,0 +1,1171 @@
+# MODULE x07 | Свои коллекции на unsafe | NonNull, MaybeUninit, свой Vec, связные списки и очередь на сырых указателях
+
+## LESSON x07-1 | NonNull и MaybeUninit | 8
+:: goals
+- Знать два главных инструмента для unsafe-коллекций
+- Понимать, чем `ptr::write` и `ptr::read` отличаются от обычного присваивания
+
+:: text NonNull<T>
+`NonNull<T>` — сырой указатель `*mut T`, который **гарантированно не нулевой**. Плюсы:
+- `Option<NonNull<T>>` занимает столько же, сколько указатель (ниша из прошлого модуля);
+- он **ковариантен** по `T`, как `Box<T>` — для коллекций это правильно;
+- `NonNull::dangling()` — «висячий», но выровненный указатель для пустой коллекции без выделения памяти.
+
+:: text Запись и чтение без Drop
+Обычное присваивание `*p = x` сначала **удаляет** старое значение по адресу `p`. Если там мусор (память только что выделена), это катастрофа.
+
+- `ptr::write(p, x)` — положить `x`, **не трогая** старое содержимое.
+- `ptr::read(p)` — забрать значение побитовой копией. Теперь владеешь ты, а в памяти осталась «тень», которую нельзя удалять второй раз.
+
+> **Аналогия:** `*p = x` — выкинуть старую вещь с полки и положить новую. `ptr::write` — поставить на пустую полку, ничего не выкидывая. `ptr::read` — снять вещь с полки, оставив на ней только след.
+
+:: text MaybeUninit<T>
+`MaybeUninit<T>` — «место под `T`, которое, может быть, ещё не заполнено». Компилятор не считает его готовым `T` и не будет его удалять. Заполнил — делаешь `assume_init()` (это `unsafe`: ты обещаешь, что заполнил).
+
+:: code
+```rust
+use std::mem::MaybeUninit;
+use std::ptr::{self, NonNull};
+
+fn main() {
+    // Массив, который заполняем по одному элементу
+    let mut slots: [MaybeUninit<String>; 3] = [const { MaybeUninit::uninit() }; 3];
+    for (i, slot) in slots.iter_mut().enumerate() {
+        slot.write(format!("ячейка {i}"));
+    }
+    // SAFETY: все три ячейки заполнены в цикле выше
+    let ready: [String; 3] = slots.map(|s| unsafe { s.assume_init() });
+    println!("{ready:?}");
+
+    // write/read через NonNull
+    let mut x = 5;
+    let p = NonNull::from(&mut x);
+    unsafe {
+        ptr::write(p.as_ptr(), 42);
+        println!("{}", ptr::read(p.as_ptr()));
+    }
+}
+```
+```out
+["ячейка 0", "ячейка 1", "ячейка 2"]
+42
+```
+
+:: quiz
+Почему для только что выделенной памяти нельзя писать `*p = value`?
+[x] Присваивание сначала удалит «старое значение» — а там мусор => Верно. Нужен `ptr::write`.
+[ ] Это медленно => Дело не в скорости.
+[ ] Компилятор не разрешит => Внутри `unsafe` разрешит — и будет ошибка во время работы.
+
+:: task
+Заполни массив `[MaybeUninit<u32>; 5]` квадратами индексов и преврати в `[u32; 5]`.
+```rust
+use std::mem::MaybeUninit;
+
+fn main() {
+    let mut a: [MaybeUninit<u32>; 5] = [const { MaybeUninit::uninit() }; 5];
+    // твой код
+}
+```
+```solution
+use std::mem::MaybeUninit;
+
+fn main() {
+    let mut a: [MaybeUninit<u32>; 5] = [const { MaybeUninit::uninit() }; 5];
+    for (i, slot) in a.iter_mut().enumerate() {
+        slot.write((i * i) as u32);
+    }
+    // SAFETY: все пять элементов заполнены выше
+    let ready: [u32; 5] = a.map(|s| unsafe { s.assume_init() });
+    println!("{ready:?}");
+}
+```
+```expect
+[0, 1, 4, 9, 16]
+```
+hint: `slot.write(...)` в цикле, потом `a.map(|s| unsafe { s.assume_init() })`.
+
+:: recap
+- `NonNull<T>` — ненулевой ковариантный указатель; `dangling()` — для пустых коллекций.
+- `ptr::write` не удаляет старое, `ptr::read` забирает без удаления.
+- `MaybeUninit<T>` — место под значение, которое ещё не готово.
+
+## LESSON x07-2 | Свой Vec | 10
+:: goals
+- Написать упрощённый `Vec<T>`: выделение, рост, push, pop, Drop
+- Увидеть, как устроен стандартный `Vec`
+
+:: text Три поля
+Настоящий `Vec<T>` — это три числа:
+- `ptr` — где лежат элементы;
+- `cap` — на сколько элементов выделено место;
+- `len` — сколько элементов на самом деле.
+
+`push`: если места нет — **вырасти** (выделить вдвое больше и переехать), затем `ptr::write` в ячейку `len`.
+`pop`: уменьшить `len` и `ptr::read` из неё.
+`Drop`: удалить все элементы, потом освободить память.
+
+> **Аналогия:** книжная полка с табличкой «на полке 7 книг, мест 8». Полка кончилась — покупаешь вдвое длиннее и переставляешь книги.
+
+:: code
+```rust
+use std::alloc::{self, Layout};
+use std::ptr::{self, NonNull};
+
+pub struct MyVec<T> {
+    ptr: NonNull<T>,
+    cap: usize,
+    len: usize,
+}
+
+impl<T> MyVec<T> {
+    pub fn new() -> Self {
+        assert!(std::mem::size_of::<T>() != 0, "типы нулевого размера не поддерживаем");
+        MyVec { ptr: NonNull::dangling(), cap: 0, len: 0 }
+    }
+
+    fn grow(&mut self) {
+        let new_cap = if self.cap == 0 { 4 } else { self.cap * 2 };
+        let new_layout = Layout::array::<T>(new_cap).expect("слишком много");
+        let raw = if self.cap == 0 {
+            // SAFETY: размер new_layout не ноль (T не нулевого размера, new_cap >= 4)
+            unsafe { alloc::alloc(new_layout) }
+        } else {
+            let old_layout = Layout::array::<T>(self.cap).unwrap();
+            // SAFETY: ptr выделен этим же аллокатором с old_layout
+            unsafe { alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size()) }
+        };
+        self.ptr = NonNull::new(raw as *mut T).unwrap_or_else(|| alloc::handle_alloc_error(new_layout));
+        self.cap = new_cap;
+    }
+
+    pub fn push(&mut self, x: T) {
+        if self.len == self.cap {
+            self.grow();
+        }
+        // SAFETY: len < cap, ячейка внутри выделенной памяти и пуста
+        unsafe { ptr::write(self.ptr.as_ptr().add(self.len), x) };
+        self.len += 1;
+    }
+
+    pub fn pop(&mut self) -> Option<T> {
+        if self.len == 0 {
+            return None;
+        }
+        self.len -= 1;
+        // SAFETY: ячейка len была заполнена и теперь считается пустой
+        Some(unsafe { ptr::read(self.ptr.as_ptr().add(self.len)) })
+    }
+
+    pub fn as_slice(&self) -> &[T] {
+        // SAFETY: первые len ячеек заполнены; для пустого — dangling и 0 допустимы
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> Drop for MyVec<T> {
+    fn drop(&mut self) {
+        while self.pop().is_some() {}
+        if self.cap != 0 {
+            // SAFETY: память выделена с этим layout и больше не используется
+            unsafe { alloc::dealloc(self.ptr.as_ptr() as *mut u8, Layout::array::<T>(self.cap).unwrap()) };
+        }
+    }
+}
+
+fn main() {
+    let mut v = MyVec::new();
+    for w in ["раз", "два", "три", "четыре", "пять"] {
+        v.push(w.to_string());
+    }
+    println!("{:?} (ёмкость {})", v.as_slice(), v.cap);
+    println!("{:?}", v.pop());
+    println!("{}", v.as_slice().len());
+}
+```
+```out
+["раз", "два", "три", "четыре", "пять"] (ёмкость 8)
+Some("пять")
+4
+```
+Пятый элемент не влез в 4 места — `grow` переселил всё на 8.
+
+:: quiz
+Что делает `Drop` нашего `MyVec` в первую очередь?
+[x] Забирает и удаляет каждый элемент через `pop` => Верно. Иначе строки внутри утекут.
+[ ] Сразу освобождает память => Тогда элементы (например, `String`) не освободят свою память.
+[ ] Ничего, Rust всё сделает сам => Сырую память Rust сам не освобождает.
+
+:: task
+Добавь в `MyVec` метод `get(&self, i) -> Option<&T>` и реализуй `Deref<Target = [T]>`, чтобы работали `v.len()`, `v.iter()` и `v[0]`.
+```rust
+use std::alloc::{self, Layout};
+use std::ops::Deref;
+use std::ptr::{self, NonNull};
+
+pub struct MyVec<T> {
+    ptr: NonNull<T>,
+    cap: usize,
+    len: usize,
+}
+
+impl<T> MyVec<T> {
+    pub fn new() -> Self {
+        MyVec { ptr: NonNull::dangling(), cap: 0, len: 0 }
+    }
+    fn grow(&mut self) {
+        let new_cap = if self.cap == 0 { 4 } else { self.cap * 2 };
+        let new_layout = Layout::array::<T>(new_cap).unwrap();
+        let raw = if self.cap == 0 {
+            unsafe { alloc::alloc(new_layout) }
+        } else {
+            let old_layout = Layout::array::<T>(self.cap).unwrap();
+            unsafe { alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size()) }
+        };
+        self.ptr = NonNull::new(raw as *mut T).unwrap_or_else(|| alloc::handle_alloc_error(new_layout));
+        self.cap = new_cap;
+    }
+    pub fn push(&mut self, x: T) {
+        if self.len == self.cap {
+            self.grow();
+        }
+        unsafe { ptr::write(self.ptr.as_ptr().add(self.len), x) };
+        self.len += 1;
+    }
+    // твой код: get
+}
+
+// твой код: impl Deref
+
+impl<T> Drop for MyVec<T> {
+    fn drop(&mut self) {
+        for i in 0..self.len {
+            unsafe { ptr::drop_in_place(self.ptr.as_ptr().add(i)) };
+        }
+        if self.cap != 0 {
+            unsafe { alloc::dealloc(self.ptr.as_ptr() as *mut u8, Layout::array::<T>(self.cap).unwrap()) };
+        }
+    }
+}
+
+fn main() {
+    let mut v = MyVec::new();
+    for x in [10, 20, 30] {
+        v.push(x);
+    }
+    println!("{:?} {:?}", v.get(1), v.get(9));
+    println!("{} {} {}", v.len(), v[0], v.iter().sum::<i32>());
+}
+```
+```solution
+use std::alloc::{self, Layout};
+use std::ops::Deref;
+use std::ptr::{self, NonNull};
+
+pub struct MyVec<T> {
+    ptr: NonNull<T>,
+    cap: usize,
+    len: usize,
+}
+
+impl<T> MyVec<T> {
+    pub fn new() -> Self {
+        MyVec { ptr: NonNull::dangling(), cap: 0, len: 0 }
+    }
+    fn grow(&mut self) {
+        let new_cap = if self.cap == 0 { 4 } else { self.cap * 2 };
+        let new_layout = Layout::array::<T>(new_cap).unwrap();
+        let raw = if self.cap == 0 {
+            unsafe { alloc::alloc(new_layout) }
+        } else {
+            let old_layout = Layout::array::<T>(self.cap).unwrap();
+            unsafe { alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size()) }
+        };
+        self.ptr = NonNull::new(raw as *mut T).unwrap_or_else(|| alloc::handle_alloc_error(new_layout));
+        self.cap = new_cap;
+    }
+    pub fn push(&mut self, x: T) {
+        if self.len == self.cap {
+            self.grow();
+        }
+        unsafe { ptr::write(self.ptr.as_ptr().add(self.len), x) };
+        self.len += 1;
+    }
+    pub fn get(&self, i: usize) -> Option<&T> {
+        if i < self.len {
+            // SAFETY: i < len, ячейка заполнена
+            Some(unsafe { &*self.ptr.as_ptr().add(i) })
+        } else {
+            None
+        }
+    }
+}
+
+impl<T> Deref for MyVec<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        // SAFETY: первые len ячеек заполнены
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> Drop for MyVec<T> {
+    fn drop(&mut self) {
+        for i in 0..self.len {
+            unsafe { ptr::drop_in_place(self.ptr.as_ptr().add(i)) };
+        }
+        if self.cap != 0 {
+            unsafe { alloc::dealloc(self.ptr.as_ptr() as *mut u8, Layout::array::<T>(self.cap).unwrap()) };
+        }
+    }
+}
+
+fn main() {
+    let mut v = MyVec::new();
+    for x in [10, 20, 30] {
+        v.push(x);
+    }
+    println!("{:?} {:?}", v.get(1), v.get(9));
+    println!("{} {} {}", v.len(), v[0], v.iter().sum::<i32>());
+}
+```
+```expect
+Some(20) None
+3 10 60
+```
+hint: `get`: проверь `i < self.len`, потом `unsafe { &*self.ptr.as_ptr().add(i) }`.
+hint: `Deref` возвращает срез: `std::slice::from_raw_parts(self.ptr.as_ptr(), self.len)`. Тогда `len`, `iter` и `[]` придут от среза.
+
+:: recap
+- `Vec` = `ptr` + `cap` + `len`.
+- Рост: `alloc` в первый раз, `realloc` потом; ошибка выделения — `handle_alloc_error`.
+- `Drop`: сначала элементы, потом память. `Deref` к срезу даёт все методы срезов.
+
+## LESSON x07-3 | Связный список без unsafe | 9
+:: goals
+- Написать односвязный стек на `Option<Box<Node>>`
+- Сделать для него итератор по ссылкам
+
+:: text Стек на списке
+Односвязный список — цепочка узлов, где каждый знает только следующего:
+
+```rust
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+```
+Добавлять и снимать в **голову** — быстро и безопасно, без единого `unsafe`. Главный приём — `Option::take()`: забрать голову, оставив `None`.
+
+> **Аналогия:** стопка тарелок. Ставишь сверху, снимаешь сверху.
+
+:: code
+```rust
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+
+pub struct Stack<T> {
+    head: Option<Box<Node<T>>>,
+    len: usize,
+}
+
+impl<T> Stack<T> {
+    pub fn new() -> Self {
+        Stack { head: None, len: 0 }
+    }
+    pub fn push(&mut self, elem: T) {
+        let old = self.head.take();
+        self.head = Some(Box::new(Node { elem, next: old }));
+        self.len += 1;
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        self.head.take().map(|node| {
+            self.head = node.next;
+            self.len -= 1;
+            node.elem
+        })
+    }
+    pub fn peek(&self) -> Option<&T> {
+        self.head.as_ref().map(|n| &n.elem)
+    }
+}
+
+fn main() {
+    let mut s = Stack::new();
+    s.push(1);
+    s.push(2);
+    s.push(3);
+    println!("{:?} {}", s.peek(), s.len);
+    println!("{:?} {:?}", s.pop(), s.pop());
+    println!("{:?} {}", s.peek(), s.len);
+}
+```
+```out
+Some(3) 3
+Some(3) Some(2)
+Some(1) 1
+```
+
+:: text Итератор по списку
+Итератор хранит ссылку на текущий узел:
+
+```rust
+pub struct Iter<'a, T> {
+    next: Option<&'a Node<T>>,
+}
+```
+`next()`: взять текущий узел, сдвинуться на `node.next.as_deref()`, вернуть `&node.elem`. `as_deref()` превращает `&Option<Box<Node>>` в `Option<&Node>`.
+
+:: quiz
+Что делает `self.head.take()`?
+[x] Забирает голову списка, оставляя на её месте `None` => Верно.
+[ ] Копирует голову => Копий нет, голова переезжает.
+[ ] Удаляет весь список => Удаляется только то, что потом не сохранят.
+
+:: task
+Добавь стеку итератор `iter()` по ссылкам и метод `reverse()`, который разворачивает список на месте.
+```rust
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+
+pub struct Stack<T> {
+    head: Option<Box<Node<T>>>,
+}
+
+impl<T> Stack<T> {
+    pub fn push(&mut self, elem: T) {
+        let old = self.head.take();
+        self.head = Some(Box::new(Node { elem, next: old }));
+    }
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter { next: self.head.as_deref() }
+    }
+    pub fn reverse(&mut self) {
+        // твой код
+    }
+}
+
+pub struct Iter<'a, T> {
+    next: Option<&'a Node<T>>,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+    fn next(&mut self) -> Option<&'a T> {
+        // твой код
+    }
+}
+
+fn main() {
+    let mut s = Stack { head: None };
+    for x in 1..=4 {
+        s.push(x);
+    }
+    println!("{:?}", s.iter().collect::<Vec<_>>());
+    s.reverse();
+    println!("{:?}", s.iter().collect::<Vec<_>>());
+}
+```
+```solution
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+
+pub struct Stack<T> {
+    head: Option<Box<Node<T>>>,
+}
+
+impl<T> Stack<T> {
+    pub fn push(&mut self, elem: T) {
+        let old = self.head.take();
+        self.head = Some(Box::new(Node { elem, next: old }));
+    }
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter { next: self.head.as_deref() }
+    }
+    pub fn reverse(&mut self) {
+        let mut prev: Option<Box<Node<T>>> = None;
+        let mut cur = self.head.take();
+        while let Some(mut node) = cur {
+            cur = node.next.take();
+            node.next = prev;
+            prev = Some(node);
+        }
+        self.head = prev;
+    }
+}
+
+pub struct Iter<'a, T> {
+    next: Option<&'a Node<T>>,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+    fn next(&mut self) -> Option<&'a T> {
+        self.next.map(|node| {
+            self.next = node.next.as_deref();
+            &node.elem
+        })
+    }
+}
+
+fn main() {
+    let mut s = Stack { head: None };
+    for x in 1..=4 {
+        s.push(x);
+    }
+    println!("{:?}", s.iter().collect::<Vec<_>>());
+    s.reverse();
+    println!("{:?}", s.iter().collect::<Vec<_>>());
+}
+```
+```expect
+[4, 3, 2, 1]
+[1, 2, 3, 4]
+```
+hint: Итератор: `self.next.map(|node| { self.next = node.next.as_deref(); &node.elem })`.
+hint: Разворот: три переменные `prev`, `cur`, `node`. Снимаешь узел с `cur` и ставишь его на `prev`.
+
+:: deep Почему длинный список может уронить программу
+Если `Drop` для списка не написать, Rust удалит его **рекурсивно**: узел удаляет `next`, тот — свой `next`… Для списка в миллион узлов это миллион вложенных вызовов — переполнение стека.
+
+Решение — свой `Drop` с циклом:
+```rust
+impl<T> Drop for Stack<T> {
+    fn drop(&mut self) {
+        let mut cur = self.head.take();
+        while let Some(mut node) = cur {
+            cur = node.next.take();
+        }
+    }
+}
+```
+Каждый узел удаляется в конце итерации, когда `next` уже вынут. Глубина вызовов — один.
+
+:: recap
+- Стек на `Option<Box<Node>>` — без `unsafe`.
+- `take()` — главный инструмент: забрать, оставив `None`.
+- `as_deref()` — из `&Option<Box<T>>` получить `Option<&T>`.
+
+## LESSON x07-4 | Очередь на сырых указателях | 10
+:: goals
+- Сделать очередь с добавлением в хвост за O(1)
+- Понять, где без сырых указателей не обойтись
+
+:: text Зачем указатель на хвост
+Чтобы добавлять в **конец** списка быстро, нужен указатель на последний узел. Но им уже владеет предыдущий узел через `Box`. Две «владеющие» ссылки на один узел Rust не разрешит.
+
+Решение из книги «Learning Rust With Entirely Too Many Linked Lists»: узлы — через сырые указатели, владеем вручную (`Box::into_raw` / `Box::from_raw`), а снаружи — безопасный интерфейс.
+
+:: code
+```rust
+use std::ptr;
+
+struct Node<T> {
+    elem: T,
+    next: *mut Node<T>,
+}
+
+pub struct Queue<T> {
+    head: *mut Node<T>,
+    tail: *mut Node<T>,
+    len: usize,
+}
+
+impl<T> Queue<T> {
+    pub fn new() -> Self {
+        Queue { head: ptr::null_mut(), tail: ptr::null_mut(), len: 0 }
+    }
+    pub fn push(&mut self, elem: T) {
+        let new = Box::into_raw(Box::new(Node { elem, next: ptr::null_mut() }));
+        if self.tail.is_null() {
+            self.head = new;
+        } else {
+            // SAFETY: tail указывает на живой узел, которым владеет очередь
+            unsafe { (*self.tail).next = new };
+        }
+        self.tail = new;
+        self.len += 1;
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.head.is_null() {
+            return None;
+        }
+        // SAFETY: head создан через Box::into_raw и ещё не освобождён
+        let head = unsafe { Box::from_raw(self.head) };
+        self.head = head.next;
+        if self.head.is_null() {
+            self.tail = ptr::null_mut();
+        }
+        self.len -= 1;
+        Some(head.elem)
+    }
+}
+
+impl<T> Drop for Queue<T> {
+    fn drop(&mut self) {
+        while self.pop().is_some() {}
+    }
+}
+
+fn main() {
+    let mut q = Queue::new();
+    for w in ["первый", "второй", "третий"] {
+        q.push(w);
+    }
+    println!("{:?} {:?}", q.pop(), q.len);
+    q.push("четвёртый");
+    while let Some(x) = q.pop() {
+        println!("{x}");
+    }
+    println!("{:?}", q.pop());
+}
+```
+```out
+Some("первый") 2
+второй
+третий
+четвёртый
+None
+```
+Снаружи — обычная безопасная очередь. Весь `unsafe` внутри и с объяснениями.
+
+:: quiz
+Что делает `Box::into_raw(b)`?
+[x] Превращает `Box` в сырой указатель; освобождать память теперь должен ты => Верно.
+[ ] Копирует данные в стек => Данные остаются в куче.
+[ ] Сразу освобождает память => Наоборот: `Box` больше её не освободит.
+
+:: task
+Добавь в `Queue` метод `peek_front(&self) -> Option<&T>` и `peek_back(&self) -> Option<&T>`.
+```rust
+use std::ptr;
+
+struct Node<T> {
+    elem: T,
+    next: *mut Node<T>,
+}
+
+pub struct Queue<T> {
+    head: *mut Node<T>,
+    tail: *mut Node<T>,
+}
+
+impl<T> Queue<T> {
+    pub fn new() -> Self {
+        Queue { head: ptr::null_mut(), tail: ptr::null_mut() }
+    }
+    pub fn push(&mut self, elem: T) {
+        let new = Box::into_raw(Box::new(Node { elem, next: ptr::null_mut() }));
+        if self.tail.is_null() {
+            self.head = new;
+        } else {
+            unsafe { (*self.tail).next = new };
+        }
+        self.tail = new;
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.head.is_null() {
+            return None;
+        }
+        let head = unsafe { Box::from_raw(self.head) };
+        self.head = head.next;
+        if self.head.is_null() {
+            self.tail = ptr::null_mut();
+        }
+        Some(head.elem)
+    }
+    // твой код
+}
+
+impl<T> Drop for Queue<T> {
+    fn drop(&mut self) {
+        while self.pop().is_some() {}
+    }
+}
+
+fn main() {
+    let mut q = Queue::new();
+    println!("{:?}", q.peek_front());
+    q.push(1);
+    q.push(2);
+    q.push(3);
+    println!("{:?} {:?}", q.peek_front(), q.peek_back());
+    q.pop();
+    println!("{:?} {:?}", q.peek_front(), q.peek_back());
+}
+```
+```solution
+use std::ptr;
+
+struct Node<T> {
+    elem: T,
+    next: *mut Node<T>,
+}
+
+pub struct Queue<T> {
+    head: *mut Node<T>,
+    tail: *mut Node<T>,
+}
+
+impl<T> Queue<T> {
+    pub fn new() -> Self {
+        Queue { head: ptr::null_mut(), tail: ptr::null_mut() }
+    }
+    pub fn push(&mut self, elem: T) {
+        let new = Box::into_raw(Box::new(Node { elem, next: ptr::null_mut() }));
+        if self.tail.is_null() {
+            self.head = new;
+        } else {
+            unsafe { (*self.tail).next = new };
+        }
+        self.tail = new;
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.head.is_null() {
+            return None;
+        }
+        let head = unsafe { Box::from_raw(self.head) };
+        self.head = head.next;
+        if self.head.is_null() {
+            self.tail = ptr::null_mut();
+        }
+        Some(head.elem)
+    }
+    pub fn peek_front(&self) -> Option<&T> {
+        // SAFETY: если head не нулевой, он указывает на живой узел очереди
+        unsafe { self.head.as_ref().map(|n| &n.elem) }
+    }
+    pub fn peek_back(&self) -> Option<&T> {
+        // SAFETY: то же для tail
+        unsafe { self.tail.as_ref().map(|n| &n.elem) }
+    }
+}
+
+impl<T> Drop for Queue<T> {
+    fn drop(&mut self) {
+        while self.pop().is_some() {}
+    }
+}
+
+fn main() {
+    let mut q = Queue::new();
+    println!("{:?}", q.peek_front());
+    q.push(1);
+    q.push(2);
+    q.push(3);
+    println!("{:?} {:?}", q.peek_front(), q.peek_back());
+    q.pop();
+    println!("{:?} {:?}", q.peek_front(), q.peek_back());
+}
+```
+```expect
+None
+Some(1) Some(3)
+Some(2) Some(3)
+```
+hint: У сырого указателя есть `as_ref()`: нулевой — `None`, иначе `Some(&узел)`. Это `unsafe`.
+hint: `unsafe { self.head.as_ref().map(|n| &n.elem) }`.
+
+:: recap
+- `Box::into_raw` / `Box::from_raw` — владеть узлами вручную.
+- Указатель на хвост делает добавление в конец быстрым.
+- Снаружи — безопасный API; внутри — `unsafe` с комментариями `SAFETY`.
+
+## LESSON x07-p | Практика: коллекции | 25 | practice
+:: goals
+- Дописать операции своих коллекций
+
+:: task
+Добавь в `MyVec` метод `insert(i, x)`: сдвигает элементы с `i` вправо на одну ячейку через `ptr::copy` и кладёт `x` в ячейку `i`.
+```rust
+use std::alloc::{self, Layout};
+use std::ptr::{self, NonNull};
+
+pub struct MyVec<T> {
+    ptr: NonNull<T>,
+    cap: usize,
+    len: usize,
+}
+
+impl<T> MyVec<T> {
+    pub fn new() -> Self {
+        MyVec { ptr: NonNull::dangling(), cap: 0, len: 0 }
+    }
+    fn grow(&mut self) {
+        let new_cap = if self.cap == 0 { 4 } else { self.cap * 2 };
+        let new_layout = Layout::array::<T>(new_cap).unwrap();
+        let raw = if self.cap == 0 {
+            unsafe { alloc::alloc(new_layout) }
+        } else {
+            let old_layout = Layout::array::<T>(self.cap).unwrap();
+            unsafe { alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size()) }
+        };
+        self.ptr = NonNull::new(raw as *mut T).unwrap_or_else(|| alloc::handle_alloc_error(new_layout));
+        self.cap = new_cap;
+    }
+    pub fn push(&mut self, x: T) {
+        let n = self.len;
+        self.insert(n, x);
+    }
+    pub fn insert(&mut self, i: usize, x: T) {
+        assert!(i <= self.len, "индекс за пределами");
+        // твой код
+    }
+    pub fn as_slice(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> Drop for MyVec<T> {
+    fn drop(&mut self) {
+        for i in 0..self.len {
+            unsafe { ptr::drop_in_place(self.ptr.as_ptr().add(i)) };
+        }
+        if self.cap != 0 {
+            unsafe { alloc::dealloc(self.ptr.as_ptr() as *mut u8, Layout::array::<T>(self.cap).unwrap()) };
+        }
+    }
+}
+
+fn main() {
+    let mut v = MyVec::new();
+    v.push('а');
+    v.push('в');
+    v.insert(1, 'б');
+    v.insert(0, '>');
+    v.push('г');
+    println!("{:?}", v.as_slice());
+}
+```
+```solution
+use std::alloc::{self, Layout};
+use std::ptr::{self, NonNull};
+
+pub struct MyVec<T> {
+    ptr: NonNull<T>,
+    cap: usize,
+    len: usize,
+}
+
+impl<T> MyVec<T> {
+    pub fn new() -> Self {
+        MyVec { ptr: NonNull::dangling(), cap: 0, len: 0 }
+    }
+    fn grow(&mut self) {
+        let new_cap = if self.cap == 0 { 4 } else { self.cap * 2 };
+        let new_layout = Layout::array::<T>(new_cap).unwrap();
+        let raw = if self.cap == 0 {
+            unsafe { alloc::alloc(new_layout) }
+        } else {
+            let old_layout = Layout::array::<T>(self.cap).unwrap();
+            unsafe { alloc::realloc(self.ptr.as_ptr() as *mut u8, old_layout, new_layout.size()) }
+        };
+        self.ptr = NonNull::new(raw as *mut T).unwrap_or_else(|| alloc::handle_alloc_error(new_layout));
+        self.cap = new_cap;
+    }
+    pub fn push(&mut self, x: T) {
+        let n = self.len;
+        self.insert(n, x);
+    }
+    pub fn insert(&mut self, i: usize, x: T) {
+        assert!(i <= self.len, "индекс за пределами");
+        if self.len == self.cap {
+            self.grow();
+        }
+        // SAFETY: i <= len < cap; сдвигаем [i, len) на одну ячейку вправо, места хватает
+        unsafe {
+            let p = self.ptr.as_ptr().add(i);
+            ptr::copy(p, p.add(1), self.len - i);
+            ptr::write(p, x);
+        }
+        self.len += 1;
+    }
+    pub fn as_slice(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+    }
+}
+
+impl<T> Drop for MyVec<T> {
+    fn drop(&mut self) {
+        for i in 0..self.len {
+            unsafe { ptr::drop_in_place(self.ptr.as_ptr().add(i)) };
+        }
+        if self.cap != 0 {
+            unsafe { alloc::dealloc(self.ptr.as_ptr() as *mut u8, Layout::array::<T>(self.cap).unwrap()) };
+        }
+    }
+}
+
+fn main() {
+    let mut v = MyVec::new();
+    v.push('а');
+    v.push('в');
+    v.insert(1, 'б');
+    v.insert(0, '>');
+    v.push('г');
+    println!("{:?}", v.as_slice());
+}
+```
+```expect
+['>', 'а', 'б', 'в', 'г']
+```
+hint: Сначала `grow`, если места нет.
+hint: `ptr::copy(p, p.add(1), self.len - i)` сдвигает хвост (области могут пересекаться — `copy` это умеет), потом `ptr::write(p, x)`.
+
+:: task
+Счётчик удалений: тип `Tracked` увеличивает глобальный счётчик в своём `Drop`. Убедись, что твой `Stack` с циклическим `Drop` удаляет все 1000 элементов.
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+struct Tracked;
+impl Drop for Tracked {
+    fn drop(&mut self) {
+        DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+
+pub struct Stack<T> {
+    head: Option<Box<Node<T>>>,
+}
+
+impl<T> Stack<T> {
+    pub fn push(&mut self, elem: T) {
+        let old = self.head.take();
+        self.head = Some(Box::new(Node { elem, next: old }));
+    }
+}
+
+// твой код: impl Drop для Stack с циклом
+
+fn main() {
+    {
+        let mut s = Stack { head: None };
+        for _ in 0..1000 {
+            s.push(Tracked);
+        }
+    }
+    println!("удалено: {}", DROPS.load(Ordering::SeqCst));
+}
+```
+```solution
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+struct Tracked;
+impl Drop for Tracked {
+    fn drop(&mut self) {
+        DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+struct Node<T> {
+    elem: T,
+    next: Option<Box<Node<T>>>,
+}
+
+pub struct Stack<T> {
+    head: Option<Box<Node<T>>>,
+}
+
+impl<T> Stack<T> {
+    pub fn push(&mut self, elem: T) {
+        let old = self.head.take();
+        self.head = Some(Box::new(Node { elem, next: old }));
+    }
+}
+
+impl<T> Drop for Stack<T> {
+    fn drop(&mut self) {
+        let mut cur = self.head.take();
+        while let Some(mut node) = cur {
+            cur = node.next.take();
+        }
+    }
+}
+
+fn main() {
+    {
+        let mut s = Stack { head: None };
+        for _ in 0..1000 {
+            s.push(Tracked);
+        }
+    }
+    println!("удалено: {}", DROPS.load(Ordering::SeqCst));
+}
+```
+```expect
+удалено: 1000
+```
+hint: Цикл из углубления: `let mut cur = self.head.take(); while let Some(mut node) = cur { cur = node.next.take(); }`.
+
+:: task
+Сделай очереди итератор `into_iter()`, который забирает очередь и выдаёт элементы с начала (через `pop`).
+```rust
+use std::ptr;
+
+struct Node<T> {
+    elem: T,
+    next: *mut Node<T>,
+}
+
+pub struct Queue<T> {
+    head: *mut Node<T>,
+    tail: *mut Node<T>,
+}
+
+impl<T> Queue<T> {
+    pub fn new() -> Self {
+        Queue { head: ptr::null_mut(), tail: ptr::null_mut() }
+    }
+    pub fn push(&mut self, elem: T) {
+        let new = Box::into_raw(Box::new(Node { elem, next: ptr::null_mut() }));
+        if self.tail.is_null() {
+            self.head = new;
+        } else {
+            unsafe { (*self.tail).next = new };
+        }
+        self.tail = new;
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.head.is_null() {
+            return None;
+        }
+        let head = unsafe { Box::from_raw(self.head) };
+        self.head = head.next;
+        if self.head.is_null() {
+            self.tail = ptr::null_mut();
+        }
+        Some(head.elem)
+    }
+}
+
+impl<T> Drop for Queue<T> {
+    fn drop(&mut self) {
+        while self.pop().is_some() {}
+    }
+}
+
+// твой код: struct IntoIter и impl IntoIterator for Queue
+
+fn main() {
+    let mut q = Queue::new();
+    for x in ["a", "b", "c"] {
+        q.push(x);
+    }
+    let all: Vec<&str> = q.into_iter().collect();
+    println!("{all:?}");
+}
+```
+```solution
+use std::ptr;
+
+struct Node<T> {
+    elem: T,
+    next: *mut Node<T>,
+}
+
+pub struct Queue<T> {
+    head: *mut Node<T>,
+    tail: *mut Node<T>,
+}
+
+impl<T> Queue<T> {
+    pub fn new() -> Self {
+        Queue { head: ptr::null_mut(), tail: ptr::null_mut() }
+    }
+    pub fn push(&mut self, elem: T) {
+        let new = Box::into_raw(Box::new(Node { elem, next: ptr::null_mut() }));
+        if self.tail.is_null() {
+            self.head = new;
+        } else {
+            unsafe { (*self.tail).next = new };
+        }
+        self.tail = new;
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        if self.head.is_null() {
+            return None;
+        }
+        let head = unsafe { Box::from_raw(self.head) };
+        self.head = head.next;
+        if self.head.is_null() {
+            self.tail = ptr::null_mut();
+        }
+        Some(head.elem)
+    }
+}
+
+impl<T> Drop for Queue<T> {
+    fn drop(&mut self) {
+        while self.pop().is_some() {}
+    }
+}
+
+pub struct IntoIter<T>(Queue<T>);
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        self.0.pop()
+    }
+}
+
+impl<T> IntoIterator for Queue<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+    fn into_iter(self) -> IntoIter<T> {
+        IntoIter(self)
+    }
+}
+
+fn main() {
+    let mut q = Queue::new();
+    for x in ["a", "b", "c"] {
+        q.push(x);
+    }
+    let all: Vec<&str> = q.into_iter().collect();
+    println!("{all:?}");
+}
+```
+```expect
+["a", "b", "c"]
+```
+hint: `struct IntoIter<T>(Queue<T>);` и в `next` — `self.0.pop()`.
+hint: `impl<T> IntoIterator for Queue<T> { type Item = T; type IntoIter = IntoIter<T>; fn into_iter(self) -> ... }`.
+
+:: homework Проверь unsafe через Miri
+Miri находит неопределённое поведение, которое обычный запуск пропускает.
+
+1. Поставь nightly и Miri:
+```sh
+rustup toolchain install nightly
+rustup +nightly component add miri
+```
+2. Создай проект `cargo new --lib mycollections`, перенеси туда `MyVec` и `Queue` из уроков.
+3. Напиши тесты: push/pop, insert в начало, середину и конец, удаление очереди с элементами.
+4. Запусти `cargo test`, потом `cargo +nightly miri test`.
+5. Сломай нарочно: в `Drop` для `MyVec` освободи память **до** удаления элементов. Убедись, что Miri это ловит.
+[ ] `cargo test` проходит
+[ ] `cargo +nightly miri test` проходит без ошибок
+[ ] Нарочно сломанная версия падает в Miri с понятным сообщением
+[ ] У каждого `unsafe`-блока есть комментарий `// SAFETY:`
+
+:: recap
+- `ptr::copy` — сдвиг с перекрытием.
+- Свой `Drop` с циклом — нет переполнения стека.
+- `IntoIterator` для своей коллекции — `for x in моя_коллекция`.
+- Miri — обязательная проверка для `unsafe`-кода.
