@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Собирает уроки из course/*.txt в content/course-data.js.
+"""Собирает уроки из course/<язык>/*.txt в content/<уровень>-<язык>.js.
+
+Уровни: m*.txt — «Уровень 1 · Основы» (base), a*.txt — «Уровень 2 · Продвинутый» (pro).
 
 Формат файла урока (кратко, подробно — в README.md):
 
@@ -17,7 +19,10 @@
                         check: exact — сохранить буквальную проверку строк
   :: recap            — строки "- ..."
   Общие ключи: "explain: ...", "hint: ...", "tests: yes", "contains: строка"
+              "crates: yes" — пример использует крейты из Playground (tokio, serde…):
+                              tools/check_rust.py его пропускает, проверяется в браузере
 """
+import hashlib
 import json
 import re
 import sys
@@ -91,6 +96,8 @@ def parse_card(kind, title, lines, where):
             card["explain"] = line[9:].strip()
         elif line.startswith("hint: "):
             hints.append(line[6:].strip())
+        elif line.startswith("crates: "):
+            card["crates"] = line[8:].strip() in ("yes", "true", "да")
         elif line.startswith("tests: "):
             card["tests"] = line[7:].strip() in ("yes", "true", "да")
         elif line.startswith("fails: "):
@@ -227,9 +234,13 @@ def parse_file(path):
     return modules
 
 
-def load_lang(lang):
+TRACKS = {"base": ("m*.txt", "glossary.txt"), "pro": ("a*.txt", "glossary-pro.txt")}
+
+
+def load_lang(lang, track="base"):
+    pattern, gname = TRACKS[track]
     modules = []
-    for f in sorted((ROOT / "course" / lang).glob("m*.txt")):
+    for f in sorted((ROOT / "course" / lang).glob(pattern)):
         modules.extend(parse_file(f))
     ids = set()
     for m in modules:
@@ -242,7 +253,7 @@ def load_lang(lang):
                 l["goals"] = g[0]["items"]
                 l["cards"] = [c for c in l["cards"] if c["t"] != "goals"]
     gloss = []
-    gpath = ROOT / "course" / lang / "glossary.txt"
+    gpath = ROOT / "course" / lang / gname
     if gpath.exists():
         for line in gpath.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.startswith("//"):
@@ -262,11 +273,8 @@ def shape(modules):
     return out
 
 
-def main():
-    strict = "--partial" not in sys.argv
-    courses, glossaries = {}, {}
-    for lang in ("ru", "en"):
-        courses[lang], glossaries[lang] = load_lang(lang)
+def check_parity(courses):
+    """Языки должны совпадать по структуре: прогресс и статистика общие."""
     ru_shape, en_shape = shape(courses["ru"]), shape(courses["en"])
     problems = []
     for lid, sh in ru_shape.items():
@@ -279,37 +287,78 @@ def main():
     for lid in en_shape:
         if lid not in ru_shape:
             problems.append(f"ru: нет урока {lid}")
-    missing_en = [p for p in problems if p.startswith("en: нет урока")]
-    other = [p for p in problems if not p.startswith("en: нет урока")]
-    for p in other:
-        print("ОШИБКА", p)
-    if other or (strict and missing_en):
-        if missing_en:
-            print(f"нет перевода для {len(missing_en)} уроков")
-        raise SystemExit(1)
-    if missing_en:
-        # временно: недостающие модули берём из русской версии
-        have = {m["id"] for m in courses["en"]}
-        merged = []
+    return problems
+
+
+def main():
+    strict = "--partial" not in sys.argv
+    out_dir = ROOT / "content"
+    out_dir.mkdir(exist_ok=True)
+    manifest = {"files": {}, "lessons": {}}
+    all_ids = set()
+    failed = False
+    for track in TRACKS:
+        courses, glossaries = {}, {}
+        for lang in ("ru", "en"):
+            courses[lang], glossaries[lang] = load_lang(lang, track)
+        if not courses["ru"] and not courses["en"]:
+            continue
         for m in courses["ru"]:
-            merged.append(next((x for x in courses["en"] if x["id"] == m["id"]), m))
-        courses["en"] = merged
-        print(f"ВНИМАНИЕ: {len(missing_en)} уроков без перевода, вставлены по-русски")
-    out = ROOT / "content" / "course-data.js"
-    out.parent.mkdir(exist_ok=True)
-    content = (
-        "// Сгенерировано tools/build.py из course/<язык>/*.txt. Не редактируй вручную.\n"
-        f"window.COURSES = {json.dumps({k: {'modules': v} for k, v in courses.items()}, ensure_ascii=False, indent=0)};\n"
-        f"window.GLOSSARIES = {json.dumps(glossaries, ensure_ascii=False, indent=0)};\n"
-    )
-    out.write_bytes(content.encode("utf-8"))
-    for lang, modules in courses.items():
-        n_l = sum(len(m["lessons"]) for m in modules)
-        n_c = sum(len(l["cards"]) for m in modules for l in m["lessons"])
-        n_t = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] in ("task", "fill", "order"))
-        n_d = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] == "deep")
-        mins = sum(l["min"] for m in modules for l in m["lessons"])
-        print(f"{lang}: модулей {len(modules)}, уроков {n_l}, карточек {n_c}, практики {n_t}, углублений {n_d}, минут {mins}, терминов {len(glossaries[lang])}")
+            for l in m["lessons"]:
+                if l["id"] in all_ids:
+                    print(f"ОШИБКА повтор id урока {l['id']} в разных уровнях")
+                    failed = True
+                all_ids.add(l["id"])
+        problems = check_parity(courses)
+        missing_en = [p for p in problems if p.startswith("en: нет урока")]
+        other = [p for p in problems if not p.startswith("en: нет урока")]
+        for p in other:
+            print("ОШИБКА", track, p)
+        if other or (strict and missing_en):
+            if missing_en:
+                print(f"{track}: нет перевода для {len(missing_en)} уроков")
+            failed = True
+            continue
+        if missing_en:
+            merged = []
+            for m in courses["ru"]:
+                merged.append(next((x for x in courses["en"] if x["id"] == m["id"]), m))
+            courses["en"] = merged
+            print(f"ВНИМАНИЕ {track}: {len(missing_en)} уроков без перевода, вставлены по-русски")
+        for lang in ("ru", "en"):
+            key = f"{track}-{lang}"
+            data = json.dumps({"modules": courses[lang], "glossary": glossaries[lang]}, ensure_ascii=False, separators=(",", ":"))
+            content = (
+                "// Сгенерировано tools/build.py из course/<язык>/*.txt. Не редактируй вручную.\n"
+                f"(window.RK_DATA = window.RK_DATA || {{}})[{json.dumps(key)}] = {data};\n"
+            )
+            raw = content.encode("utf-8")
+            (out_dir / f"{key}.js").write_bytes(raw)
+            manifest["files"][key] = hashlib.sha1(raw).hexdigest()[:8]
+            manifest["lessons"][track] = sum(len(m["lessons"]) for m in courses[lang])
+            modules = courses[lang]
+            n_l = sum(len(m["lessons"]) for m in modules)
+            n_c = sum(len(l["cards"]) for m in modules for l in m["lessons"])
+            n_t = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] in ("task", "fill", "order"))
+            n_d = sum(1 for m in modules for l in m["lessons"] for c in l["cards"] if c["t"] == "deep")
+            mins = sum(l["min"] for m in modules for l in m["lessons"])
+            print(f"{key}: модулей {len(modules)}, уроков {n_l}, карточек {n_c}, практики {n_t}, углублений {n_d}, минут {mins}, терминов {len(glossaries[lang])}, {len(raw)//1024} КБ")
+    if failed:
+        raise SystemExit(1)
+    mtext = ("// Сгенерировано tools/build.py: какие файлы курса есть и их версии (для сброса кэша).\n"
+             f"window.RK_MANIFEST = {json.dumps(manifest)};\n")
+    (out_dir / "manifest.js").write_text(mtext, encoding="utf-8")
+    # index.html грузит манифест с версией, чтобы браузер не держал старый.
+    index = ROOT / "index.html"
+    html = index.read_text(encoding="utf-8")
+    ver = hashlib.sha1(mtext.encode("utf-8")).hexdigest()[:8]
+    html2 = re.sub(r'<script src="content/(?:course-data|manifest)\.js(?:\?v=[^"]*)?"></script>',
+                   f'<script src="content/manifest.js?v={ver}"></script>', html)
+    if html2 != html:
+        index.write_text(html2, encoding="utf-8")
+    old = out_dir / "course-data.js"
+    if old.exists():
+        old.unlink()
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@
 
   // ---------- Хранилище ----------
   const defaultLang = () => (/^ru|^uk|^be|^kk/i.test(navigator.language || "") ? "ru" : "en");
-  const blank = () => ({ done: {}, step: {}, last: null, stats: {}, code: {}, settings: { theme: "auto", fs: 18, motion: true, focus: false, deep: "closed", lang: defaultLang() } });
+  const blank = () => ({ done: {}, step: {}, last: null, stats: {}, code: {}, track: "base", settings: { theme: "auto", fs: 18, motion: true, focus: false, deep: "closed", lang: defaultLang() } });
   let S = load();
   function load() {
     try {
@@ -26,28 +26,66 @@
     const write = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* приватный режим */ } };
     if (now) write(); else saveTimer = setTimeout(write, 250);
   }
-  window.addEventListener("storage", (e) => { if (e.key === KEY) { S = load(); applySettings(); indexCourse(); route(); } });
+  window.addEventListener("storage", (e) => { if (e.key === KEY) { S = load(); applySettings(); indexCourse(true); route(); } });
 
   // ---------- Язык ----------
   let T = RK.STR.ru;
   let COURSE, lessons = [], byId = {}, totalMin = 0;
   const code_key = (c) => c.key; // ключи кода и статистики одинаковы для обоих языков
 
-  function indexCourse() {
-    const lang = RK.STR[S.settings.lang] && window.COURSES[S.settings.lang] ? S.settings.lang : "ru";
-    T = RK.STR[lang];
-    COURSE = window.COURSES[lang];
+  // ---------- Данные курса ----------
+  // Каждый уровень и язык — отдельный файл content/<уровень>-<язык>.js. Грузим только нужный.
+  const MANIFEST = window.RK_MANIFEST || { files: {}, lessons: {} };
+  const dataKey = (track, lang) => `${track}-${lang}`;
+  const hasTrack = (track) => !!MANIFEST.files[dataKey(track, "ru")];
+  const loading = {};
+  function loadData(track, lang) {
+    const key = dataKey(track, lang);
+    const ready = () => window.RK_DATA && window.RK_DATA[key];
+    if (ready()) return Promise.resolve(ready());
+    if (!loading[key]) loading[key] = new Promise((resolve, reject) => {
+      const tag = document.createElement("script");
+      tag.src = `content/${key}.js?v=${MANIFEST.files[key] || ""}`;
+      tag.onload = () => (ready() ? resolve(ready()) : reject(new Error(key)));
+      tag.onerror = () => { delete loading[key]; tag.remove(); reject(new Error(key)); };
+      document.head.appendChild(tag);
+    });
+    return loading[key];
+  }
+  const curLang = () => (RK.STR[S.settings.lang] ? S.settings.lang : "ru");
+  const curTrack = () => (S.track === "pro" && hasTrack("pro") ? "pro" : "base");
+  const isPro = () => curTrack() === "pro";
+  function setTrack(track) {
+    if (track !== S.track && (track === "base" || hasTrack(track))) { S.track = track; save(); }
+  }
+  // Тексты уровня 2 поверх общих: заголовки, диплом.
+  const trackText = (name) => (isPro() && T.pro && T.pro[name] != null ? T.pro[name] : T[name]);
+  const dip = () => (isPro() && T.pro ? Object.assign({}, T.diploma, T.pro.diploma) : T.diploma);
+
+  let indexedKey = null;
+  function indexCourse(force) {
+    const lang = curLang();
+    if (T !== RK.STR[lang] || force) {
+      T = RK.STR[lang];
+      document.documentElement.lang = lang;
+      document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T[el.dataset.i18n]; });
+      const lb = document.getElementById("lang-btn");
+      if (lb) { lb.textContent = T.langBtn; lb.setAttribute("aria-label", T.langBtnLabel); lb.title = T.langBtnLabel; }
+    }
+    const key = dataKey(curTrack(), lang);
+    const data = window.RK_DATA && window.RK_DATA[key];
+    if (!data) return false;
+    if (key === indexedKey && !force) return true;
+    indexedKey = key;
+    COURSE = data;
     lessons = [];
     COURSE.modules.forEach((m, mi) => m.lessons.forEach((l, li) => {
       l.module = m; l.mi = mi; l.li = li; l.idx = lessons.length; lessons.push(l);
     }));
     byId = Object.fromEntries(lessons.map((l) => [l.id, l]));
     totalMin = lessons.reduce((a, l) => a + (l.min || 5), 0);
-    document.documentElement.lang = lang;
-    document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = T[el.dataset.i18n]; });
-    const lb = document.getElementById("lang-btn");
-    if (lb) { lb.textContent = T.langBtn; lb.setAttribute("aria-label", T.langBtnLabel); lb.title = T.langBtnLabel; }
     L = null;
+    return true;
   }
   const doneCount = () => lessons.filter((l) => S.done[l.id]).length;
   const nextLesson = () => lessons.find((l) => !S.done[l.id]);
@@ -230,9 +268,27 @@
     });
   }
 
+  // Переключатель уровней. Виден, только когда второй уровень есть на сайте.
+  function trackTabs() {
+    if (!hasTrack("pro") || !T.pro) return `<span class="hero-kicker">Rust UwU</span>`;
+    const tab = (t, label) => {
+      const n = MANIFEST.lessons[t] || 0;
+      const d = Object.keys(S.done).filter((id) => (id[0] === "a") === (t === "pro")).length;
+      return `<a class="track-tab" href="#/${t}"${curTrack() === t ? ' aria-current="page"' : ""}>${label}${n ? `<small>${T.pro.tabDone(Math.min(d, n), n)}</small>` : ""}</a>`;
+    };
+    return `<nav class="track-tabs" aria-label="${T.pro.tabsLabel}">${tab("base", T.pro.base)}${tab("pro", T.pro.pro)}</nav>`;
+  }
+  // Совет начать с основ. Ничего не запирает: можно учиться в любом порядке.
+  function proNote() {
+    if (!isPro() || !T.pro) return "";
+    const baseDone = Object.keys(S.done).filter((id) => id[0] === "m").length;
+    if (baseDone >= (MANIFEST.lessons.base || 1)) return "";
+    return `<div class="pro-note">${mascotBubble("bookmark", T.pro.note)}</div>`;
+  }
+
   function viewHome() {
     setNav("home");
-    document.title = T.docTitle;
+    document.title = isPro() && T.pro ? T.pro.docTitle : T.docTitle;
     const n = nextLesson();
     const saved = S.last && byId[S.last] && !S.done[S.last] ? byId[S.last] : null;
     const cont = saved || n;
@@ -242,11 +298,11 @@
       <section class="hero">
         <div class="hero-grid">
           <div class="hero-copy">
-            <span class="hero-kicker">Rust UwU</span>
-            <h1>${T.heroTitle}</h1>
-            <p>${T.heroText}</p>
+            ${trackTabs()}
+            <h1>${trackText("heroTitle")}</h1>
+            <p>${trackText("heroText")}</p>
             <div class="hero-actions">
-              ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : T.diploma && courseComplete() ? `<a class="btn" href="#/diploma">${T.diploma.open}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
+              ${cont ? `<a class="btn" href="#/l/${cont.id}">${started ? T.continue : T.startFirst}: ${esc(cont.title)}</a>` : T.diploma && courseComplete() ? `<a class="btn" href="#/diploma">${dip().open}</a>` : `<a class="btn" href="#/review">${T.allDone}</a>`}
               ${doneCount() > 0 ? `<a class="btn btn-ghost" href="#/review">${T.reviewBtn}</a>` : ""}
             </div>
             ${saved && S.step[saved.id] > 0 && T.mascotBookmark ? `<div class="resume-note">${mascotBubble("bookmark", esc(T.mascotBookmark))}</div>` : ""}
@@ -293,6 +349,7 @@
         <div><b>${T.how3t}</b>${T.how3}</div>
         <div><b>${T.how4t}</b>${T.how4}</div>
       </div>
+      ${proNote()}
       <h2>${T.mapTitle}</h2>${cont ? mapGuide(cont) : ""}`;
     COURSE.modules.forEach((m, mi) => {
       const ls = m.lessons;
@@ -364,7 +421,7 @@
     app.innerHTML = `<div class="wrap">
       <div class="lesson-head">
         <a class="btn btn-quiet btn-sm" href="#/" aria-label="${T.toMap}">←</a>
-        <div><div class="crumbs">${esc(T.crumbs(lesson.mi, lesson.module.title, step + 1, L.cards.length))}</div>
+        <div><div class="crumbs">${esc((isPro() && T.pro ? T.pro.crumb + " · " : "") + T.crumbs(lesson.mi, lesson.module.title, step + 1, L.cards.length))}</div>
         <h1>${esc(lesson.title)}</h1></div>
       </div>
       <div class="progress" aria-hidden="true">${segs}</div>
@@ -412,7 +469,7 @@
       </div>
       ${complete && T.diploma ? `<div class="diploma-award">
         <img src="assets/fox-diploma-960.webp" srcset="${foxSet("diploma")}" sizes="12rem" alt="">
-        <div><p>${T.diploma.award}</p><a class="btn" href="#/diploma">${T.diploma.open}</a></div>
+        <div><p>${dip().award}</p><a class="btn" href="#/diploma">${dip().open}</a></div>
       </div>` : ""}
       ${recap.length ? `<h3>${T.remember}</h3><ul class="tldr">${recap.map((r) => `<li>${inline(r)}</li>`).join("")}</ul>` : ""}
       ${breakTip}
@@ -911,8 +968,11 @@
   function viewGlossary() {
     setNav("glossary");
     document.title = T.glossTitle + T.titleSuffix;
-    const lang = S.settings.lang;
-    const terms = ((window.GLOSSARIES || {})[lang] || []).slice().sort((a, b) => a.term.localeCompare(b.term, lang));
+    const lang = curLang();
+    const seen = new Set();
+    const terms = ["pro", "base"].flatMap((t) => (window.RK_DATA?.[dataKey(t, lang)]?.glossary || []).map((g) => Object.assign({ pro: t === "pro" }, g)))
+      .filter((g) => !seen.has(g.term) && seen.add(g.term))
+      .sort((a, b) => a.term.localeCompare(b.term, lang));
     app.innerHTML = `<div class="wrap"><h1>${T.glossTitle}</h1><p class="muted">${T.glossText}</p>
       <input class="search" type="search" placeholder="${T.glossSearch}" aria-label="${T.glossSearch}">
       <div class="gloss"></div><div class="gloss-empty" hidden>
@@ -938,7 +998,7 @@
       empty.hidden = true;
       empty.querySelector("[role=status]").textContent = "";
       list.innerHTML = found.map((t) => `<details class="gloss-entry" name="gloss-entry">
-        <summary>${esc(t.term)} ${t.en && t.en !== t.term ? `<small>${esc(t.en)}</small>` : ""}</summary>
+        <summary>${esc(t.term)} ${t.en && t.en !== t.term ? `<small>${esc(t.en)}</small>` : ""}${t.pro && T.pro ? ` <span class="tag">${T.pro.short}</span>` : ""}</summary>
         <div class="gloss-definition"><div>${inline(t.def)}</div>
           <div class="section-fox" aria-hidden="true" hidden></div></div>
       </details>`).join("");
@@ -948,7 +1008,7 @@
 
   // ---------- Настройки ----------
   function setLang(lang) {
-    S.settings.lang = lang; save(true); indexCourse(); route();
+    S.settings.lang = lang; save(true); indexCourse(true); route();
   }
 
   function themeMascot(theme) {
@@ -999,7 +1059,7 @@
         const d = JSON.parse(await f.text());
         if (!d || typeof d.done !== "object") throw new Error("bad");
         S = Object.assign(blank(), d, { settings: Object.assign(blank().settings, d.settings || {}) });
-        save(true); applySettings(); indexCourse(); toast(T.imported); route();
+        save(true); applySettings(); indexCourse(true); toast(T.imported); route();
       } catch (err) { toast(T.badFile); }
     };
     app.querySelector("#reset").onclick = () => {
@@ -1011,7 +1071,7 @@
 
   // ---------- Диплом ----------
   function viewDiploma() {
-    const d = T.diploma;
+    const d = dip();
     setNav("");
     document.title = d.title + T.titleSuffix;
     if (!courseComplete()) {
@@ -1065,12 +1125,33 @@
   }
 
   // ---------- Роутер ----------
-  function route() {
+  // #/pro и #/base переключают уровень; #/l/a… — урок уровня 2, #/l/m… — уровня 1.
+  let routeSeq = 0;
+  async function route() {
+    const seq = ++routeSeq;
     mapObserver?.disconnect();
     mapObserver = null;
-    const p = location.hash.replace(/^#\/?/, "").split("/");
+    let p = location.hash.replace(/^#\/?/, "").split("/");
+    if (p[0] === "pro" || p[0] === "base") { setTrack(p[0]); p = p.slice(1); }
+    else if (p[0] === "l" && p[1]) setTrack(p[1][0] === "a" ? "pro" : "base");
     const inLesson = p[0] === "l";
     document.body.classList.toggle("focus", inLesson && S.settings.focus);
+    const lang = curLang();
+    const needs = [curTrack()];
+    if (p[0] === "glossary" && hasTrack("pro")) needs.push(curTrack() === "pro" ? "base" : "pro");
+    if (!indexCourse() || needs.some((t) => !window.RK_DATA?.[dataKey(t, lang)])) {
+      app.innerHTML = `<div class="wrap"><p class="muted" role="status">${T.loadingCourse || "…"}</p></div>`;
+      try { await Promise.all(needs.map((t) => loadData(t, lang))); }
+      catch (e) {
+        if (seq !== routeSeq) return;
+        app.innerHTML = `<div class="wrap"><div class="card"><p>${T.loadFailed || "Error"}</p><button class="btn" id="retry">${T.retry || "↻"}</button></div></div>`;
+        document.getElementById("retry").onclick = route;
+        return;
+      }
+      if (seq !== routeSeq) return;
+      indexCourse();
+    }
+    document.querySelectorAll('.navlink[data-nav="home"]').forEach((a) => { a.href = "#/" + curTrack(); });
     if (!inLesson) L = null;
     if (inLesson) viewLesson(p[1], p[2] != null && p[2] !== "" ? +p[2] : null);
     else if (p[0] === "review") viewReview();
@@ -1093,7 +1174,7 @@
   if (lb) lb.onclick = () => setLang(S.settings.lang === "ru" ? "en" : "ru");
 
   applySettings();
-  indexCourse();
+  indexCourse(true);
   window.addEventListener("hashchange", route);
   route();
 })();

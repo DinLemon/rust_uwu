@@ -19,8 +19,12 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-src = (ROOT / "content" / "course-data.js").read_text(encoding="utf-8")
-courses = json.loads(src.split("window.COURSES = ", 1)[1].split(";\nwindow.GLOSSARIES", 1)[0])
+courses = {}
+for f in sorted((ROOT / "content").glob("*-*.js")):
+    track, lang = f.stem.split("-", 1)
+    data = json.loads(f.read_text(encoding="utf-8").split("] = ", 1)[1].rstrip().rstrip(";"))
+    courses.setdefault(lang, {"modules": []})["modules"].extend(data["modules"])
+skipped_crates = []
 args = [a for a in sys.argv[1:] if not a.startswith("--lang=")]
 langs = [a[7:] for a in sys.argv[1:] if a.startswith("--lang=")] or ["ru", "en"]
 flt = args[0] if args else ""
@@ -56,6 +60,9 @@ for lang in langs:
         for i, c in enumerate(l["cards"]):
             where = f"{lang}:{l['id']}#{i} {c['t']}"
             sig = (c.get("code"), c.get("solution"), c.get("out"), c.get("expect"))
+            if c.get("crates"):
+                skipped_crates.append(where)
+                continue
             if sig in seen:
                 continue
             seen.add(sig)
@@ -86,5 +93,5 @@ for lang in langs:
                     if s not in c["solution"]:
                         bad += 1
                         print(f"FAIL {where}: в решении нет обязательного '{s}'")
-print(f"проверено {total}, ошибок {bad}")
+print(f"проверено {total}, ошибок {bad}, с крейтами (проверять в браузере) {len(skipped_crates)}")
 sys.exit(1 if bad else 0)
