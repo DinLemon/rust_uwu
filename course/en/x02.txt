@@ -1,0 +1,830 @@
+# MODULE x02 | Fine points of traits | dyn compatibility, upcasting, Any, GATs, impl Trait and async fn in traits
+
+## LESSON x02-1 | What dyn can and can't do | 8
+:: goals
+- See why not every trait can be used as `dyn`
+- Exclude single methods with `where Self: Sized`
+
+:: text The dyn compatibility rules
+To use a trait as `dyn Trait`, the compiler must build a **method table**. That's impossible if a method:
+- returns `Self` (the size of `Self` is unknown behind `dyn`);
+- is generic over its own parameter `<T>` (that would need an endless table — one entry per `T`);
+- doesn't take `self` at all (a static method like `fn new()`).
+
+Such a trait is called **not dyn compatible**.
+
+> **Analogy:** a TV remote: its buttons are known in advance. You can't put a "do that thing, whatever it is" button on a remote.
+
+:: text Switch a method off for dyn
+If a trait has one "awkward" method, you can **exclude** it from the table:
+
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+    fn scaled(&self, k: f64) -> Self where Self: Sized; // not for dyn
+}
+```
+`where Self: Sized` means "this method is only for concrete types". The other methods still work through `dyn Shape`.
+
+:: code
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+    fn name(&self) -> String {
+        String::from("shape")
+    }
+    fn scaled(&self, k: f64) -> Self
+    where
+        Self: Sized;
+}
+
+#[derive(Debug)]
+struct Square(f64);
+
+impl Shape for Square {
+    fn area(&self) -> f64 { self.0 * self.0 }
+    fn scaled(&self, k: f64) -> Self { Square(self.0 * k) }
+}
+
+fn main() {
+    let big = Square(2.0).scaled(3.0);
+    println!("{big:?}");
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(big), Box::new(Square(1.0))];
+    for s in &shapes {
+        println!("{}: {}", s.name(), s.area());
+    }
+}
+```
+```out
+Square(6.0)
+shape: 36
+shape: 1
+```
+Remove `where Self: Sized` and look at the error: the trait stops being dyn compatible.
+
+:: quiz
+Which method makes a trait not dyn compatible?
+[ ] `fn area(&self) -> f64` => An ordinary method, it's fine.
+[x] `fn clone_me(&self) -> Self` => Right. The size of `Self` is unknown behind `dyn`.
+[ ] `fn name(&self) -> String` => `String` is a known type, it's fine.
+
+:: task
+The `Animal` trait doesn't compile as `dyn` because it has `fn new(name: &str) -> Self`. Exclude that method from the table so `Vec<Box<dyn Animal>>` works.
+```rust
+trait Animal {
+    fn new(name: &str) -> Self;
+    fn speak(&self) -> String;
+}
+
+struct Cat(String);
+
+impl Animal for Cat {
+    fn new(name: &str) -> Self { Cat(name.to_string()) }
+    fn speak(&self) -> String { format!("{}: meow", self.0) }
+}
+
+fn main() {
+    let zoo: Vec<Box<dyn Animal>> = vec![Box::new(Cat::new("Kitty"))];
+    for a in &zoo {
+        println!("{}", a.speak());
+    }
+}
+```
+```solution
+trait Animal {
+    fn new(name: &str) -> Self
+    where
+        Self: Sized;
+    fn speak(&self) -> String;
+}
+
+struct Cat(String);
+
+impl Animal for Cat {
+    fn new(name: &str) -> Self { Cat(name.to_string()) }
+    fn speak(&self) -> String { format!("{}: meow", self.0) }
+}
+
+fn main() {
+    let zoo: Vec<Box<dyn Animal>> = vec![Box::new(Cat::new("Kitty"))];
+    for a in &zoo {
+        println!("{}", a.speak());
+    }
+}
+```
+```expect
+Kitty: meow
+```
+hint: Add the condition `where Self: Sized` to `new`.
+
+:: recap
+- `dyn` needs a trait without `-> Self`, without generic methods and without methods lacking `self`.
+- `where Self: Sized` removes a method from the `dyn` table.
+- The other methods still work through `dyn`.
+
+## LESSON x02-2 | Upcasting and Any | 8
+:: goals
+- Turn a `&dyn Sub` into a `&dyn Super`
+- Find out the concrete type behind a `dyn Any`
+
+:: text Upcasting
+If `trait Pet: Animal` (Pet requires Animal), any `&dyn Pet` can be turned into a `&dyn Animal`. That's **upcasting** — moving to a more general trait. You write it as a plain assignment.
+
+```rust
+let p: &dyn Pet = &dog;
+let a: &dyn Animal = p; // upcast
+```
+
+:: code
+```rust
+trait Animal {
+    fn name(&self) -> String;
+}
+trait Pet: Animal {
+    fn owner(&self) -> String;
+}
+
+struct Dog;
+impl Animal for Dog {
+    fn name(&self) -> String { String::from("Rex") }
+}
+impl Pet for Dog {
+    fn owner(&self) -> String { String::from("Uncle Theo") }
+}
+
+fn describe(a: &dyn Animal) {
+    println!("animal: {}", a.name());
+}
+
+fn main() {
+    let pets: Vec<Box<dyn Pet>> = vec![Box::new(Dog)];
+    for p in &pets {
+        println!("owner: {}", p.owner());
+        describe(p.as_ref()); // &dyn Pet -> &dyn Animal
+    }
+}
+```
+```out
+owner: Uncle Theo
+animal: Rex
+```
+
+:: text Any — find out who's in there
+`std::any::Any` is a trait almost every type has. Through a `dyn Any` you can ask "are you a `String`?" — and get a reference to the concrete type.
+
+```rust
+use std::any::Any;
+fn inspect(x: &dyn Any) {
+    if let Some(s) = x.downcast_ref::<String>() { println!("string {s}"); }
+}
+```
+This is **downcasting** — moving to a concrete type. It's used rarely: an `enum` is usually better. But for plugins and mixed storage it's a lifesaver.
+
+:: code
+```rust
+use std::any::Any;
+
+fn inspect(x: &dyn Any) -> String {
+    if let Some(n) = x.downcast_ref::<i32>() {
+        format!("number {n}")
+    } else if let Some(s) = x.downcast_ref::<String>() {
+        format!("string \"{s}\"")
+    } else {
+        String::from("something else")
+    }
+}
+
+fn main() {
+    let items: Vec<Box<dyn Any>> = vec![Box::new(7), Box::new(String::from("cat")), Box::new(1.5)];
+    for it in &items {
+        println!("{}", inspect(it.as_ref()));
+    }
+}
+```
+```out
+number 7
+string "cat"
+something else
+```
+
+:: quiz
+What is downcasting?
+[ ] Turning a `&dyn Pet` into a `&dyn Animal` => That's upcasting: to something more general.
+[x] Trying to get a concrete type out of a `dyn Any` => Right. It may fail — hence the `Option`.
+[ ] Casting a number to a smaller type => That's `as`, a different thing.
+
+:: task
+A component store: `Vec<Box<dyn Any>>`. Write `sum_ints`, which adds up only the values of type `i32` and skips the rest.
+```rust
+use std::any::Any;
+
+fn sum_ints(items: &[Box<dyn Any>]) -> i32 {
+    // your code
+}
+
+fn main() {
+    let items: Vec<Box<dyn Any>> = vec![
+        Box::new(10),
+        Box::new("text"),
+        Box::new(5),
+        Box::new(2.5f64),
+    ];
+    println!("{}", sum_ints(&items));
+}
+```
+```solution
+use std::any::Any;
+
+fn sum_ints(items: &[Box<dyn Any>]) -> i32 {
+    items.iter().filter_map(|b| b.downcast_ref::<i32>()).sum()
+}
+
+fn main() {
+    let items: Vec<Box<dyn Any>> = vec![
+        Box::new(10),
+        Box::new("text"),
+        Box::new(5),
+        Box::new(2.5f64),
+    ];
+    println!("{}", sum_ints(&items));
+}
+```
+```expect
+15
+```
+hint: `b.downcast_ref::<i32>()` returns an `Option<&i32>`. `filter_map` fits.
+
+:: recap
+- Upcasting: `&dyn Sub` → `&dyn Super` when `trait Sub: Super`.
+- `dyn Any` + `downcast_ref::<T>()` — find out the concrete type.
+- Downcasting is a last resort; an `enum` is usually better.
+
+## LESSON x02-3 | GATs: a lending iterator | 9
+:: goals
+- Understand an associated type with a parameter
+- Write an iterator that yields references into its own buffer
+
+:: text The problem: an iterator can't lend itself
+A normal `Iterator` yields items that live **independently** of the `next` call. So you can't write an iterator that returns a `&mut` into **its own** buffer on every step: two such items at once would be two `&mut` to the same thing.
+
+You need a trait where the item type **depends on how long the iterator itself is borrowed**:
+
+```rust
+trait LendingIterator {
+    type Item<'a> where Self: 'a;
+    fn next(&mut self) -> Option<Self::Item<'_>>;
+}
+```
+`type Item<'a>` is a **generic associated type** (GAT).
+
+> **Analogy:** a librarian lets you read a book in the reading room. You get the next one only after you return this one.
+
+:: code
+```rust
+trait LendingIterator {
+    type Item<'a>
+    where
+        Self: 'a;
+    fn next(&mut self) -> Option<Self::Item<'_>>;
+}
+
+// Windows of 2 items that you can CHANGE
+struct WindowsMut<'s> {
+    data: &'s mut [i32],
+    pos: usize,
+}
+
+impl<'s> LendingIterator for WindowsMut<'s> {
+    type Item<'a> = &'a mut [i32] where Self: 'a;
+    fn next(&mut self) -> Option<&mut [i32]> {
+        let start = self.pos;
+        if start + 2 > self.data.len() {
+            return None;
+        }
+        self.pos += 1;
+        Some(&mut self.data[start..start + 2])
+    }
+}
+
+fn main() {
+    let mut v = [1, 2, 3, 4];
+    let mut it = WindowsMut { data: &mut v, pos: 0 };
+    while let Some(w) = it.next() {
+        w[1] += w[0]; // running total
+    }
+    println!("{v:?}");
+}
+```
+```out
+[1, 3, 6, 10]
+```
+The regular `windows` gives only `&[T]`. Changing through windows became possible thanks to GATs.
+
+:: text The while let limitation
+`for`, `map` and `collect` don't work with a `LendingIterator` — they're built for the normal `Iterator`. You write `while let Some(x) = it.next()`. In exchange it's safe: you can't get the next item while the previous one is alive.
+
+:: quiz
+Why can't a normal `Iterator` yield `&mut` into its own buffer?
+[x] `collect` could gather several `&mut` to the same data at once => Right. A normal iterator's items live independently of each other.
+[ ] You can't return `&mut` from methods at all => You can, just not this way.
+[ ] The buffer must be on the heap => The heap has nothing to do with it.
+
+:: task
+Finish the `LendingIterator` for `Upper`: each call puts the next line of text, uppercased, into the **internal** `String` buffer and returns a `&str` to that buffer.
+```rust
+trait LendingIterator {
+    type Item<'a>
+    where
+        Self: 'a;
+    fn next(&mut self) -> Option<Self::Item<'_>>;
+}
+
+struct Upper<'t> {
+    lines: std::str::Lines<'t>,
+    buf: String,
+}
+
+impl<'t> LendingIterator for Upper<'t> {
+    type Item<'a> = &'a str where Self: 'a;
+    fn next(&mut self) -> Option<&str> {
+        // your code
+    }
+}
+
+fn main() {
+    let text = "one\ntwo\nthree";
+    let mut it = Upper { lines: text.lines(), buf: String::new() };
+    while let Some(line) = it.next() {
+        println!("{line}");
+    }
+}
+```
+```solution
+trait LendingIterator {
+    type Item<'a>
+    where
+        Self: 'a;
+    fn next(&mut self) -> Option<Self::Item<'_>>;
+}
+
+struct Upper<'t> {
+    lines: std::str::Lines<'t>,
+    buf: String,
+}
+
+impl<'t> LendingIterator for Upper<'t> {
+    type Item<'a> = &'a str where Self: 'a;
+    fn next(&mut self) -> Option<&str> {
+        let line = self.lines.next()?;
+        self.buf.clear();
+        for c in line.chars() {
+            self.buf.extend(c.to_uppercase());
+        }
+        Some(&self.buf)
+    }
+}
+
+fn main() {
+    let text = "one\ntwo\nthree";
+    let mut it = Upper { lines: text.lines(), buf: String::new() };
+    while let Some(line) = it.next() {
+        println!("{line}");
+    }
+}
+```
+```expect
+ONE
+TWO
+THREE
+```
+hint: Take a line: `let line = self.lines.next()?;`. Then `self.buf.clear()` and fill the buffer.
+hint: Return a reference to the buffer: `Some(&self.buf)`. One buffer for every step — no copies.
+
+:: deep GATs go beyond iterators
+GATs are needed wherever an associated type must depend on a parameter: a lifetime or a type.
+
+- **Collection "families"**: `type Pointer<T>` — a trait that says "my smart pointer is `Rc<T>`" or "`Arc<T>`", and code is written for both.
+- **Async traits**, before `async fn` in traits existed, used `type Fut<'a>: Future + 'a`.
+- **Zero-copy parsers** that return pieces of their own buffer.
+
+The required `where Self: 'a` says: "a reference to the item won't outlive the iterator itself". The compiler wants it written explicitly.
+
+:: recap
+- GAT: `type Item<'a> where Self: 'a;` — the item type depends on the borrow.
+- A `LendingIterator` yields references into its buffer, one at a time.
+- Use it with `while let`, not `for`.
+
+## LESSON x02-4 | impl Trait and async fn in traits | 8
+:: goals
+- Return `impl Trait` from trait methods
+- Write `async fn` right in a trait
+
+:: text Returning impl Trait from a trait method
+A trait can have a method that returns "some iterator" — each implementation returns its own:
+
+```rust
+trait Container {
+    fn items(&self) -> impl Iterator<Item = i32>;
+}
+```
+This used to require `Box<dyn Iterator>` or an associated type. Now it's just `impl`. It's called **RPITIT** (return-position impl Trait in traits).
+
+:: code
+```rust
+trait Container {
+    fn items(&self) -> impl Iterator<Item = i32>;
+    fn total(&self) -> i32 {
+        self.items().sum()
+    }
+}
+
+struct Evens(i32);
+struct List(Vec<i32>);
+
+impl Container for Evens {
+    fn items(&self) -> impl Iterator<Item = i32> {
+        (0..=self.0).filter(|x| x % 2 == 0)
+    }
+}
+
+impl Container for List {
+    fn items(&self) -> impl Iterator<Item = i32> {
+        self.0.iter().copied()
+    }
+}
+
+fn main() {
+    println!("{}", Evens(6).total());
+    println!("{}", List(vec![5, 5, 1]).total());
+}
+```
+```out
+12
+11
+```
+`Evens` returns a `Filter<...>`, `List` returns a `Copied<...>`. Different types, one trait.
+
+:: text async fn in a trait
+In the same way, you can write `async fn` right in a trait:
+
+```rust
+trait Storage {
+    async fn load(&self, key: &str) -> Option<String>;
+}
+```
+Under the hood it's the same trick: the method returns an `impl Future<Output = ...>`.
+
+One caveat: such a trait is **not dyn compatible** (`impl` is a concrete but hidden type). For `dyn`, use the `async-trait` crate or a hand-written `Pin<Box<dyn Future>>`.
+
+:: code
+Let's check it with the home-made `block_on` from Level 2:
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+trait Storage {
+    async fn load(&self, key: &str) -> Option<String>;
+}
+
+struct Memory;
+
+impl Storage for Memory {
+    async fn load(&self, key: &str) -> Option<String> {
+        match key {
+            "name" => Some(String::from("Ferris")),
+            _ => None,
+        }
+    }
+}
+
+async fn greet<S: Storage>(s: &S) -> String {
+    let name = s.load("name").await.unwrap_or_default();
+    format!("Hello, {name}!")
+}
+
+fn main() {
+    println!("{}", block_on(greet(&Memory)));
+}
+```
+```out
+Hello, Ferris!
+```
+
+:: quiz
+Can types with `async fn` in a trait go into a `Vec<Box<dyn Storage>>`?
+[ ] Yes, no problem => `async fn` in a trait returns a hidden `impl Future`; that's not dyn compatible.
+[x] No, `dyn` needs `async-trait` or a hand-written `Pin<Box<dyn Future>>` => Right.
+[ ] Only for `Box`, not for `&` => The kind of pointer doesn't matter.
+
+:: task
+Add a method `long_words(&self, min: usize) -> impl Iterator<Item = &str>` to the `Words` trait that returns words longer than `min` characters. Implement it for `Sentence`.
+```rust
+trait Words {
+    fn long_words(&self, min: usize) -> impl Iterator<Item = &str>;
+}
+
+struct Sentence(String);
+
+// your code
+
+fn main() {
+    let s = Sentence(String::from("the cat ate tremendous pies"));
+    let v: Vec<&str> = s.long_words(4).collect();
+    println!("{v:?}");
+}
+```
+```solution
+trait Words {
+    fn long_words(&self, min: usize) -> impl Iterator<Item = &str>;
+}
+
+struct Sentence(String);
+
+impl Words for Sentence {
+    fn long_words(&self, min: usize) -> impl Iterator<Item = &str> {
+        self.0.split_whitespace().filter(move |w| w.chars().count() > min)
+    }
+}
+
+fn main() {
+    let s = Sentence(String::from("the cat ate tremendous pies"));
+    let v: Vec<&str> = s.long_words(4).collect();
+    println!("{v:?}");
+}
+```
+```expect
+["tremendous"]
+```
+hint: `self.0.split_whitespace().filter(move |w| w.chars().count() > min)`.
+hint: `move` is needed so the closure takes `min` with it.
+
+:: recap
+- `fn x(&self) -> impl Trait` right in a trait — each implementation has its own type.
+- `async fn` in a trait — the same, but with a `Future`.
+- Such traits aren't dyn compatible.
+
+## LESSON x02-p | Practice: fine points of traits | 20 | practice
+:: goals
+- Use dyn compatibility, upcasting, Any, GATs and RPITIT
+
+:: task
+Plugins: a `Plugin` trait with `name(&self) -> &str` and `run(&self, input: i32) -> i32`, plus a constructor `create() -> Self`. Make the trait dyn compatible, implement two plugins (`Double`: multiplies by 2, `Inc`: adds 1) and run the number 5 through all of them in order.
+```rust
+trait Plugin {
+    fn create() -> Self;
+    fn name(&self) -> &str;
+    fn run(&self, input: i32) -> i32;
+}
+
+// your code: Double and Inc
+
+fn main() {
+    let chain: Vec<Box<dyn Plugin>> = vec![Box::new(Double::create()), Box::new(Inc::create())];
+    let mut x = 5;
+    for p in &chain {
+        x = p.run(x);
+        println!("{} -> {x}", p.name());
+    }
+}
+```
+```solution
+trait Plugin {
+    fn create() -> Self
+    where
+        Self: Sized;
+    fn name(&self) -> &str;
+    fn run(&self, input: i32) -> i32;
+}
+
+struct Double;
+struct Inc;
+
+impl Plugin for Double {
+    fn create() -> Self { Double }
+    fn name(&self) -> &str { "double" }
+    fn run(&self, input: i32) -> i32 { input * 2 }
+}
+
+impl Plugin for Inc {
+    fn create() -> Self { Inc }
+    fn name(&self) -> &str { "inc" }
+    fn run(&self, input: i32) -> i32 { input + 1 }
+}
+
+fn main() {
+    let chain: Vec<Box<dyn Plugin>> = vec![Box::new(Double::create()), Box::new(Inc::create())];
+    let mut x = 5;
+    for p in &chain {
+        x = p.run(x);
+        println!("{} -> {x}", p.name());
+    }
+}
+```
+```expect
+double -> 10
+inc -> 11
+```
+hint: `fn create() -> Self where Self: Sized;` — otherwise the trait isn't dyn compatible.
+
+:: task
+An event bus with `Any`: `handle(event: &dyn Any)` prints `click (x, y)` for `Click`, `key K` for `Key`, and `unknown` for anything else.
+```rust
+use std::any::Any;
+
+struct Click {
+    x: i32,
+    y: i32,
+}
+struct Key(char);
+
+fn handle(event: &dyn Any) {
+    // your code
+}
+
+fn main() {
+    let events: Vec<Box<dyn Any>> = vec![Box::new(Click { x: 3, y: 4 }), Box::new(Key('q')), Box::new(42u8)];
+    for e in &events {
+        handle(e.as_ref());
+    }
+}
+```
+```solution
+use std::any::Any;
+
+struct Click {
+    x: i32,
+    y: i32,
+}
+struct Key(char);
+
+fn handle(event: &dyn Any) {
+    if let Some(c) = event.downcast_ref::<Click>() {
+        println!("click ({}, {})", c.x, c.y);
+    } else if let Some(k) = event.downcast_ref::<Key>() {
+        println!("key {}", k.0);
+    } else {
+        println!("unknown");
+    }
+}
+
+fn main() {
+    let events: Vec<Box<dyn Any>> = vec![Box::new(Click { x: 3, y: 4 }), Box::new(Key('q')), Box::new(42u8)];
+    for e in &events {
+        handle(e.as_ref());
+    }
+}
+```
+```expect
+click (3, 4)
+key q
+unknown
+```
+hint: A chain: `if let Some(c) = event.downcast_ref::<Click>() { ... } else if ...`.
+
+:: task
+A `LendingIterator` over chunks of a slice: `ChunksMut` yields `&mut [i32]` of `n` items. Use it to reverse every chunk.
+```rust
+trait LendingIterator {
+    type Item<'a>
+    where
+        Self: 'a;
+    fn next(&mut self) -> Option<Self::Item<'_>>;
+}
+
+struct ChunksMut<'s> {
+    data: &'s mut [i32],
+    n: usize,
+    pos: usize,
+}
+
+impl<'s> LendingIterator for ChunksMut<'s> {
+    type Item<'a> = &'a mut [i32] where Self: 'a;
+    fn next(&mut self) -> Option<&mut [i32]> {
+        // your code
+    }
+}
+
+fn main() {
+    let mut v = [1, 2, 3, 4, 5];
+    let mut it = ChunksMut { data: &mut v, n: 2, pos: 0 };
+    while let Some(c) = it.next() {
+        c.reverse();
+    }
+    println!("{v:?}");
+}
+```
+```solution
+trait LendingIterator {
+    type Item<'a>
+    where
+        Self: 'a;
+    fn next(&mut self) -> Option<Self::Item<'_>>;
+}
+
+struct ChunksMut<'s> {
+    data: &'s mut [i32],
+    n: usize,
+    pos: usize,
+}
+
+impl<'s> LendingIterator for ChunksMut<'s> {
+    type Item<'a> = &'a mut [i32] where Self: 'a;
+    fn next(&mut self) -> Option<&mut [i32]> {
+        if self.pos >= self.data.len() {
+            return None;
+        }
+        let start = self.pos;
+        let end = (start + self.n).min(self.data.len());
+        self.pos = end;
+        Some(&mut self.data[start..end])
+    }
+}
+
+fn main() {
+    let mut v = [1, 2, 3, 4, 5];
+    let mut it = ChunksMut { data: &mut v, n: 2, pos: 0 };
+    while let Some(c) = it.next() {
+        c.reverse();
+    }
+    println!("{v:?}");
+}
+```
+```expect
+[2, 1, 4, 3, 5]
+```
+hint: The end of a chunk is `(start + n).min(len)`, so the last chunk doesn't go past the end.
+
+:: task
+A `Source` trait with a method `numbers(&self) -> impl Iterator<Item = u32>` and a default method `max_or_zero`. Implement it for `Range10` (the numbers 1..=10) and `Fixed` (its own vector). Print the maximums.
+```rust
+trait Source {
+    fn numbers(&self) -> impl Iterator<Item = u32>;
+    fn max_or_zero(&self) -> u32 {
+        // your code
+    }
+}
+
+struct Range10;
+struct Fixed(Vec<u32>);
+
+// your code
+
+fn main() {
+    println!("{}", Range10.max_or_zero());
+    println!("{}", Fixed(vec![]).max_or_zero());
+    println!("{}", Fixed(vec![4, 9, 2]).max_or_zero());
+}
+```
+```solution
+trait Source {
+    fn numbers(&self) -> impl Iterator<Item = u32>;
+    fn max_or_zero(&self) -> u32 {
+        self.numbers().max().unwrap_or(0)
+    }
+}
+
+struct Range10;
+struct Fixed(Vec<u32>);
+
+impl Source for Range10 {
+    fn numbers(&self) -> impl Iterator<Item = u32> {
+        1..=10
+    }
+}
+
+impl Source for Fixed {
+    fn numbers(&self) -> impl Iterator<Item = u32> {
+        self.0.iter().copied()
+    }
+}
+
+fn main() {
+    println!("{}", Range10.max_or_zero());
+    println!("{}", Fixed(vec![]).max_or_zero());
+    println!("{}", Fixed(vec![4, 9, 2]).max_or_zero());
+}
+```
+```expect
+10
+0
+9
+```
+hint: `self.numbers().max().unwrap_or(0)`.
+hint: For `Fixed` — `self.0.iter().copied()`.
+
+:: recap
+- `where Self: Sized` — constructors in dyn-compatible traits.
+- `downcast_ref` — handling mixed events.
+- GATs let you change data in chunks through your own iterator.
+- `impl Iterator` in a trait — flexible data sources.
