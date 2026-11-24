@@ -1,0 +1,31 @@
+// term | short form or syntax | explanation  (Level 2 glossary)
+Default method |  | A trait method with a ready-made body. A type gets it for free and may override it.
+Supertrait | trait A: B | A trait required by another: `trait Report: Display` — to be `Report`, you must be `Display`.
+Associated type | type Item | A type inside a trait chosen by each implementation: `type Item = u32;`.
+Dynamic dispatch | dyn | Calling a method through a table at run time. That's how `dyn Trait` works.
+Vtable |  | The list of a concrete type's methods that a `Box<dyn Trait>` points to.
+Orphan rule |  | You can implement a trait for a type only if the trait or the type is declared in your crate.
+FromStr | parse() | The trait "how to make my type from a string". It's what makes `"...".parse()` work.
+IntoIterator | for | The trait "how to make an iterator out of me". The `for` loop calls it.
+Fold | fold | Reducing all items to one value: `fold(0, ...)`.
+FnOnce, FnMut, Fn |  | Kinds of closures: takes, changes, only looks.
+Function pointer | fn(A) -> B | A plain function or a closure that captures nothing.
+'static |  | A reference to something that lives the whole program, or the requirement "no temporary references in the type".
+Lifetime elision |  | The rules by which the compiler fills in lifetime labels by itself.
+Cow | clone on write | Either a reference or an owned value. A copy is made only if a change is needed.
+Weak | Rc::downgrade | A reference from an `Rc` that doesn't keep the value alive. `upgrade()` returns `None` if it's gone.
+Newtype | struct M(f64) | A wrapper struct with one field so values don't get mixed up: `struct Meters(f64);`.
+Builder |  | An object that collects settings one by one and creates the finished thing at the end.
+Typestate |  | A technique where each state is its own type. A wrong order doesn't compile.
+Send and Sync |  | Type markers: can be sent to another thread / can be shared by reference between threads.
+Atomic | AtomicUsize | A type whose operations are indivisible: `AtomicUsize`, `AtomicBool`. Works without a lock.
+RwLock | read-write lock | A lock: many readers at once or one writer.
+Future | async | A value meaning "the result comes later". It works only while it's polled with `poll`.
+Runtime | tokio | A program that polls Futures and manages tasks. For example, tokio.
+Fragment specifier | $x:expr | What `$x:...` catches in a macro: `expr`, `ident`, `ty`, `tt`…
+Procedural macro | derive | A Rust program that receives code and returns new code. For example, `#[derive(Serialize)]`.
+Undefined behavior | UB | A situation the language promises nothing about. Safe Rust has none.
+Raw pointer | *const T | `*const T` or `*mut T`. Can be dereferenced only in `unsafe`.
+FFI | extern "C" | Calling functions from other languages (usually C), and the other way around.
+Semantic versioning | semver | A `MAJOR.MINOR.PATCH` version: breaking, new, fix.
+Cargo feature | features | An optional part of a crate that you switch on in `Cargo.toml`.

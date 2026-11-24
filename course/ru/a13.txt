@@ -1,0 +1,801 @@
+# MODULE a13 | Итоговый проект: анализатор логов | Собираем трейты, ошибки, итераторы, времена жизни и потоки в одну программу
+
+## LESSON a13-1 | Шаг 1: типы и разбор строки | 9
+:: goals
+- Описать запись лога типами
+- Разбирать строку без копирования и с понятными ошибками
+- Познакомиться с трейтом `FromStr`
+
+:: text Что строим
+Программа читает **лог** — журнал событий программы — и делает отчёт: сколько ошибок, где их больше всего.
+
+Строка лога выглядит так:
+```
+ERROR db: query failed
+```
+Уровень (`INFO`, `WARN`, `ERROR`), модуль (`db`), двоеточие и сообщение.
+
+Мы пройдём четыре шага. Каждый использует темы второго уровня. Если что-то забылось — в тексте будет ссылка на модуль.
+
+> **Аналогия:** собираем конструктор. Детали уже знакомы, теперь соединяем их в одну машинку.
+
+:: text Трейт FromStr
+Ты много раз писал `"42".parse::<i32>()`. Как `parse` узнаёт, как превратить строку в `i32`? Через трейт `FromStr`.
+
+Реализуй `FromStr` для своего типа — и `parse` заработает и для него:
+
+```rust
+impl FromStr for Level {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Level, ParseError> { ... }
+}
+
+let lvl: Level = "WARN".parse()?;
+```
+`type Err` — ассоциированный тип (модуль «Трейты глубже»).
+
+:: code
+```rust
+use std::str::FromStr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, PartialEq)]
+enum ParseError {
+    NoLevel,
+    UnknownLevel(String),
+    NoMessage,
+}
+
+impl FromStr for Level {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Level, ParseError> {
+        match s {
+            "INFO" => Ok(Level::Info),
+            "WARN" => Ok(Level::Warn),
+            "ERROR" => Ok(Level::Error),
+            other => Err(ParseError::UnknownLevel(other.to_string())),
+        }
+    }
+}
+
+fn main() {
+    println!("{:?}", "WARN".parse::<Level>());
+    println!("{:?}", "DEBUG".parse::<Level>());
+}
+```
+```out
+Ok(Warn)
+Err(UnknownLevel("DEBUG"))
+```
+`PartialOrd, Ord` в `derive` — чтобы уровни можно было сравнивать и сортировать: `Info < Warn < Error` (по порядку объявления).
+
+:: text Запись лога без копий
+Запись хранит **куски исходной строки**, а не копии — как парсер из модуля «Времена жизни глубже»:
+
+```rust
+#[derive(Debug)]
+struct Entry<'a> {
+    level: Level,
+    module: &'a str,
+    msg: &'a str,
+}
+```
+`Entry` не может пережить строку, из которой её разобрали. Зато разбор очень быстрый.
+
+:: quiz
+Зачем `Entry<'a>` хранит `&'a str`, а не `String`?
+[x] Чтобы не копировать текст: записи — окошки в исходный лог => Верно.
+[ ] Потому что `String` нельзя хранить в структуре => Можно, просто это копия.
+[ ] Чтобы `Entry` жила дольше лога => Наоборот, она не может пережить лог.
+
+:: task
+Напиши `parse_line`: делит строку на уровень и остаток по первому пробелу, разбирает уровень через `parse()?`, потом делит остаток по `": "` на модуль и сообщение. Ошибки: нет пробела — `NoLevel`, нет `": "` — `NoMessage`.
+```rust
+use std::str::FromStr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, PartialEq)]
+enum ParseError {
+    NoLevel,
+    UnknownLevel(String),
+    NoMessage,
+}
+
+impl FromStr for Level {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Level, ParseError> {
+        match s {
+            "INFO" => Ok(Level::Info),
+            "WARN" => Ok(Level::Warn),
+            "ERROR" => Ok(Level::Error),
+            other => Err(ParseError::UnknownLevel(other.to_string())),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Entry<'a> {
+    level: Level,
+    module: &'a str,
+    msg: &'a str,
+}
+
+fn parse_line(line: &str) -> Result<Entry<'_>, ParseError> {
+    // твой код
+}
+
+fn main() {
+    for line in ["ERROR db: query failed", "oops", "DEBUG web: hi", "INFO web"] {
+        println!("{:?}", parse_line(line));
+    }
+}
+```
+```solution
+use std::str::FromStr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, PartialEq)]
+enum ParseError {
+    NoLevel,
+    UnknownLevel(String),
+    NoMessage,
+}
+
+impl FromStr for Level {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Level, ParseError> {
+        match s {
+            "INFO" => Ok(Level::Info),
+            "WARN" => Ok(Level::Warn),
+            "ERROR" => Ok(Level::Error),
+            other => Err(ParseError::UnknownLevel(other.to_string())),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Entry<'a> {
+    level: Level,
+    module: &'a str,
+    msg: &'a str,
+}
+
+fn parse_line(line: &str) -> Result<Entry<'_>, ParseError> {
+    let (lvl, rest) = line.split_once(' ').ok_or(ParseError::NoLevel)?;
+    let level: Level = lvl.parse()?;
+    let (module, msg) = rest.split_once(": ").ok_or(ParseError::NoMessage)?;
+    Ok(Entry { level, module, msg })
+}
+
+fn main() {
+    for line in ["ERROR db: query failed", "oops", "DEBUG web: hi", "INFO web"] {
+        println!("{:?}", parse_line(line));
+    }
+}
+```
+```expect
+Ok(Entry { level: Error, module: "db", msg: "query failed" })
+Err(NoLevel)
+Err(UnknownLevel("DEBUG"))
+Err(NoMessage)
+```
+hint: `line.split_once(' ').ok_or(ParseError::NoLevel)?` — уровень и остаток.
+hint: `lvl.parse()?` сработает: `Level` умеет `FromStr`, а тип ошибки совпадает.
+hint: Потом `rest.split_once(": ").ok_or(ParseError::NoMessage)?`.
+
+:: recap
+- `FromStr` учит `parse()` делать твой тип.
+- `Entry<'a>` — запись из кусков исходной строки, без копий.
+- `split_once` + `ok_or` + `?` — короткий разбор с понятными ошибками.
+
+## LESSON a13-2 | Шаг 2: статистика | 9
+:: goals
+- Посчитать статистику итераторами
+- Отделить хорошие строки от плохих
+
+:: text Что считаем
+- Сколько записей каждого уровня.
+- В каком модуле больше всего ошибок.
+- Сколько строк не удалось разобрать.
+
+Для подсчёта по ключу — `BTreeMap` и `entry().or_insert(0)` (модуль «Итераторы изнутри»). `BTreeMap` хранит ключи по порядку — отчёт выйдет стабильным.
+
+:: code
+Разбор (из шага 1) свёрнут в несколько строк, чтобы пример был короче. Смотри на `main`:
+```rust
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> { level: Level, module: &'a str }
+
+fn parse_line(line: &str) -> Option<Entry<'_>> {
+    let (lvl, rest) = line.split_once(' ')?;
+    let level = match lvl { "INFO" => Level::Info, "WARN" => Level::Warn, "ERROR" => Level::Error, _ => return None };
+    let (module, _msg) = rest.split_once(": ")?;
+    Some(Entry { level, module })
+}
+
+const LOG: &str = "INFO db: connected
+WARN net: slow response
+ERROR db: query failed
+INFO web: request /home
+ERROR net: timeout
+ERROR db: lost connection
+oops";
+
+fn main() {
+    let (good, bad): (Vec<_>, Vec<_>) = LOG.lines().map(parse_line).partition(|e| e.is_some());
+    let entries: Vec<Entry> = good.into_iter().flatten().collect();
+
+    let mut by_level: BTreeMap<Level, usize> = BTreeMap::new();
+    for e in &entries {
+        *by_level.entry(e.level).or_insert(0) += 1;
+    }
+    println!("{by_level:?}");
+    println!("плохих строк: {}", bad.len());
+}
+```
+```out
+{Info: 2, Warn: 1, Error: 3}
+плохих строк: 1
+```
+- `lines()` — строки текста по одной.
+- `partition` — разделить на две кучи по условию.
+- `flatten()` убирает `Some` и оставляет сами записи.
+
+:: quiz
+Почему для подсчёта взяли `BTreeMap`, а не `HashMap`?
+[ ] `HashMap` не умеет считать => Умеет, `entry` у него тоже есть.
+[x] `BTreeMap` хранит ключи по порядку, отчёт всегда одинаковый => Верно. `HashMap` выдаёт ключи в случайном порядке.
+[ ] `BTreeMap` быстрее всегда => Не всегда; здесь важен порядок.
+
+:: task
+Посчитай ошибки (`Level::Error`) по модулям и найди модуль с наибольшим числом ошибок. Напечатай словарь и победителя.
+```rust
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> { level: Level, module: &'a str }
+
+fn parse_line(line: &str) -> Option<Entry<'_>> {
+    let (lvl, rest) = line.split_once(' ')?;
+    let level = match lvl { "INFO" => Level::Info, "WARN" => Level::Warn, "ERROR" => Level::Error, _ => return None };
+    let (module, _msg) = rest.split_once(": ")?;
+    Some(Entry { level, module })
+}
+
+const LOG: &str = "INFO db: connected
+ERROR net: timeout
+ERROR db: query failed
+ERROR db: lost connection
+WARN web: slow";
+
+fn main() {
+    let entries: Vec<Entry> = LOG.lines().filter_map(parse_line).collect();
+    let mut errors: BTreeMap<&str, usize> = BTreeMap::new();
+    // твой код
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> { level: Level, module: &'a str }
+
+fn parse_line(line: &str) -> Option<Entry<'_>> {
+    let (lvl, rest) = line.split_once(' ')?;
+    let level = match lvl { "INFO" => Level::Info, "WARN" => Level::Warn, "ERROR" => Level::Error, _ => return None };
+    let (module, _msg) = rest.split_once(": ")?;
+    Some(Entry { level, module })
+}
+
+const LOG: &str = "INFO db: connected
+ERROR net: timeout
+ERROR db: query failed
+ERROR db: lost connection
+WARN web: slow";
+
+fn main() {
+    let entries: Vec<Entry> = LOG.lines().filter_map(parse_line).collect();
+    let mut errors: BTreeMap<&str, usize> = BTreeMap::new();
+    for e in entries.iter().filter(|e| e.level == Level::Error) {
+        *errors.entry(e.module).or_insert(0) += 1;
+    }
+    println!("{errors:?}");
+    if let Some((module, n)) = errors.iter().max_by_key(|(_, n)| **n) {
+        println!("больше всего ошибок: {module} ({n})");
+    }
+}
+```
+```expect
+{"db": 2, "net": 1}
+больше всего ошибок: db (2)
+```
+hint: Отфильтруй `e.level == Level::Error` и считай `*errors.entry(e.module).or_insert(0) += 1`.
+hint: Победитель: `errors.iter().max_by_key(|(_, n)| **n)` — вернёт `Option<(&&str, &usize)>`.
+
+:: recap
+- `lines()` → `filter_map(parse)` — только удачные записи.
+- `partition` — разделить удачные и неудачные.
+- `BTreeMap` + `entry` — подсчёт; `max_by_key` — найти лидера.
+
+## LESSON a13-3 | Шаг 3: форматы отчёта | 8
+:: goals
+- Сделать несколько форматов отчёта через трейт
+- Выбирать формат во время работы через `Box<dyn Report>`
+
+:: text Один отчёт — разные виды
+Человеку удобен текст, таблице — CSV, другой программе — JSON. Логика подсчёта одна, а вывод разный.
+
+Описываем **умение** «нарисовать отчёт» трейтом, и каждый формат реализует его по-своему (модуль «Трейты глубже»):
+
+```rust
+trait Report {
+    fn name(&self) -> &str;
+    fn render(&self, counts: &[(&str, usize)]) -> String;
+}
+```
+
+:: code
+```rust
+trait Report {
+    fn name(&self) -> &str;
+    fn render(&self, counts: &[(&str, usize)]) -> String;
+}
+
+struct Plain;
+struct Bars;
+
+impl Report for Plain {
+    fn name(&self) -> &str { "текст" }
+    fn render(&self, counts: &[(&str, usize)]) -> String {
+        counts.iter().map(|(m, n)| format!("{m}: {n}")).collect::<Vec<_>>().join(", ")
+    }
+}
+
+impl Report for Bars {
+    fn name(&self) -> &str { "полоски" }
+    fn render(&self, counts: &[(&str, usize)]) -> String {
+        counts.iter().map(|(m, n)| format!("{m:>4} {}", "#".repeat(*n))).collect::<Vec<_>>().join("\n")
+    }
+}
+
+fn pick(name: &str) -> Box<dyn Report> {
+    match name {
+        "bars" => Box::new(Bars),
+        _ => Box::new(Plain),
+    }
+}
+
+fn main() {
+    let counts = [("db", 3), ("net", 1), ("web", 2)];
+    for choice in ["plain", "bars"] {
+        let r = pick(choice);
+        println!("[{}]", r.name());
+        println!("{}", r.render(&counts));
+    }
+}
+```
+```out
+[текст]
+db: 3, net: 1, web: 2
+[полоски]
+  db ###
+ net #
+ web ##
+```
+`{m:>4}` — выровнять по правому краю в 4 символа. Так полоски начинаются ровно.
+
+:: quiz
+Зачем `pick` возвращает `Box<dyn Report>`, а не `impl Report`?
+[x] В разных ветках возвращаются разные типы => Верно. `impl` — только один конкретный тип.
+[ ] `impl` нельзя возвращать из функций => Можно, но только один тип.
+[ ] `Box` быстрее => Нет, `dyn` чуть медленнее; он нужен ради гибкости.
+
+:: task
+Добавь формат `Csv`: первая строка `module,errors`, дальше по строке на модуль: `db,3`. Подключи его в `pick` по имени `"csv"`.
+```rust
+trait Report {
+    fn render(&self, counts: &[(&str, usize)]) -> String;
+}
+
+struct Plain;
+
+impl Report for Plain {
+    fn render(&self, counts: &[(&str, usize)]) -> String {
+        counts.iter().map(|(m, n)| format!("{m}: {n}")).collect::<Vec<_>>().join(", ")
+    }
+}
+
+// твой код: struct Csv и impl Report for Csv
+
+fn pick(name: &str) -> Box<dyn Report> {
+    match name {
+        _ => Box::new(Plain),
+    }
+}
+
+fn main() {
+    let counts = [("db", 3), ("net", 1)];
+    println!("{}", pick("csv").render(&counts));
+}
+```
+```solution
+trait Report {
+    fn render(&self, counts: &[(&str, usize)]) -> String;
+}
+
+struct Plain;
+struct Csv;
+
+impl Report for Plain {
+    fn render(&self, counts: &[(&str, usize)]) -> String {
+        counts.iter().map(|(m, n)| format!("{m}: {n}")).collect::<Vec<_>>().join(", ")
+    }
+}
+
+impl Report for Csv {
+    fn render(&self, counts: &[(&str, usize)]) -> String {
+        let mut out = String::from("module,errors");
+        for (m, n) in counts {
+            out.push_str(&format!("\n{m},{n}"));
+        }
+        out
+    }
+}
+
+fn pick(name: &str) -> Box<dyn Report> {
+    match name {
+        "csv" => Box::new(Csv),
+        _ => Box::new(Plain),
+    }
+}
+
+fn main() {
+    let counts = [("db", 3), ("net", 1)];
+    println!("{}", pick("csv").render(&counts));
+}
+```
+```expect
+module,errors
+db,3
+net,1
+```
+hint: `struct Csv;` и `impl Report for Csv { fn render(...) -> String { ... } }`.
+hint: Начни со строки `"module,errors"` и добавляй `"\n{m},{n}"` для каждой пары.
+hint: В `pick` добавь ветку `"csv" => Box::new(Csv),` перед `_`.
+
+:: recap
+- Трейт `Report` — общее умение, форматы — разные реализации.
+- `Box<dyn Report>` — выбрать формат во время работы.
+- Новый формат = новая структура + `impl`, остальной код не меняется.
+
+## LESSON a13-4 | Шаг 4: параллельно и с тестами | 9
+:: goals
+- Разобрать большой лог в нескольких потоках
+- Закрепить поведение тестами
+- Понять, куда двигаться дальше
+
+:: text Большой лог — несколько потоков
+Если в логе миллион строк, разбор можно разделить: каждый поток берёт свой кусок строк (модуль «Потоки глубже»). `thread::scope` позволяет потокам смотреть на общий текст без `Arc` и копий.
+
+:: code
+```rust
+use std::thread;
+
+fn is_error(line: &str) -> bool {
+    line.starts_with("ERROR ")
+}
+
+fn main() {
+    let log: String = (0..10_000)
+        .map(|i| if i % 4 == 0 { "ERROR db: x\n" } else { "INFO web: y\n" })
+        .collect();
+    let lines: Vec<&str> = log.lines().collect();
+
+    let total: usize = thread::scope(|s| {
+        let handles: Vec<_> = lines
+            .chunks(2_500)
+            .map(|part| s.spawn(move || part.iter().filter(|l| is_error(l)).count()))
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).sum()
+    });
+    println!("ошибок: {total}");
+}
+```
+```out
+ошибок: 2500
+```
+Четыре потока по 2500 строк. Строки — `&str` в общий `log`, ничего не скопировано.
+
+:: text Тесты — страховка
+Перед тем как что-то менять, напиши тесты (модуль «Тесты» первого уровня). Они проверят, что разбор всё ещё работает.
+
+Хорошие тесты для парсера:
+- правильная строка разбирается правильно;
+- каждая ошибка возвращает свой вариант;
+- граничные случаи: пустая строка, лишние пробелы.
+
+:: task
+Напиши два теста для `parse_level`: что `"WARN"` даёт `Some(2)` и что `"debug"` даёт `None`.
+```rust
+pub fn parse_level(s: &str) -> Option<u8> {
+    match s {
+        "INFO" => Some(1),
+        "WARN" => Some(2),
+        "ERROR" => Some(3),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // твои тесты
+}
+```
+```solution
+pub fn parse_level(s: &str) -> Option<u8> {
+    match s {
+        "INFO" => Some(1),
+        "WARN" => Some(2),
+        "ERROR" => Some(3),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn warn_is_two() {
+        assert_eq!(parse_level("WARN"), Some(2));
+    }
+
+    #[test]
+    fn lowercase_is_unknown() {
+        assert_eq!(parse_level("debug"), None);
+    }
+}
+```
+tests: yes
+contains: #[test]
+hint: `#[test] fn warn_is_two() { assert_eq!(parse_level("WARN"), Some(2)); }`.
+
+:: text Что дальше
+Ты прошёл второй уровень. Вот куда можно пойти:
+- **The Rust Programming Language** («книга») — перечитай главы про трейты, умные указатели и async: теперь они будут понятнее.
+- **Rust by Example** и **Rustlings** — короткие упражнения.
+- **Rust Atomics and Locks** (Mara Bos) — потоки и атомики глубоко.
+- **The Rustonomicon** — всё про `unsafe`.
+- **Asynchronous Programming in Rust** и туториал tokio — async на практике.
+- Свой проект: утилита для командной строки (`clap`), веб-сервер (`axum`), игра (`bevy`). Лучший учитель — задача, которая интересна **тебе**.
+
+> **Аналогия:** ты собрал свой первый настоящий механизм. Дальше — не учебник, а мастерская.
+
+:: quiz
+Почему в параллельном примере не нужен `Arc`?
+[ ] Потому что строки скопированы в каждый поток => Ничего не копировалось.
+[x] `thread::scope` гарантирует, что потоки закончатся раньше, чем исчезнет `log` => Верно.
+[ ] Потому что `&str` всегда `'static` => Только литералы `'static`, а тут строка из `String`.
+
+:: recap
+- `thread::scope` + `chunks` — параллельный разбор без копий.
+- Тесты фиксируют поведение перед изменениями.
+- Дальше — книги, упражнения и свой проект.
+
+## LESSON a13-p | Практика: расширяем анализатор | 20 | practice
+:: goals
+- Добавить в анализатор новые возможности
+- Повторить ключевые темы второго уровня в одном проекте
+
+:: task
+Сделай `Display` для `Entry`, чтобы запись печаталась как `[ERROR] db — query failed`.
+```rust
+use std::fmt;
+
+#[derive(Debug, Clone, Copy)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> {
+    level: Level,
+    module: &'a str,
+    msg: &'a str,
+}
+
+// твой код
+
+fn main() {
+    let e = Entry { level: Level::Error, module: "db", msg: "query failed" };
+    println!("{e}");
+    let w = Entry { level: Level::Warn, module: "net", msg: "slow" };
+    println!("{w}");
+}
+```
+```solution
+use std::fmt;
+
+#[derive(Debug, Clone, Copy)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> {
+    level: Level,
+    module: &'a str,
+    msg: &'a str,
+}
+
+impl fmt::Display for Entry<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let lvl = match self.level {
+            Level::Info => "INFO",
+            Level::Warn => "WARN",
+            Level::Error => "ERROR",
+        };
+        write!(f, "[{lvl}] {} — {}", self.module, self.msg)
+    }
+}
+
+fn main() {
+    let e = Entry { level: Level::Error, module: "db", msg: "query failed" };
+    println!("{e}");
+    let w = Entry { level: Level::Warn, module: "net", msg: "slow" };
+    println!("{w}");
+}
+```
+```expect
+[ERROR] db — query failed
+[WARN] net — slow
+```
+hint: `impl fmt::Display for Entry<'_>` — `'_` значит «какое-то время жизни, неважно какое».
+hint: Сначала `match self.level` в текст, потом `write!(f, "[{lvl}] {} — {}", self.module, self.msg)`.
+
+:: task
+Фильтр-строитель: `Query::new().min_level(Level::Warn).module("db")` отбирает записи с уровнем **не ниже** заданного и из нужного модуля. Допиши методы и `matches`.
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> { level: Level, module: &'a str, msg: &'a str }
+
+struct Query<'q> {
+    min_level: Level,
+    module: Option<&'q str>,
+}
+
+impl<'q> Query<'q> {
+    fn new() -> Self {
+        Query { min_level: Level::Info, module: None }
+    }
+    // твой код: min_level, module, matches
+}
+
+fn main() {
+    let log = [
+        Entry { level: Level::Info, module: "db", msg: "connected" },
+        Entry { level: Level::Error, module: "db", msg: "query failed" },
+        Entry { level: Level::Warn, module: "net", msg: "slow" },
+        Entry { level: Level::Warn, module: "db", msg: "retry" },
+    ];
+    let q = Query::new().min_level(Level::Warn).module("db");
+    for e in log.iter().filter(|e| q.matches(e)) {
+        println!("{}", e.msg);
+    }
+}
+```
+```solution
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Level { Info, Warn, Error }
+
+struct Entry<'a> { level: Level, module: &'a str, msg: &'a str }
+
+struct Query<'q> {
+    min_level: Level,
+    module: Option<&'q str>,
+}
+
+impl<'q> Query<'q> {
+    fn new() -> Self {
+        Query { min_level: Level::Info, module: None }
+    }
+    fn min_level(mut self, l: Level) -> Self {
+        self.min_level = l;
+        self
+    }
+    fn module(mut self, m: &'q str) -> Self {
+        self.module = Some(m);
+        self
+    }
+    fn matches(&self, e: &Entry) -> bool {
+        e.level >= self.min_level && self.module.is_none_or(|m| m == e.module)
+    }
+}
+
+fn main() {
+    let log = [
+        Entry { level: Level::Info, module: "db", msg: "connected" },
+        Entry { level: Level::Error, module: "db", msg: "query failed" },
+        Entry { level: Level::Warn, module: "net", msg: "slow" },
+        Entry { level: Level::Warn, module: "db", msg: "retry" },
+    ];
+    let q = Query::new().min_level(Level::Warn).module("db");
+    for e in log.iter().filter(|e| q.matches(e)) {
+        println!("{}", e.msg);
+    }
+}
+```
+```expect
+query failed
+retry
+```
+hint: Методы строителя: `fn min_level(mut self, l: Level) -> Self` и `fn module(mut self, m: &'q str) -> Self`.
+hint: Уровни сравниваются через `>=` благодаря `PartialOrd`.
+hint: Модуль: если фильтра нет — подходит любой. `self.module.is_none_or(|m| m == e.module)`.
+
+:: task
+Топ-2 модулей по числу записей. Посчитай в `BTreeMap`, переложи в `Vec`, отсортируй по убыванию количества (при равенстве — по имени) и выведи первые два.
+```rust
+use std::collections::BTreeMap;
+
+fn main() {
+    let modules = ["db", "web", "net", "db", "web", "db", "auth"];
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for m in modules {
+        *counts.entry(m).or_insert(0) += 1;
+    }
+    // твой код
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn main() {
+    let modules = ["db", "web", "net", "db", "web", "db", "auth"];
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for m in modules {
+        *counts.entry(m).or_insert(0) += 1;
+    }
+    let mut top: Vec<(&str, usize)> = counts.into_iter().collect();
+    top.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    for (m, n) in top.iter().take(2) {
+        println!("{m}: {n}");
+    }
+}
+```
+```expect
+db: 3
+web: 2
+```
+hint: `counts.into_iter().collect::<Vec<_>>()` — пары `(модуль, число)`.
+hint: `sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)))` — сначала по числу (убывание), потом по имени.
+
+:: recap
+- `Display` для своей структуры — красивый вывод.
+- Строитель-фильтр со ссылками внутри — `Query<'q>`.
+- `sort_by` + `cmp().then()` — сортировка по нескольким признакам.
+- Второй уровень пройден. Дальше — свой проект.
