@@ -1,0 +1,453 @@
+# MODULE a08 | Threads, deeper | Send and Sync, scope, RwLock, atomics and rayon
+
+## LESSON a08-1 | Send and Sync | 7
+:: goals
+- See who decides what can be handed to a thread
+- Know why `Rc` can't go and `Arc` can
+
+:: text Two marker traits
+Rust has two traits without methods. The compiler gives them to types **by itself**:
+- `Send` — a value can be **sent** to another thread (ownership handed over).
+- `Sync` — a value can be **looked at** from several threads at once (sharing `&T`).
+
+Almost everything is `Send` and `Sync`: numbers, `String`, `Vec`. The exceptions are types that are unsafe to use at the same time.
+
+> **Analogy:** `Send` — the thing can be mailed as a parcel. `Sync` — the thing can be pinned on a shared board, and everyone can look at it at once.
+
+:: text Why Rc isn't Send
+`Rc` counts owners with a **plain** number. If two threads `clone` at the same moment, the count can go wrong: both read 1, both write 2, when it should be 3. Later the memory gets freed too early.
+
+So `Rc` isn't `Send`, and the compiler won't let you send it to a thread. Use `Arc` (atomic Rc) instead: it counts owners **atomically**, without glitches. A bit slower, but safe.
+
+:: code
+```rust
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let shared = Arc::new(vec![1, 2, 3]);
+    let mut handles = vec![];
+    for i in 0..3 {
+        let data = Arc::clone(&shared);
+        handles.push(thread::spawn(move || data[i] * 10));
+    }
+    let results: Vec<i32> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    println!("{results:?}");
+}
+```
+```out
+[10, 20, 30]
+```
+Replace `Arc` with `std::rc::Rc` and run it. The error will say: `Rc<Vec<i32>>` cannot be sent between threads safely.
+
+:: quiz
+Why can't an `Rc` be sent to another thread?
+[ ] Because it stores data on the heap => `Arc` does too, and it can be sent.
+[x] Its owner count can go wrong under simultaneous changes => Right. `Arc` counts atomically.
+[ ] Because it's slow => The opposite: `Rc` is faster than `Arc`.
+
+:: text More "not for threads" and "for threads" pairs
+- `Rc` → `Arc`
+- `RefCell` → `Mutex` or `RwLock`
+- `Cell` → atomics (`AtomicUsize`, `AtomicBool`…)
+
+The rule: if a type is "single-threaded", it has a multi-threaded sibling.
+
+:: deep How the compiler assigns Send and Sync
+`Send` and `Sync` are **auto traits**. A struct gets them by itself if **all its fields** have them. One `Rc` field inside is enough — and the whole struct is no longer `Send`.
+
+There's a precise rule: `T` is `Sync` if `&T` is `Send`. That is, "sharing a reference is safe" = "the reference can be sent to another thread".
+
+You can implement these traits by hand only with `unsafe impl Send for T {}`. That's a promise to the compiler that you checked everything yourself. It's rarely needed — mostly by authors of low-level libraries.
+
+:: recap
+- `Send` — can be handed to a thread; `Sync` — a reference can be shared between threads.
+- The compiler assigns them based on the fields.
+- `Rc`/`RefCell` are single-threaded; `Arc`/`Mutex` are their multi-threaded siblings.
+
+## LESSON a08-2 | thread::scope: threads that borrow | 7
+:: goals
+- Start threads that read local data without `Arc` and `move`
+- See why it's safe
+
+:: text The problem with spawn
+`thread::spawn` requires `'static`: the thread may outlive the function. So you have to move everything or wrap it in an `Arc`. Even if the thread lives a couple of milliseconds.
+
+`thread::scope` fixes that: all threads inside the "scope" **must** finish before you leave it. So they can freely borrow local variables.
+
+> **Analogy:** a kids' party at home. Every guest leaves before you lock the door. So you can lend them your toys — they'll definitely come back.
+
+:: code
+```rust
+use std::thread;
+
+fn main() {
+    let numbers = vec![1, 2, 3, 4, 5, 6];
+    let (left, right) = numbers.split_at(3);
+
+    let (a, b) = thread::scope(|s| {
+        let h1 = s.spawn(|| left.iter().sum::<i32>());
+        let h2 = s.spawn(|| right.iter().sum::<i32>());
+        (h1.join().unwrap(), h2.join().unwrap())
+    });
+
+    println!("{a} + {b} = {}", a + b);
+    println!("the vector is still ours: {}", numbers.len());
+}
+```
+```out
+6 + 15 = 21
+the vector is still ours: 6
+```
+No `Arc`, no `move`, no `clone`. The threads just look at the halves of the vector.
+
+:: text You can change things too
+Inside a `scope` a thread can even take a `&mut` — as long as it's the only one:
+
+```rust
+let mut counts = [0; 2];
+thread::scope(|s| {
+    let (a, b) = counts.split_at_mut(1);
+    s.spawn(|| a[0] += 1);
+    s.spawn(|| b[0] += 2);
+});
+// counts == [1, 2]
+```
+`split_at_mut` splits the array into two **non-overlapping** parts. Each thread changes its own.
+
+:: quiz
+Why can threads inside `thread::scope` take references to local variables?
+[x] All the scope's threads must finish before it's left => Right. The references won't outlive the data.
+[ ] Because the checks are turned off there => The checks work as usual.
+[ ] Because the data is copied into each thread => Nothing is copied.
+
+:: task
+Count in two threads inside `thread::scope`: the first counts even numbers, the second counts odd ones. Print `even 3, odd 4`.
+```rust
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3, 4, 5, 6, 7];
+    // your code
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3, 4, 5, 6, 7];
+    let (even, odd) = thread::scope(|s| {
+        let e = s.spawn(|| v.iter().filter(|x| *x % 2 == 0).count());
+        let o = s.spawn(|| v.iter().filter(|x| *x % 2 == 1).count());
+        (e.join().unwrap(), o.join().unwrap())
+    });
+    println!("even {even}, odd {odd}");
+}
+```
+```expect
+even 3, odd 4
+```
+hint: `thread::scope(|s| { ... })` — inside it `s.spawn(|| ...)`. The scope's result is whatever the block returns.
+hint: Return a pair: `(e.join().unwrap(), o.join().unwrap())`.
+
+:: recap
+- `thread::scope` — threads finish before the scope is left.
+- So they can get `&` and even `&mut` to local data.
+- No `Arc` and no `move` needed.
+
+## LESSON a08-3 | RwLock and atomics | 8
+:: goals
+- Choose between `Mutex` and `RwLock`
+- Count things across threads without a lock — with atomics
+
+:: text RwLock: many readers or one writer
+A `Mutex` lets **one** in at a time — whether it reads or writes. If reads are frequent and writes are rare, that's a needless queue.
+
+An `RwLock` (read-write lock) lets in:
+- **any number** of readers at once — `read()`;
+- or **one** writer — `write()`.
+
+> **Analogy:** a museum. Many people can look at the paintings at once. But when a restorer works on a painting, the hall is closed to everyone.
+
+:: code
+```rust
+use std::sync::{Arc, RwLock};
+use std::thread;
+
+fn main() {
+    let config = Arc::new(RwLock::new(String::from("dark theme")));
+
+    let readers: Vec<_> = (0..3).map(|_| {
+        let c = Arc::clone(&config);
+        thread::spawn(move || c.read().unwrap().len()) // they read at the same time
+    }).collect();
+    for r in readers {
+        r.join().unwrap();
+    }
+
+    {
+        let mut w = config.write().unwrap();
+        *w = String::from("light theme");
+    }
+    println!("{}", config.read().unwrap());
+}
+```
+```out
+light theme
+```
+
+:: text Atomics: no lock at all
+For simple things — a counter, a flag — you don't need a lock. There are **atomic** types: `AtomicUsize`, `AtomicBool`, `AtomicI64`… The processor performs their operations "in one indivisible step".
+
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+let hits = AtomicUsize::new(0);
+hits.fetch_add(1, Ordering::Relaxed); // +1, safe from any thread
+let n = hits.load(Ordering::Relaxed);
+```
+`Ordering::Relaxed` is enough for simple counters. What it means is in the deep dive.
+
+:: code
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+
+fn main() {
+    let hits = AtomicUsize::new(0);
+    thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                for _ in 0..1000 {
+                    hits.fetch_add(1, Ordering::Relaxed);
+                }
+            });
+        }
+    });
+    println!("{}", hits.load(Ordering::Relaxed));
+}
+```
+```out
+4000
+```
+Four threads, a thousand times each — exactly 4000, no lock. Note: an atomic is changed through `&`, no `mut` needed.
+
+:: quiz
+Data is read often from many threads and changed rarely. What's better?
+[ ] `Mutex` => It works, but readers will wait for each other for nothing.
+[x] `RwLock` => Right. Readers don't get in each other's way.
+[ ] `RefCell` => It's not for threads.
+
+:: quiz
+You need a shared request counter for all threads. What's simplest?
+[x] `AtomicUsize` => Right. No lock, no `mut`.
+[ ] `Arc<Rc<usize>>` => `Rc` can't go to threads, and you can't change through it.
+[ ] A plain `usize` in a `static mut` => Unsafe and requires `unsafe`.
+
+:: deep What Ordering is
+The processor and the compiler **reorder** operations for speed when it's invisible within one thread. But another thread may see the changes in a different order than you wrote them.
+
+`Ordering` says which order must be preserved:
+- `Relaxed` — only the operation itself is indivisible; no order guarantee relative to others. Enough for counters.
+- `Release` (on write) + `Acquire` (on read) — "everything I did before the write will be visible to whoever read it". That's how "data ready" flags are built.
+- `SeqCst` — the strictest: all threads see one common order. Slower, but easier to reason about.
+
+Not sure? Use `SeqCst`. Want to go deeper? Mara Bos's book "Rust Atomics and Locks" (free online).
+
+:: recap
+- `RwLock`: many `read()`s at once or one `write()`.
+- Atomics (`AtomicUsize`…) — counters and flags without a lock.
+- For a simple counter — `fetch_add(1, Ordering::Relaxed)`.
+
+## LESSON a08-4 | rayon: parallel with one word | 6
+:: goals
+- Parallelize work by changing `iter` to `par_iter`
+- Know when it speeds things up and when it doesn't
+
+:: text A parallel iterator
+The **rayon** crate takes an ordinary iterator chain and spreads the work over all CPU cores. Most of the time the change is one word:
+
+```rust
+use rayon::prelude::*;
+
+let sum: u64 = data.iter().map(heavy).sum();     // one core
+let sum: u64 = data.par_iter().map(heavy).sum(); // all cores
+```
+rayon splits the data into pieces, creates the threads and gathers the result by itself.
+
+> **Analogy:** peeling a sack of potatoes alone, or calling the whole family. The sack is split into piles, and everyone peels their own.
+
+:: code
+```rust
+use rayon::prelude::*;
+
+fn is_prime(n: u64) -> bool {
+    n >= 2 && (2..).take_while(|d| d * d <= n).all(|d| n % d != 0)
+}
+
+fn main() {
+    let count = (1..200_000u64).into_par_iter().filter(|&n| is_prime(n)).count();
+    println!("primes: {count}");
+
+    let words = vec!["rust", "crab", "ferris"];
+    let lens: Vec<usize> = words.par_iter().map(|w| w.chars().count()).collect();
+    println!("{lens:?}");
+}
+```
+crates: yes
+```out
+primes: 17984
+[4, 4, 6]
+```
+`collect` after `par_iter` keeps the **original order**, even though the work ran in parallel.
+
+:: text When it won't help
+- There's little work (adding 100 numbers). Handing out the work takes longer than doing it.
+- Each step waits for the network or disk. That calls for async, not more cores.
+- Steps depend on each other (each one uses the previous one).
+
+The rule: **measure** first (see the speed module), then parallelize.
+
+:: quiz
+You added 10 numbers with `par_iter` and it got slower. Why?
+[x] Handing work out to threads costs more than the work itself => Right. Parallelism pays off on large amounts.
+[ ] rayon is broken => rayon is fine, the task is just too small.
+[ ] The numbers were added wrong => The result is correct, just slower.
+
+:: recap
+- rayon: `iter()` → `par_iter()`, `into_iter()` → `into_par_iter()`.
+- The order in `collect` is kept.
+- Helps with heavy computation, not with tiny jobs or waiting on the network.
+
+## LESSON a08-p | Practice: threads | 14 | practice
+:: goals
+- Solve tasks with `scope`, atomics and `RwLock`
+
+:: task
+Split the vector into 4 pieces with `chunks` and sum each one in its own thread inside `thread::scope`. Add up the results and print them.
+```rust
+use std::thread;
+
+fn main() {
+    let data: Vec<u64> = (1..=100).collect();
+    // your code
+}
+```
+```solution
+use std::thread;
+
+fn main() {
+    let data: Vec<u64> = (1..=100).collect();
+    let total: u64 = thread::scope(|s| {
+        let handles: Vec<_> = data.chunks(25).map(|c| s.spawn(move || c.iter().sum::<u64>())).collect();
+        handles.into_iter().map(|h| h.join().unwrap()).sum()
+    });
+    println!("{total}");
+}
+```
+```expect
+5050
+```
+hint: `data.chunks(25)` gives 4 pieces. For each one — `s.spawn(move || c.iter().sum::<u64>())`.
+hint: `move` here takes only the reference to the piece `c`; the data itself stays in `data`.
+
+:: task
+A stop flag: `AtomicBool`. The worker thread counts to 1000 but checks the flag and stops if it's raised. We raise the flag **before** starting the thread, so the thread won't take a single step.
+```rust
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+
+fn main() {
+    let stop = AtomicBool::new(false);
+    // raise the flag
+    let done = thread::scope(|s| {
+        s.spawn(|| {
+            let mut n = 0;
+            while n < 1000 {
+                // check the flag
+                n += 1;
+            }
+            n
+        }).join().unwrap()
+    });
+    println!("steps done: {done}");
+}
+```
+```solution
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+
+fn main() {
+    let stop = AtomicBool::new(false);
+    stop.store(true, Ordering::SeqCst);
+    let done = thread::scope(|s| {
+        s.spawn(|| {
+            let mut n = 0;
+            while n < 1000 {
+                if stop.load(Ordering::SeqCst) {
+                    break;
+                }
+                n += 1;
+            }
+            n
+        }).join().unwrap()
+    });
+    println!("steps done: {done}");
+}
+```
+```expect
+steps done: 0
+```
+hint: Raise it: `stop.store(true, Ordering::SeqCst)`. Check it: `if stop.load(Ordering::SeqCst) { break; }`.
+
+:: task
+A shared list `Arc<RwLock<Vec<String>>>`. Three threads each **add** one name with `write()`. Then the main thread uses `read()` to sort a copy and print it.
+```rust
+use std::sync::{Arc, RwLock};
+use std::thread;
+
+fn main() {
+    let names = Arc::new(RwLock::new(Vec::new()));
+    let mut handles = vec![];
+    for n in ["Vicky", "Ann", "Bob"] {
+        // your code
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut sorted = names.read().unwrap().clone();
+    sorted.sort();
+    println!("{sorted:?}");
+}
+```
+```solution
+use std::sync::{Arc, RwLock};
+use std::thread;
+
+fn main() {
+    let names = Arc::new(RwLock::new(Vec::new()));
+    let mut handles = vec![];
+    for n in ["Vicky", "Ann", "Bob"] {
+        let names = Arc::clone(&names);
+        handles.push(thread::spawn(move || {
+            names.write().unwrap().push(n.to_string());
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut sorted = names.read().unwrap().clone();
+    sorted.sort();
+    println!("{sorted:?}");
+}
+```
+```expect
+["Ann", "Bob", "Vicky"]
+```
+hint: On each loop step: clone the `Arc`, start `thread::spawn(move || ...)` and push the thread into `handles`.
+hint: Inside the thread: `names.write().unwrap().push(n.to_string());`.
+
+:: recap
+- `scope` + `chunks` — a simple way to split work.
+- `AtomicBool` — a stop flag without a lock.
+- `RwLock::write()` to change, `read()` to read.
