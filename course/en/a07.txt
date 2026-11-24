@@ -1,0 +1,727 @@
+# MODULE a07 | Patterns with types | Newtype, builder, state machine and typestate
+
+## LESSON a07-1 | Newtype: a wrapper with character | 7
+:: goals
+- Wrap a simple type so values don't get mixed up
+- Check data once — when it's created
+
+:: text Two f64s are easy to mix up
+```rust
+fn travel(distance: f64, time: f64) -> f64 { distance / time }
+travel(2.0, 100.0); // swapped by mistake — the compiler says nothing
+```
+Both arguments are `f64`. Rust doesn't know these are meters and seconds.
+
+A **newtype** is a struct with one field: `struct Meters(f64);`. Inside it's the same number, but the type is **different**. Now you can't mix them up.
+
+> **Analogy:** identical jars in a kitchen. Without labels, it's easy to mistake salt for sugar.
+
+:: code
+```rust
+struct Meters(f64);
+struct Seconds(f64);
+
+fn speed(d: Meters, t: Seconds) -> f64 {
+    d.0 / t.0
+}
+
+fn main() {
+    let d = Meters(100.0);
+    let t = Seconds(20.0);
+    println!("{} m/s", speed(d, t));
+    // speed(Seconds(20.0), Meters(100.0)); // error: wrong types
+}
+```
+```out
+5 m/s
+```
+Inside it's a normal number, and the speed is the same: the wrapper disappears at compile time.
+
+:: text Check once
+A newtype with a **private** field and a constructor that checks the data. Then it's simply impossible to create a wrong value.
+
+```rust
+pub struct Email(String);
+
+impl Email {
+    pub fn parse(s: &str) -> Option<Email> {
+        if s.contains('@') { Some(Email(s.to_string())) } else { None }
+    }
+}
+```
+Any function that takes an `Email` doesn't need to check it again: if it exists, it's valid.
+
+:: quiz
+Why write `struct UserId(u64)` instead of just using `u64`?
+[ ] It runs faster => The speed is the same.
+[x] So an id can't be mixed up with other numbers => Right. The compiler now tells them apart.
+[ ] `u64` can't be stored in structs => It can.
+
+:: task
+Make a newtype `Percent(u8)` with a `new` constructor that returns `None` if the number is above 100.
+```rust
+#[derive(Debug)]
+struct Percent(u8);
+
+impl Percent {
+    fn new(v: u8) -> Option<Percent> {
+        // your code
+    }
+}
+
+fn main() {
+    println!("{:?}", Percent::new(42));
+    println!("{:?}", Percent::new(150));
+}
+```
+```solution
+#[derive(Debug)]
+struct Percent(u8);
+
+impl Percent {
+    fn new(v: u8) -> Option<Percent> {
+        if v <= 100 { Some(Percent(v)) } else { None }
+    }
+}
+
+fn main() {
+    println!("{:?}", Percent::new(42));
+    println!("{:?}", Percent::new(150));
+}
+```
+```expect
+Some(Percent(42))
+None
+```
+hint: `if v <= 100 { Some(Percent(v)) } else { None }`.
+
+:: deep Deref: handy, but careful
+Sometimes you want the wrapper to behave like what's inside: `name.len()` instead of `name.0.len()`. For that you implement the `Deref` trait:
+
+```rust
+impl std::ops::Deref for Name {
+    type Target = str;
+    fn deref(&self) -> &str { &self.0 }
+}
+```
+But many people advise against overusing it: a newtype exists precisely to be **different** from the inner type. If the wrapper behaves exactly the same, the point is lost. It's better to write the methods you need by hand.
+
+:: recap
+- A newtype is `struct Name(Type);` — the same type inside, a different one outside.
+- It protects against mixing up values.
+- With a private field and a check in the constructor, a wrong value can't be created.
+
+## LESSON a07-2 | Builder | 7
+:: goals
+- Create objects with lots of optional settings
+- Write chains like `.with_...().with_...()`
+
+:: text Problem: many settings
+A request has ten settings, and almost all of them are optional. A function `new(a, b, c, d, e, f…)` is a nightmare: easy to mix up the order, and writing `None, None, None` is boring.
+
+A **builder** is a separate struct that collects settings one by one and makes the finished object at the end.
+
+> **Analogy:** ordering a burger. "No onions. Double cheese. That's it." Each phrase is one call.
+
+:: code
+```rust
+#[derive(Debug)]
+struct Request {
+    url: String,
+    method: String,
+    timeout: u32,
+    retries: u32,
+}
+
+struct RequestBuilder {
+    url: String,
+    method: String,
+    timeout: u32,
+    retries: u32,
+}
+
+impl RequestBuilder {
+    fn new(url: &str) -> Self {
+        RequestBuilder { url: url.to_string(), method: String::from("GET"), timeout: 30, retries: 0 }
+    }
+    fn method(mut self, m: &str) -> Self {
+        self.method = m.to_string();
+        self
+    }
+    fn timeout(mut self, t: u32) -> Self {
+        self.timeout = t;
+        self
+    }
+    fn retries(mut self, r: u32) -> Self {
+        self.retries = r;
+        self
+    }
+    fn build(self) -> Request {
+        Request { url: self.url, method: self.method, timeout: self.timeout, retries: self.retries }
+    }
+}
+
+fn main() {
+    let r = RequestBuilder::new("rust-lang.org").method("POST").retries(3).build();
+    println!("{r:?}");
+}
+```
+```out
+Request { url: "rust-lang.org", method: "POST", timeout: 30, retries: 3 }
+```
+Each method **takes** the builder (`mut self`) and **returns** it. That's why they can be chained.
+
+:: text Even simpler: Default
+If every field has a sensible default, sometimes `#[derive(Default)]` and the "rest by default" syntax are enough:
+
+```rust
+#[derive(Debug, Default)]
+struct Config { verbose: bool, level: u8, name: String }
+
+let c = Config { level: 3, ..Default::default() };
+```
+`..Default::default()` means "take all the other fields from the default".
+
+:: quiz
+Why are builder methods written as `fn timeout(mut self, t: u32) -> Self`?
+[x] So you can chain them: `.a().b().c()` => Right. Each call returns the builder for the next one.
+[ ] The compiler requires it => It's a style choice, not a requirement.
+[ ] So the builder can't be used => The opposite: so it's convenient to use.
+
+:: task
+Finish the pizza builder: a `size` method and a `topping` method that adds a topping to the list.
+```rust
+#[derive(Debug)]
+struct Pizza {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+struct PizzaBuilder {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+impl PizzaBuilder {
+    fn new() -> Self {
+        PizzaBuilder { size: 30, toppings: vec![] }
+    }
+    // your code
+    fn build(self) -> Pizza {
+        Pizza { size: self.size, toppings: self.toppings }
+    }
+}
+
+fn main() {
+    let p = PizzaBuilder::new().size(40).topping("cheese").topping("mushrooms").build();
+    println!("{p:?}");
+}
+```
+```solution
+#[derive(Debug)]
+struct Pizza {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+struct PizzaBuilder {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+impl PizzaBuilder {
+    fn new() -> Self {
+        PizzaBuilder { size: 30, toppings: vec![] }
+    }
+    fn size(mut self, s: u32) -> Self {
+        self.size = s;
+        self
+    }
+    fn topping(mut self, t: &str) -> Self {
+        self.toppings.push(t.to_string());
+        self
+    }
+    fn build(self) -> Pizza {
+        Pizza { size: self.size, toppings: self.toppings }
+    }
+}
+
+fn main() {
+    let p = PizzaBuilder::new().size(40).topping("cheese").topping("mushrooms").build();
+    println!("{p:?}");
+}
+```
+```expect
+Pizza { size: 40, toppings: ["cheese", "mushrooms"] }
+```
+hint: `fn size(mut self, s: u32) -> Self { self.size = s; self }`.
+hint: `topping` does `self.toppings.push(t.to_string())` and returns `self`.
+
+:: recap
+- A builder collects settings one by one; `build()` makes the object.
+- Methods: `fn x(mut self, ...) -> Self` — for chaining.
+- Simple cases — `..Default::default()`.
+
+## LESSON a07-3 | A state machine with enum | 8
+:: goals
+- Describe "what state an object is in" with an `enum`
+- Make transitions with `match`
+
+:: text States and transitions
+An order can be created, paid, shipped, delivered. From "created" you can go to "paid", but not straight to "delivered".
+
+This is a **state machine**. In Rust it's convenient to write one with an `enum`: each state is a variant, and data needed only in that state lives right in the variant.
+
+> **Analogy:** a board game. A token stands on a square, and a move takes it to another one according to the rules.
+
+:: code
+```rust
+#[derive(Debug)]
+enum Order {
+    Created,
+    Paid { amount: u32 },
+    Shipped { amount: u32, track: String },
+    Delivered,
+}
+
+impl Order {
+    fn next(self) -> Order {
+        match self {
+            Order::Created => Order::Paid { amount: 500 },
+            Order::Paid { amount } => Order::Shipped { amount, track: String::from("US123") },
+            Order::Shipped { .. } => Order::Delivered,
+            Order::Delivered => Order::Delivered,
+        }
+    }
+}
+
+fn main() {
+    let mut o = Order::Created;
+    for _ in 0..4 {
+        println!("{o:?}");
+        o = o.next();
+    }
+}
+```
+```out
+Created
+Paid { amount: 500 }
+Shipped { amount: 500, track: "US123" }
+Delivered
+```
+Only a shipped order has a tracking number. In other states it simply doesn't exist — so it can't be read by accident.
+
+:: text Why not flag fields
+You could make a struct with fields `paid: bool`, `shipped: bool`, `track: Option<String>`. But then nonsense becomes possible: `shipped = true` while `paid = false`. Or a tracking number on an order that hasn't shipped.
+
+With an `enum`, such **impossible** states simply can't be written. The motto: *make impossible states unrepresentable*.
+
+:: quiz
+Why are `enum` states better than a set of `bool` flags?
+[ ] They take less memory => Not the main point, and not always.
+[x] Impossible combinations can't even be written => Right.
+[ ] `match` is faster than `if` => It's not about speed.
+
+:: task
+Finish the door transitions: `Closed` → `open` → `Open`, `Open` → `close` → `Closed`, `Closed` → `lock` → `Locked`. A wrong transition keeps the state and prints `not allowed`.
+```rust
+#[derive(Debug, Clone, Copy)]
+enum Door {
+    Open,
+    Closed,
+    Locked,
+}
+
+fn act(d: Door, action: &str) -> Door {
+    match (d, action) {
+        // your code
+        _ => {
+            println!("not allowed");
+            d
+        }
+    }
+}
+
+fn main() {
+    let mut d = Door::Closed;
+    for a in ["open", "lock", "close", "lock"] {
+        d = act(d, a);
+        println!("{a} -> {d:?}");
+    }
+}
+```
+```solution
+#[derive(Debug, Clone, Copy)]
+enum Door {
+    Open,
+    Closed,
+    Locked,
+}
+
+fn act(d: Door, action: &str) -> Door {
+    match (d, action) {
+        (Door::Closed, "open") => Door::Open,
+        (Door::Open, "close") => Door::Closed,
+        (Door::Closed, "lock") => Door::Locked,
+        _ => {
+            println!("not allowed");
+            d
+        }
+    }
+}
+
+fn main() {
+    let mut d = Door::Closed;
+    for a in ["open", "lock", "close", "lock"] {
+        d = act(d, a);
+        println!("{a} -> {d:?}");
+    }
+}
+```
+```expect
+open -> Open
+not allowed
+lock -> Open
+close -> Closed
+lock -> Locked
+```
+hint: `match` on a pair: `(Door::Closed, "open") => Door::Open,` and so on.
+
+:: recap
+- A state is an `enum` variant; the state's data lives inside the variant.
+- A transition is a `match` on the current state.
+- Impossible states can't be written.
+
+## LESSON a07-4 | Typestate: errors at compile time | 8
+:: goals
+- Make a wrong call order fail to compile
+- Understand the idea of "state in the type"
+
+:: text Even stricter than an enum
+With an `enum`, a wrong transition is caught **while running** (`not allowed`). Can it be caught **at compile time**?
+
+Yes: make each state a **separate type**. Each type has only the allowed methods. No method — no mistake.
+
+> **Analogy:** a subway turnstile. Without a ticket it physically won't let you through. No guard needed to shout at you.
+
+:: code
+```rust
+struct Draft {
+    text: String,
+}
+struct Review {
+    text: String,
+}
+struct Published {
+    text: String,
+}
+
+impl Draft {
+    fn new() -> Draft {
+        Draft { text: String::new() }
+    }
+    fn write(mut self, s: &str) -> Draft {
+        self.text.push_str(s);
+        self
+    }
+    fn submit(self) -> Review {
+        Review { text: self.text }
+    }
+}
+
+impl Review {
+    fn approve(self) -> Published {
+        Published { text: self.text }
+    }
+}
+
+impl Published {
+    fn show(&self) -> &str {
+        &self.text
+    }
+}
+
+fn main() {
+    let post = Draft::new().write("Hello, Rust!").submit().approve();
+    println!("{}", post.show());
+    // Draft::new().approve(); // error: Draft has no approve
+}
+```
+```out
+Hello, Rust!
+```
+Publishing a draft **without** review is impossible: `Draft` simply has no `approve` method. And `submit(self)` takes the draft — you can't use the old one anymore.
+
+:: text Where it's useful
+- A database connection: you can't send a query until you've called `connect()`.
+- A builder where a required field must be set before `build()`.
+- Protocols: handshake first, data after.
+
+The cost: more types and more code. Use it when an ordering mistake is **expensive**.
+
+:: quiz
+What happens when you call `Draft::new().approve()` in the example above?
+[ ] A panic at run time => Worse for the user, and not what happens here.
+[x] A compile error: `Draft` has no `approve` method => Right.
+[ ] The post is published without review => That's exactly what typestate prevents.
+
+:: deep Typestate with PhantomData
+When there are many states but the data is the same, the state goes into a **type parameter**:
+
+```rust
+use std::marker::PhantomData;
+
+struct Locked;
+struct Unlocked;
+
+struct Safe<State> {
+    gold: u32,
+    _state: PhantomData<State>,
+}
+
+impl Safe<Locked> {
+    fn unlock(self) -> Safe<Unlocked> { Safe { gold: self.gold, _state: PhantomData } }
+}
+impl Safe<Unlocked> {
+    fn take(&self) -> u32 { self.gold }
+}
+```
+`PhantomData<State>` takes no memory. It only "marks" the type: `Safe<Locked>` and `Safe<Unlocked>` are different types with different methods.
+
+:: task
+Make a typestate for a kettle: `Kettle` (empty) → `fill()` → `FullKettle` → `boil()` → prints `boiling: N ml`. An empty kettle must not have `boil`.
+```rust
+struct Kettle;
+struct FullKettle {
+    ml: u32,
+}
+
+impl Kettle {
+    // your code
+}
+
+impl FullKettle {
+    // your code
+}
+
+fn main() {
+    Kettle.fill(500).boil();
+}
+```
+```solution
+struct Kettle;
+struct FullKettle {
+    ml: u32,
+}
+
+impl Kettle {
+    fn fill(self, ml: u32) -> FullKettle {
+        FullKettle { ml }
+    }
+}
+
+impl FullKettle {
+    fn boil(self) {
+        println!("boiling: {} ml", self.ml);
+    }
+}
+
+fn main() {
+    Kettle.fill(500).boil();
+}
+```
+```expect
+boiling: 500 ml
+```
+hint: `fill(self, ml: u32) -> FullKettle` in `impl Kettle`, `boil(self)` in `impl FullKettle`.
+
+:: recap
+- Typestate: each state is its own type with its own methods.
+- A wrong order doesn't compile.
+- Transition methods take `self` so the old state disappears.
+
+## LESSON a07-p | Practice: patterns | 14 | practice
+:: goals
+- Use newtype, builder and a state machine together
+
+:: task
+A `Username` newtype is created with `parse`: 3 to 12 characters, only Latin letters and digits. Otherwise `Err` with the reason.
+```rust
+#[derive(Debug)]
+struct Username(String);
+
+impl Username {
+    fn parse(s: &str) -> Result<Username, String> {
+        // your code
+    }
+}
+
+fn main() {
+    for s in ["rustacean", "ab", "кот123", "user_1"] {
+        println!("{:?}", Username::parse(s));
+    }
+}
+```
+```solution
+#[derive(Debug)]
+struct Username(String);
+
+impl Username {
+    fn parse(s: &str) -> Result<Username, String> {
+        let n = s.chars().count();
+        if n < 3 || n > 12 {
+            return Err(String::from("length 3 to 12"));
+        }
+        if !s.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(String::from("Latin letters and digits only"));
+        }
+        Ok(Username(s.to_string()))
+    }
+}
+
+fn main() {
+    for s in ["rustacean", "ab", "кот123", "user_1"] {
+        println!("{:?}", Username::parse(s));
+    }
+}
+```
+```expect
+Ok(Username("rustacean"))
+Err("length 3 to 12")
+Err("Latin letters and digits only")
+Err("Latin letters and digits only")
+```
+hint: Count the length in characters with `s.chars().count()`.
+hint: `c.is_ascii_alphanumeric()` — a Latin letter or a digit.
+
+:: task
+A player: `Stopped`, `Playing { track }`, `Paused { track }`. The method `press(self, button)`: `"play"` from `Stopped` starts the track `"intro"`, from `Paused` it resumes; `"pause"` from `Playing` pauses; `"stop"` from anything gives `Stopped`. Everything else changes nothing.
+```rust
+#[derive(Debug)]
+enum Player {
+    Stopped,
+    Playing { track: String },
+    Paused { track: String },
+}
+
+impl Player {
+    fn press(self, button: &str) -> Player {
+        // your code
+    }
+}
+
+fn main() {
+    let mut p = Player::Stopped;
+    for b in ["play", "pause", "pause", "play", "stop"] {
+        p = p.press(b);
+        println!("{b}: {p:?}");
+    }
+}
+```
+```solution
+#[derive(Debug)]
+enum Player {
+    Stopped,
+    Playing { track: String },
+    Paused { track: String },
+}
+
+impl Player {
+    fn press(self, button: &str) -> Player {
+        match (self, button) {
+            (_, "stop") => Player::Stopped,
+            (Player::Stopped, "play") => Player::Playing { track: String::from("intro") },
+            (Player::Paused { track }, "play") => Player::Playing { track },
+            (Player::Playing { track }, "pause") => Player::Paused { track },
+            (other, _) => other,
+        }
+    }
+}
+
+fn main() {
+    let mut p = Player::Stopped;
+    for b in ["play", "pause", "pause", "play", "stop"] {
+        p = p.press(b);
+        println!("{b}: {p:?}");
+    }
+}
+```
+```expect
+play: Playing { track: "intro" }
+pause: Paused { track: "intro" }
+pause: Paused { track: "intro" }
+play: Playing { track: "intro" }
+stop: Stopped
+```
+hint: `match (self, button)` — match on the pair. The last branch is `(other, _) => other`.
+hint: The track moves from one variant to the other: `(Player::Paused { track }, "play") => Player::Playing { track }`.
+
+:: task
+An email builder: `to` is required, `subject` defaults to `"(no subject)"`. The `build` method returns a `Result`: without a recipient — `Err("no recipient")`.
+```rust
+#[derive(Debug)]
+struct Email {
+    to: String,
+    subject: String,
+}
+
+#[derive(Default)]
+struct EmailBuilder {
+    to: Option<String>,
+    subject: Option<String>,
+}
+
+impl EmailBuilder {
+    // your code
+}
+
+fn main() {
+    println!("{:?}", EmailBuilder::default().to("ada@rust.dev").build());
+    println!("{:?}", EmailBuilder::default().subject("Hi").build());
+}
+```
+```solution
+#[derive(Debug)]
+struct Email {
+    to: String,
+    subject: String,
+}
+
+#[derive(Default)]
+struct EmailBuilder {
+    to: Option<String>,
+    subject: Option<String>,
+}
+
+impl EmailBuilder {
+    fn to(mut self, addr: &str) -> Self {
+        self.to = Some(addr.to_string());
+        self
+    }
+    fn subject(mut self, s: &str) -> Self {
+        self.subject = Some(s.to_string());
+        self
+    }
+    fn build(self) -> Result<Email, String> {
+        let to = self.to.ok_or(String::from("no recipient"))?;
+        let subject = self.subject.unwrap_or(String::from("(no subject)"));
+        Ok(Email { to, subject })
+    }
+}
+
+fn main() {
+    println!("{:?}", EmailBuilder::default().to("ada@rust.dev").build());
+    println!("{:?}", EmailBuilder::default().subject("Hi").build());
+}
+```
+```expect
+Ok(Email { to: "ada@rust.dev", subject: "(no subject)" })
+Err("no recipient")
+```
+hint: The `to` and `subject` methods put `Some(...)` into the field and return `self`.
+hint: In `build`: `self.to.ok_or(...)?` and `self.subject.unwrap_or(...)`.
+
+:: recap
+- A newtype with a check — the data is always valid.
+- `match (state, action)` — a compact state machine.
+- A builder can return a `Result` if a required field isn't set.

@@ -1,0 +1,727 @@
+# MODULE a07 | Паттерны на типах | Newtype, строитель, машина состояний и typestate
+
+## LESSON a07-1 | Newtype: обёртка с характером | 7
+:: goals
+- Обернуть простой тип, чтобы не путать значения
+- Проверять данные один раз — при создании
+
+:: text Две f64 легко перепутать
+```rust
+fn travel(distance: f64, time: f64) -> f64 { distance / time }
+travel(2.0, 100.0); // перепутали местами — компилятор молчит
+```
+Оба аргумента `f64`. Rust не знает, что это метры и секунды.
+
+**Newtype** — структура с одним полем: `struct Meters(f64);`. Внутри то же число, но тип **другой**. Перепутать уже нельзя.
+
+> **Аналогия:** одинаковые банки на кухне. Пока нет этикеток, соль легко спутать с сахаром.
+
+:: code
+```rust
+struct Meters(f64);
+struct Seconds(f64);
+
+fn speed(d: Meters, t: Seconds) -> f64 {
+    d.0 / t.0
+}
+
+fn main() {
+    let d = Meters(100.0);
+    let t = Seconds(20.0);
+    println!("{} м/с", speed(d, t));
+    // speed(Seconds(20.0), Meters(100.0)); // ошибка: типы не те
+}
+```
+```out
+5 м/с
+```
+Внутри это обычное число, а скорость работы та же: обёртка исчезает при компиляции.
+
+:: text Проверить один раз
+Newtype с **приватным** полем и конструктором, который проверяет данные. Создать неправильное значение тогда просто невозможно.
+
+```rust
+pub struct Email(String);
+
+impl Email {
+    pub fn parse(s: &str) -> Option<Email> {
+        if s.contains('@') { Some(Email(s.to_string())) } else { None }
+    }
+}
+```
+Любая функция, которая принимает `Email`, может не проверять его заново: раз он существует — он правильный.
+
+:: quiz
+Зачем писать `struct UserId(u64)`, а не просто использовать `u64`?
+[ ] Так быстрее работает => Скорость та же.
+[x] Чтобы не перепутать id с другими числами => Верно. Компилятор теперь различает их.
+[ ] `u64` нельзя хранить в структурах => Можно.
+
+:: task
+Сделай newtype `Percent(u8)` с конструктором `new`, который возвращает `None`, если число больше 100.
+```rust
+#[derive(Debug)]
+struct Percent(u8);
+
+impl Percent {
+    fn new(v: u8) -> Option<Percent> {
+        // твой код
+    }
+}
+
+fn main() {
+    println!("{:?}", Percent::new(42));
+    println!("{:?}", Percent::new(150));
+}
+```
+```solution
+#[derive(Debug)]
+struct Percent(u8);
+
+impl Percent {
+    fn new(v: u8) -> Option<Percent> {
+        if v <= 100 { Some(Percent(v)) } else { None }
+    }
+}
+
+fn main() {
+    println!("{:?}", Percent::new(42));
+    println!("{:?}", Percent::new(150));
+}
+```
+```expect
+Some(Percent(42))
+None
+```
+hint: `if v <= 100 { Some(Percent(v)) } else { None }`.
+
+:: deep Deref: удобно, но с осторожностью
+Иногда хочется, чтобы обёртка вела себя как то, что внутри: `name.len()` вместо `name.0.len()`. Для этого реализуют трейт `Deref`:
+
+```rust
+impl std::ops::Deref for Name {
+    type Target = str;
+    fn deref(&self) -> &str { &self.0 }
+}
+```
+Но многие советуют не злоупотреблять: newtype нужен как раз для того, чтобы **отличаться** от внутреннего типа. Если обёртка ведёт себя точно так же, смысл теряется. Лучше дописать нужные методы руками.
+
+:: recap
+- Newtype — `struct Имя(Тип);`, тот же тип внутри, но другой снаружи.
+- Защищает от путаницы значений.
+- С приватным полем и проверкой в конструкторе — неправильное значение не создать.
+
+## LESSON a07-2 | Строитель (Builder) | 7
+:: goals
+- Создавать объекты с кучей необязательных настроек
+- Писать цепочки `.with_...().with_...()`
+
+:: text Проблема: много настроек
+У запроса десять настроек, и почти все необязательные. Функция `new(a, b, c, d, e, f…)` — это ад: легко перепутать порядок, а писать `None, None, None` скучно.
+
+**Строитель** — отдельная структура, которая собирает настройки по одной и в конце делает готовый объект.
+
+> **Аналогия:** заказ бургера. «Мне без лука. И двойной сыр. Готово». Каждая фраза — один вызов.
+
+:: code
+```rust
+#[derive(Debug)]
+struct Request {
+    url: String,
+    method: String,
+    timeout: u32,
+    retries: u32,
+}
+
+struct RequestBuilder {
+    url: String,
+    method: String,
+    timeout: u32,
+    retries: u32,
+}
+
+impl RequestBuilder {
+    fn new(url: &str) -> Self {
+        RequestBuilder { url: url.to_string(), method: String::from("GET"), timeout: 30, retries: 0 }
+    }
+    fn method(mut self, m: &str) -> Self {
+        self.method = m.to_string();
+        self
+    }
+    fn timeout(mut self, t: u32) -> Self {
+        self.timeout = t;
+        self
+    }
+    fn retries(mut self, r: u32) -> Self {
+        self.retries = r;
+        self
+    }
+    fn build(self) -> Request {
+        Request { url: self.url, method: self.method, timeout: self.timeout, retries: self.retries }
+    }
+}
+
+fn main() {
+    let r = RequestBuilder::new("rust-lang.org").method("POST").retries(3).build();
+    println!("{r:?}");
+}
+```
+```out
+Request { url: "rust-lang.org", method: "POST", timeout: 30, retries: 3 }
+```
+Каждый метод **забирает** строителя (`mut self`) и **возвращает** его. Поэтому их можно ставить цепочкой.
+
+:: text Ещё проще: Default
+Если у всех полей есть разумные значения по умолчанию, иногда хватает `#[derive(Default)]` и синтаксиса «остальное по умолчанию»:
+
+```rust
+#[derive(Debug, Default)]
+struct Config { verbose: bool, level: u8, name: String }
+
+let c = Config { level: 3, ..Default::default() };
+```
+`..Default::default()` — «все остальные поля возьми по умолчанию».
+
+:: quiz
+Почему методы строителя пишут как `fn timeout(mut self, t: u32) -> Self`?
+[x] Чтобы можно было писать цепочкой `.a().b().c()` => Верно. Каждый вызов возвращает строителя для следующего.
+[ ] Так требует компилятор => Это выбор стиля, не требование.
+[ ] Чтобы строитель нельзя было использовать => Наоборот, чтобы им было удобно пользоваться.
+
+:: task
+Допиши строитель пиццы: метод `size` и метод `topping`, который добавляет начинку в список.
+```rust
+#[derive(Debug)]
+struct Pizza {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+struct PizzaBuilder {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+impl PizzaBuilder {
+    fn new() -> Self {
+        PizzaBuilder { size: 30, toppings: vec![] }
+    }
+    // твой код
+    fn build(self) -> Pizza {
+        Pizza { size: self.size, toppings: self.toppings }
+    }
+}
+
+fn main() {
+    let p = PizzaBuilder::new().size(40).topping("сыр").topping("грибы").build();
+    println!("{p:?}");
+}
+```
+```solution
+#[derive(Debug)]
+struct Pizza {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+struct PizzaBuilder {
+    size: u32,
+    toppings: Vec<String>,
+}
+
+impl PizzaBuilder {
+    fn new() -> Self {
+        PizzaBuilder { size: 30, toppings: vec![] }
+    }
+    fn size(mut self, s: u32) -> Self {
+        self.size = s;
+        self
+    }
+    fn topping(mut self, t: &str) -> Self {
+        self.toppings.push(t.to_string());
+        self
+    }
+    fn build(self) -> Pizza {
+        Pizza { size: self.size, toppings: self.toppings }
+    }
+}
+
+fn main() {
+    let p = PizzaBuilder::new().size(40).topping("сыр").topping("грибы").build();
+    println!("{p:?}");
+}
+```
+```expect
+Pizza { size: 40, toppings: ["сыр", "грибы"] }
+```
+hint: `fn size(mut self, s: u32) -> Self { self.size = s; self }`.
+hint: `topping` делает `self.toppings.push(t.to_string())` и возвращает `self`.
+
+:: recap
+- Строитель собирает настройки по одной, `build()` делает объект.
+- Методы: `fn x(mut self, ...) -> Self` — для цепочек.
+- Простые случаи — `..Default::default()`.
+
+## LESSON a07-3 | Машина состояний на enum | 8
+:: goals
+- Описать «в каком состоянии объект» через `enum`
+- Делать переходы через `match`
+
+:: text Состояния и переходы
+Заказ бывает: создан, оплачен, отправлен, доставлен. Из «создан» можно в «оплачен», но не сразу в «доставлен».
+
+Это **машина состояний**. В Rust её удобно писать через `enum`: каждое состояние — вариант, а данные, нужные только в этом состоянии, лежат прямо в варианте.
+
+> **Аналогия:** настольная игра. Фишка стоит на клетке, ход переводит её на другую по правилам.
+
+:: code
+```rust
+#[derive(Debug)]
+enum Order {
+    Created,
+    Paid { amount: u32 },
+    Shipped { amount: u32, track: String },
+    Delivered,
+}
+
+impl Order {
+    fn next(self) -> Order {
+        match self {
+            Order::Created => Order::Paid { amount: 500 },
+            Order::Paid { amount } => Order::Shipped { amount, track: String::from("RU123") },
+            Order::Shipped { .. } => Order::Delivered,
+            Order::Delivered => Order::Delivered,
+        }
+    }
+}
+
+fn main() {
+    let mut o = Order::Created;
+    for _ in 0..4 {
+        println!("{o:?}");
+        o = o.next();
+    }
+}
+```
+```out
+Created
+Paid { amount: 500 }
+Shipped { amount: 500, track: "RU123" }
+Delivered
+```
+Трек-номер есть **только** у отправленного заказа. В других состояниях его просто нет — а значит, его нельзя случайно прочитать.
+
+:: text Почему не поля-флаги
+Можно было бы сделать структуру с полями `paid: bool`, `shipped: bool`, `track: Option<String>`. Но тогда возможна чепуха: `shipped = true`, а `paid = false`. Или трек есть, а заказ не отправлен.
+
+С `enum` такие **невозможные** состояния просто нельзя записать. Девиз: *сделай невозможное состояние невыразимым*.
+
+:: quiz
+Чем `enum`-состояния лучше набора `bool`-флагов?
+[ ] Занимают меньше памяти => Не главное, и не всегда.
+[x] Невозможные комбинации нельзя даже записать => Верно.
+[ ] `match` работает быстрее `if` => Дело не в скорости.
+
+:: task
+Допиши переходы двери: `Closed` → `open` → `Open`, `Open` → `close` → `Closed`, `Closed` → `lock` → `Locked`. Неправильный переход оставляет состояние как есть и печатает `нельзя`.
+```rust
+#[derive(Debug, Clone, Copy)]
+enum Door {
+    Open,
+    Closed,
+    Locked,
+}
+
+fn act(d: Door, action: &str) -> Door {
+    match (d, action) {
+        // твой код
+        _ => {
+            println!("нельзя");
+            d
+        }
+    }
+}
+
+fn main() {
+    let mut d = Door::Closed;
+    for a in ["open", "lock", "close", "lock"] {
+        d = act(d, a);
+        println!("{a} -> {d:?}");
+    }
+}
+```
+```solution
+#[derive(Debug, Clone, Copy)]
+enum Door {
+    Open,
+    Closed,
+    Locked,
+}
+
+fn act(d: Door, action: &str) -> Door {
+    match (d, action) {
+        (Door::Closed, "open") => Door::Open,
+        (Door::Open, "close") => Door::Closed,
+        (Door::Closed, "lock") => Door::Locked,
+        _ => {
+            println!("нельзя");
+            d
+        }
+    }
+}
+
+fn main() {
+    let mut d = Door::Closed;
+    for a in ["open", "lock", "close", "lock"] {
+        d = act(d, a);
+        println!("{a} -> {d:?}");
+    }
+}
+```
+```expect
+open -> Open
+нельзя
+lock -> Open
+close -> Closed
+lock -> Locked
+```
+hint: `match` по паре: `(Door::Closed, "open") => Door::Open,` и так далее.
+
+:: recap
+- Состояние — вариант `enum`, данные состояния — внутри варианта.
+- Переход — `match` по текущему состоянию.
+- Невозможные состояния нельзя записать.
+
+## LESSON a07-4 | Typestate: ошибки при компиляции | 8
+:: goals
+- Сделать так, чтобы неправильный порядок вызовов не компилировался
+- Понять идею «состояние в типе»
+
+:: text Ещё строже, чем enum
+С `enum` неправильный переход ловится **во время работы** (`нельзя`). А можно ли поймать его **при компиляции**?
+
+Можно: сделать каждое состояние **отдельным типом**. У каждого типа — только разрешённые методы. Нет метода — нет ошибки.
+
+> **Аналогия:** турникет в метро. Без билета он физически не пропускает. Не нужно охранника, который ругается.
+
+:: code
+```rust
+struct Draft {
+    text: String,
+}
+struct Review {
+    text: String,
+}
+struct Published {
+    text: String,
+}
+
+impl Draft {
+    fn new() -> Draft {
+        Draft { text: String::new() }
+    }
+    fn write(mut self, s: &str) -> Draft {
+        self.text.push_str(s);
+        self
+    }
+    fn submit(self) -> Review {
+        Review { text: self.text }
+    }
+}
+
+impl Review {
+    fn approve(self) -> Published {
+        Published { text: self.text }
+    }
+}
+
+impl Published {
+    fn show(&self) -> &str {
+        &self.text
+    }
+}
+
+fn main() {
+    let post = Draft::new().write("Привет, Rust!").submit().approve();
+    println!("{}", post.show());
+    // Draft::new().approve(); // ошибка: у Draft нет approve
+}
+```
+```out
+Привет, Rust!
+```
+Опубликовать черновик **без** проверки невозможно: у `Draft` просто нет метода `approve`. А `submit(self)` забирает черновик — старым больше не воспользуешься.
+
+:: text Где это пригождается
+- Подключение к базе: нельзя отправить запрос, пока не вызвал `connect()`.
+- Строитель, где обязательное поле нужно задать до `build()`.
+- Протоколы: сначала рукопожатие, потом данные.
+
+Цена: больше типов и кода. Используй, когда ошибка порядка **дорогая**.
+
+:: quiz
+Что произойдёт при вызове `Draft::new().approve()` в примере выше?
+[ ] Паника во время работы => Хуже для пользователя, и это не тот случай.
+[x] Ошибка компиляции: у `Draft` нет метода `approve` => Верно.
+[ ] Пост опубликуется без проверки => Именно этого typestate и не допускает.
+
+:: deep Typestate с PhantomData
+Когда состояний много, а данные одни и те же, состояние кладут в **параметр типа**:
+
+```rust
+use std::marker::PhantomData;
+
+struct Locked;
+struct Unlocked;
+
+struct Safe<State> {
+    gold: u32,
+    _state: PhantomData<State>,
+}
+
+impl Safe<Locked> {
+    fn unlock(self) -> Safe<Unlocked> { Safe { gold: self.gold, _state: PhantomData } }
+}
+impl Safe<Unlocked> {
+    fn take(&self) -> u32 { self.gold }
+}
+```
+`PhantomData<State>` не занимает памяти. Он только «помечает» тип: `Safe<Locked>` и `Safe<Unlocked>` — разные типы с разными методами.
+
+:: task
+Сделай typestate для чайника: `Kettle` (пустой) → `fill()` → `FullKettle` → `boil()` → печатает `кипит: N мл`. У пустого чайника не должно быть `boil`.
+```rust
+struct Kettle;
+struct FullKettle {
+    ml: u32,
+}
+
+impl Kettle {
+    // твой код
+}
+
+impl FullKettle {
+    // твой код
+}
+
+fn main() {
+    Kettle.fill(500).boil();
+}
+```
+```solution
+struct Kettle;
+struct FullKettle {
+    ml: u32,
+}
+
+impl Kettle {
+    fn fill(self, ml: u32) -> FullKettle {
+        FullKettle { ml }
+    }
+}
+
+impl FullKettle {
+    fn boil(self) {
+        println!("кипит: {} мл", self.ml);
+    }
+}
+
+fn main() {
+    Kettle.fill(500).boil();
+}
+```
+```expect
+кипит: 500 мл
+```
+hint: `fill(self, ml: u32) -> FullKettle` в `impl Kettle`, `boil(self)` в `impl FullKettle`.
+
+:: recap
+- Typestate: каждое состояние — свой тип со своими методами.
+- Неправильный порядок не компилируется.
+- Методы-переходы забирают `self`, чтобы старое состояние исчезло.
+
+## LESSON a07-p | Практика: паттерны | 14 | practice
+:: goals
+- Применить newtype, строителя и машину состояний вместе
+
+:: task
+Newtype `Username` создаётся через `parse`: от 3 до 12 символов, только латинские буквы и цифры. Иначе `Err` с причиной.
+```rust
+#[derive(Debug)]
+struct Username(String);
+
+impl Username {
+    fn parse(s: &str) -> Result<Username, String> {
+        // твой код
+    }
+}
+
+fn main() {
+    for s in ["rustacean", "ab", "кот123", "user_1"] {
+        println!("{:?}", Username::parse(s));
+    }
+}
+```
+```solution
+#[derive(Debug)]
+struct Username(String);
+
+impl Username {
+    fn parse(s: &str) -> Result<Username, String> {
+        let n = s.chars().count();
+        if n < 3 || n > 12 {
+            return Err(String::from("длина от 3 до 12"));
+        }
+        if !s.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(String::from("только латиница и цифры"));
+        }
+        Ok(Username(s.to_string()))
+    }
+}
+
+fn main() {
+    for s in ["rustacean", "ab", "кот123", "user_1"] {
+        println!("{:?}", Username::parse(s));
+    }
+}
+```
+```expect
+Ok(Username("rustacean"))
+Err("длина от 3 до 12")
+Err("только латиница и цифры")
+Err("только латиница и цифры")
+```
+hint: Длину в символах считай через `s.chars().count()`.
+hint: `c.is_ascii_alphanumeric()` — латинская буква или цифра.
+
+:: task
+Плеер: `Stopped`, `Playing { track }`, `Paused { track }`. Метод `press(self, button)`: `"play"` из `Stopped` начинает трек `"intro"`, из `Paused` продолжает; `"pause"` из `Playing` ставит на паузу; `"stop"` из любого — `Stopped`. Остальное ничего не меняет.
+```rust
+#[derive(Debug)]
+enum Player {
+    Stopped,
+    Playing { track: String },
+    Paused { track: String },
+}
+
+impl Player {
+    fn press(self, button: &str) -> Player {
+        // твой код
+    }
+}
+
+fn main() {
+    let mut p = Player::Stopped;
+    for b in ["play", "pause", "pause", "play", "stop"] {
+        p = p.press(b);
+        println!("{b}: {p:?}");
+    }
+}
+```
+```solution
+#[derive(Debug)]
+enum Player {
+    Stopped,
+    Playing { track: String },
+    Paused { track: String },
+}
+
+impl Player {
+    fn press(self, button: &str) -> Player {
+        match (self, button) {
+            (_, "stop") => Player::Stopped,
+            (Player::Stopped, "play") => Player::Playing { track: String::from("intro") },
+            (Player::Paused { track }, "play") => Player::Playing { track },
+            (Player::Playing { track }, "pause") => Player::Paused { track },
+            (other, _) => other,
+        }
+    }
+}
+
+fn main() {
+    let mut p = Player::Stopped;
+    for b in ["play", "pause", "pause", "play", "stop"] {
+        p = p.press(b);
+        println!("{b}: {p:?}");
+    }
+}
+```
+```expect
+play: Playing { track: "intro" }
+pause: Paused { track: "intro" }
+pause: Paused { track: "intro" }
+play: Playing { track: "intro" }
+stop: Stopped
+```
+hint: `match (self, button)` — разбирай пару. Последней веткой `(other, _) => other`.
+hint: Трек переезжает из одного варианта в другой: `(Player::Paused { track }, "play") => Player::Playing { track }`.
+
+:: task
+Строитель письма: `to` обязателен, `subject` по умолчанию `"(без темы)"`. Метод `build` возвращает `Result`: без получателя — `Err("нет получателя")`.
+```rust
+#[derive(Debug)]
+struct Email {
+    to: String,
+    subject: String,
+}
+
+#[derive(Default)]
+struct EmailBuilder {
+    to: Option<String>,
+    subject: Option<String>,
+}
+
+impl EmailBuilder {
+    // твой код
+}
+
+fn main() {
+    println!("{:?}", EmailBuilder::default().to("ada@rust.dev").build());
+    println!("{:?}", EmailBuilder::default().subject("Привет").build());
+}
+```
+```solution
+#[derive(Debug)]
+struct Email {
+    to: String,
+    subject: String,
+}
+
+#[derive(Default)]
+struct EmailBuilder {
+    to: Option<String>,
+    subject: Option<String>,
+}
+
+impl EmailBuilder {
+    fn to(mut self, addr: &str) -> Self {
+        self.to = Some(addr.to_string());
+        self
+    }
+    fn subject(mut self, s: &str) -> Self {
+        self.subject = Some(s.to_string());
+        self
+    }
+    fn build(self) -> Result<Email, String> {
+        let to = self.to.ok_or(String::from("нет получателя"))?;
+        let subject = self.subject.unwrap_or(String::from("(без темы)"));
+        Ok(Email { to, subject })
+    }
+}
+
+fn main() {
+    println!("{:?}", EmailBuilder::default().to("ada@rust.dev").build());
+    println!("{:?}", EmailBuilder::default().subject("Привет").build());
+}
+```
+```expect
+Ok(Email { to: "ada@rust.dev", subject: "(без темы)" })
+Err("нет получателя")
+```
+hint: Методы `to` и `subject` кладут `Some(...)` в поле и возвращают `self`.
+hint: В `build`: `self.to.ok_or(...)?` и `self.subject.unwrap_or(...)`.
+
+:: recap
+- Newtype с проверкой — данные всегда правильные.
+- `match (состояние, действие)` — компактная машина состояний.
+- Строитель может вернуть `Result`, если обязательное поле не задано.
