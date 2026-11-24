@@ -1,0 +1,653 @@
+# MODULE x11 | The web and WebAssembly | HTTP from the inside, tower Service, axum, JSON and Rust in the browser
+
+## LESSON x11-1 | HTTP from the inside | 8
+:: goals
+- See that HTTP is just text
+- Parse a request line and headers by hand
+
+:: text Request and response
+A browser sends the server **text**:
+
+```text
+GET /books?limit=2 HTTP/1.1
+Host: example.com
+Accept: application/json
+
+```
+The first line is the **method**, the **path** and the version. Then headers "Name: value". An empty line ends the headers; a body may follow.
+
+The server replies with text too: `HTTP/1.1 200 OK`, headers, an empty line, a body.
+
+Frameworks (axum, actix) do this for you. But it's worth seeing once what's inside.
+
+> **Analogy:** a letter. The address and subject on top, then an empty line, then the text of the letter.
+
+:: code
+```rust
+use std::collections::BTreeMap;
+
+#[derive(Debug)]
+struct Request<'a> {
+    method: &'a str,
+    path: &'a str,
+    query: Option<&'a str>,
+    headers: BTreeMap<String, &'a str>,
+}
+
+fn parse(raw: &str) -> Option<Request<'_>> {
+    let mut lines = raw.lines();
+    let mut first = lines.next()?.split_whitespace();
+    let method = first.next()?;
+    let target = first.next()?;
+    let (path, query) = match target.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (target, None),
+    };
+    let mut headers = BTreeMap::new();
+    for line in lines.take_while(|l| !l.is_empty()) {
+        let (name, value) = line.split_once(':')?;
+        headers.insert(name.trim().to_ascii_lowercase(), value.trim());
+    }
+    Some(Request { method, path, query, headers })
+}
+
+fn main() {
+    let raw = "GET /books?limit=2 HTTP/1.1\r\nHost: example.com\r\nAccept: application/json\r\n\r\n";
+    let req = parse(raw).unwrap();
+    println!("{} {} {:?}", req.method, req.path, req.query);
+    println!("{:?}", req.headers);
+}
+```
+```out
+GET /books Some("limit=2")
+{"accept": "application/json", "host": "example.com"}
+```
+Header names are case-insensitive, so we lowercase them.
+
+:: quiz
+What separates the headers of an HTTP request from the body?
+[x] An empty line => Right.
+[ ] The word `BODY` => There's no such word in HTTP.
+[ ] The `Content-Type` header => It says *what* is in the body, but doesn't separate it.
+
+:: task
+Write `parse_query`, which turns `"limit=2&sort=year&q=rust"` into a `BTreeMap<&str, &str>`. A pair without `=` gets an empty value.
+```rust
+use std::collections::BTreeMap;
+
+fn parse_query(q: &str) -> BTreeMap<&str, &str> {
+    // your code
+}
+
+fn main() {
+    println!("{:?}", parse_query("limit=2&sort=year&q=rust"));
+    println!("{:?}", parse_query("debug&x=1"));
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn parse_query(q: &str) -> BTreeMap<&str, &str> {
+    q.split('&')
+        .filter(|p| !p.is_empty())
+        .map(|p| p.split_once('=').unwrap_or((p, "")))
+        .collect()
+}
+
+fn main() {
+    println!("{:?}", parse_query("limit=2&sort=year&q=rust"));
+    println!("{:?}", parse_query("debug&x=1"));
+}
+```
+```expect
+{"limit": "2", "q": "rust", "sort": "year"}
+{"debug": "", "x": "1"}
+```
+hint: `q.split('&')`, and for each pair `split_once('=')`; no `=` — `(p, "")`.
+hint: An iterator of `(&str, &str)` pairs collects straight into a `BTreeMap`.
+
+:: recap
+- HTTP is text: a request line, headers, an empty line, a body.
+- `?` separates the path from the parameters; parameters use `&` and `=`.
+- Frameworks parse this for us, but it's good to know how it works.
+
+## LESSON x11-2 | tower: everything is a Service | 9
+:: goals
+- Understand the `Service` trait: "request → future response"
+- Make a handler and a middleware wrapper
+
+:: text Service
+Almost all web code in Rust (axum, hyper, tonic) is built on the **tower** crate and one trait:
+
+```rust
+trait Service<Request> {
+    type Response;
+    type Error;
+    type Future: Future<Output = Result<Self::Response, Self::Error>>;
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>>;
+    fn call(&mut self, req: Request) -> Self::Future;
+}
+```
+The meaning is simple: **give a request — get a Future with the response**. `poll_ready` means "am I ready to take another request" (for limiting load).
+
+A **middleware** is a Service that wraps another Service: logging, timeouts, retries, authorization.
+
+> **Analogy:** a service window. You hand in a ticket and get "please wait". A middleware is the guard in front of the window: checks, writes down, lets you through.
+
+:: code
+```rust
+use std::convert::Infallible;
+use tower::{service_fn, Service, ServiceExt};
+
+async fn handle(path: String) -> Result<String, Infallible> {
+    Ok(match path.as_str() {
+        "/" => String::from("200 home"),
+        "/about" => String::from("200 about us"),
+        _ => format!("404 no page {path}"),
+    })
+}
+
+#[tokio::main]
+async fn main() {
+    let mut svc = service_fn(handle);
+    for p in ["/", "/about", "/admin"] {
+        let resp = svc.ready().await.unwrap().call(p.to_string()).await.unwrap();
+        println!("{resp}");
+    }
+    // oneshot: wait until ready and call once
+    let r = service_fn(handle).oneshot(String::from("/")).await.unwrap();
+    println!("{r}");
+}
+```
+crates: yes
+```out
+200 home
+200 about us
+404 no page /admin
+200 home
+```
+`oneshot` is the handiest way to test a handler without a network. That's how axum is tested too.
+
+:: code
+A middleware of our own: it counts requests and adds a number to the response.
+```rust
+use std::convert::Infallible;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use tower::{service_fn, Service, ServiceExt};
+
+struct Counted<S> {
+    inner: S,
+    count: Arc<AtomicU32>,
+}
+
+impl<S> Service<String> for Counted<S>
+where
+    S: Service<String, Response = String>,
+    S::Future: Send + 'static,
+{
+    type Response = String;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<String, S::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), S::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: String) -> Self::Future {
+        let n = self.count.fetch_add(1, Ordering::Relaxed) + 1;
+        let fut = self.inner.call(req);
+        Box::pin(async move {
+            let resp = fut.await?;
+            Ok(format!("#{n} {resp}"))
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let count = Arc::new(AtomicU32::new(0));
+    let mut svc = Counted {
+        inner: service_fn(|p: String| async move { Ok::<_, Infallible>(format!("reply to {p}")) }),
+        count: count.clone(),
+    };
+    for p in ["/a", "/b"] {
+        println!("{}", svc.ready().await.unwrap().call(p.to_string()).await.unwrap());
+    }
+    println!("total: {}", count.load(Ordering::Relaxed));
+}
+```
+crates: yes
+```out
+#1 reply to /a
+#2 reply to /b
+total: 2
+```
+
+:: quiz
+What is a middleware in the tower world?
+[x] A Service that wraps another Service and adds behavior => Right.
+[ ] A separate server between the browser and the program => That's a proxy, something else.
+[ ] A function that runs at startup => A middleware runs on every request.
+
+:: recap
+- `Service`: request → a Future with the response. `poll_ready` — readiness.
+- `service_fn` — a Service from an async function; `oneshot` — call it once.
+- A middleware is a wrapper around a Service.
+
+## LESSON x11-3 | axum: a web server | 9
+:: goals
+- Learn how an axum server is built: routes, handlers, extractors
+- See how to test a server without a network
+
+:: text A router and handlers
+**axum** is the most popular Rust web framework, from the authors of tokio. It isn't in the Playground, so you'll run the server code in the home assignment. Here's how it's built.
+
+```rust
+use axum::{routing::{get, post}, Router, Json, extract::{Path, State}};
+
+let app = Router::new()
+    .route("/books", get(list_books).post(add_book))
+    .route("/books/{id}", get(get_book))
+    .with_state(state);
+```
+- a **route** — a path + a method → a handler;
+- a **handler** — an ordinary `async fn`;
+- `{id}` — the part of the path that the `Path` extractor pulls out.
+
+:: text Extractors
+A handler's arguments are **extractors**: axum pulls them out of the request by their type.
+
+```rust
+async fn get_book(
+    State(db): State<AppState>,     // shared state
+    Path(id): Path<u32>,            // /books/7 → 7
+) -> Result<Json<Book>, StatusCode> {
+    db.find(id).map(Json).ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn add_book(State(db): State<AppState>, Json(new): Json<NewBook>) -> StatusCode {
+    db.insert(new);
+    StatusCode::CREATED
+}
+```
+- `Json<T>` as input — parse the body as JSON into `T` (through serde);
+- `Json<T>` in a response — turn `T` into JSON;
+- `Result<_, StatusCode>` — an error becomes the response code.
+
+Bad JSON or a non-numeric `id` — axum answers `400` or `404` by itself, before your code is even called.
+
+> **Analogy:** a reception desk. The secretary (axum) checks documents against a list (the argument types) and lets in to see you (the handler) only those whose papers are in order.
+
+:: text A test without a network
+A `Router` is a tower `Service`. So it can be called with `oneshot`, just like in the last lesson:
+
+```rust
+let resp = app
+    .oneshot(Request::get("/books/1").body(Body::empty()).unwrap())
+    .await
+    .unwrap();
+assert_eq!(resp.status(), StatusCode::OK);
+```
+No port, no network — the test is fast and reliable.
+
+:: quiz
+Where does an axum handler get `Path(id): Path<u32>` from?
+[ ] You must pull it out of the request string by hand => axum does that.
+[x] axum extracts it from the path using the route template and the argument type => Right. It's an extractor.
+[ ] From an environment variable => No, from the URL.
+
+:: homework A books API on axum
+Build a real web service.
+
+1. Create a project and add the dependencies:
+```sh
+cargo new books-api && cd books-api
+cargo add axum tokio --features tokio/full
+cargo add serde --features derive
+cargo add serde_json
+cargo add tower --features util --dev
+```
+2. State: `Arc<RwLock<Vec<Book>>>` (or `Mutex`), `Book { id, title, year }`.
+3. Routes: `GET /books`, `GET /books/{id}` (404 if missing), `POST /books` (JSON, reply 201), `DELETE /books/{id}`.
+4. Startup: `tokio::net::TcpListener::bind("127.0.0.1:3000")` + `axum::serve`. Check it with a browser or `curl`.
+5. Tests: build the `Router` in an `app()` function and check each route through `oneshot`.
+6. Optional: the `tower_http::trace::TraceLayer` middleware and SQLite storage from module x10.
+[ ] `curl localhost:3000/books` returns a JSON array
+[ ] `GET /books/999` answers 404; bad JSON in `POST` gives 400 or 422
+[ ] There are tests through `oneshot`, and `cargo test` passes without starting the server
+[ ] Handlers don't `unwrap` user data
+
+:: recap
+- axum: a `Router` + routes + `async fn` handlers.
+- Extractors: `Path`, `Query`, `Json`, `State` — by argument type.
+- A `Router` is a tower Service; test it with `oneshot`, no network.
+
+## LESSON x11-4 | WebAssembly: Rust in the browser | 8
+:: goals
+- Understand what WebAssembly is and how Rust gets there
+- Separate pure logic from the "glue" with JavaScript
+
+:: text Wasm
+**WebAssembly** (wasm) is a program format every browser understands. Rust can build into it: `cargo build --target wasm32-unknown-unknown`. You get a `.wasm` file that the browser runs at almost native speed.
+
+To talk to JavaScript there's **wasm-bindgen**: mark a function, and JS can call it.
+
+```rust
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn fib(n: u32) -> u64 {
+    let (mut a, mut b) = (0u64, 1u64);
+    for _ in 0..n { (a, b) = (b, a + b); }
+    a
+}
+```
+```text
+import init, { fib } from "./pkg/my_wasm.js";
+await init();
+console.log(fib(50));
+```
+
+:: text How to structure the project
+The best practice is to **split** it:
+- the **core** — pure functions and structs with no wasm and no JS. They can be tested with plain `cargo test`;
+- the **glue** — a thin layer with `#[wasm_bindgen]` that calls the core.
+
+That way the core works in the browser, in a CLI and on a server.
+
+> **Analogy:** one engine, different bodies. The same motor goes into a car and a boat — only the mounting changes.
+
+:: code
+The core of Conway's Game of Life: pure logic you can later hand to the browser through wasm-bindgen.
+```rust
+#[derive(Clone, PartialEq)]
+pub struct World {
+    w: usize,
+    h: usize,
+    cells: Vec<bool>,
+}
+
+impl World {
+    pub fn from_str(rows: &[&str]) -> World {
+        let h = rows.len();
+        let w = rows[0].len();
+        let cells = rows.iter().flat_map(|r| r.chars().map(|c| c == '#')).collect();
+        World { w, h, cells }
+    }
+
+    fn alive(&self, x: isize, y: isize) -> bool {
+        let x = x.rem_euclid(self.w as isize) as usize;
+        let y = y.rem_euclid(self.h as isize) as usize;
+        self.cells[y * self.w + x]
+    }
+
+    pub fn step(&self) -> World {
+        let mut next = self.clone();
+        for y in 0..self.h {
+            for x in 0..self.w {
+                let mut n = 0;
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        if (dx, dy) != (0, 0) && self.alive(x as isize + dx, y as isize + dy) {
+                            n += 1;
+                        }
+                    }
+                }
+                let me = self.cells[y * self.w + x];
+                next.cells[y * self.w + x] = matches!((me, n), (true, 2) | (_, 3));
+            }
+        }
+        next
+    }
+
+    pub fn render(&self) -> String {
+        self.cells.chunks(self.w).map(|r| r.iter().map(|&c| if c { '#' } else { '.' }).collect::<String>()).collect::<Vec<_>>().join("\n")
+    }
+}
+
+fn main() {
+    let w = World::from_str(&[".....", "..#..", "..#..", "..#..", "....."]);
+    println!("{}\n", w.render());
+    println!("{}", w.step().render());
+}
+```
+```out
+.....
+..#..
+..#..
+..#..
+.....
+
+.....
+.....
+.###.
+.....
+.....
+```
+The "blinker": a vertical bar becomes horizontal. The same `World` can be wrapped in `#[wasm_bindgen]` and drawn on a canvas.
+
+:: quiz
+Why separate the core from the `#[wasm_bindgen]` glue?
+[x] The core can be tested with plain `cargo test` and works everywhere, not only in the browser => Right.
+[ ] wasm-bindgen can't handle structs => It can; that's not the reason.
+[ ] It makes the `.wasm` file smaller => The size is about the same; the gain is in code structure.
+
+:: homework Life in the browser
+Run the core from the lesson in a real browser.
+
+1. Install the target and a build tool:
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+```
+(If `wasm-pack` isn't available, `cargo install wasm-bindgen-cli` with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen`, or the `trunk` bundler, work too.)
+2. `cargo new --lib life && cd life`; in `Cargo.toml`: `crate-type = ["cdylib", "rlib"]` and a `wasm-bindgen` dependency.
+3. Move `World` into `src/lib.rs` and add a `#[wasm_bindgen] pub struct Life` wrapper with `new`, `tick`, `render` methods.
+4. Build: `wasm-pack build --target web`.
+5. Make an `index.html` that imports `pkg/life.js`, calls `tick` on a timer and puts `render()` into a `<pre>`.
+6. Open it through a local server (`python3 -m http.server`), not by double-clicking the file.
+[ ] The build creates a `pkg` folder with `.wasm` and `.js`
+[ ] The pattern changes every step in the browser
+[ ] The `World` core is covered by ordinary tests (`cargo test`), no browser
+
+:: recap
+- wasm is a format for the browser; Rust builds into it.
+- wasm-bindgen connects Rust and JavaScript.
+- Core separate, glue separate: the core is testable and reusable.
+
+## LESSON x11-p | Practice: the web | 25 | practice
+:: goals
+- Build a router, a JSON handler and a request limiter
+
+:: task
+A router with parameters: the template `/users/{id}/posts/{post}` and the path `/users/7/posts/42` give `Some([("id", "7"), ("post", "42")])`. No match — `None`.
+```rust
+fn route<'a>(pattern: &'a str, path: &'a str) -> Option<Vec<(&'a str, &'a str)>> {
+    // your code
+}
+
+fn main() {
+    println!("{:?}", route("/users/{id}/posts/{post}", "/users/7/posts/42"));
+    println!("{:?}", route("/users/{id}", "/users/7/posts"));
+    println!("{:?}", route("/about", "/about"));
+    println!("{:?}", route("/about", "/contacts"));
+}
+```
+```solution
+fn route<'a>(pattern: &'a str, path: &'a str) -> Option<Vec<(&'a str, &'a str)>> {
+    let pat: Vec<&str> = pattern.split('/').collect();
+    let got: Vec<&str> = path.split('/').collect();
+    if pat.len() != got.len() {
+        return None;
+    }
+    let mut params = Vec::new();
+    for (p, g) in pat.iter().zip(got.iter()) {
+        if let Some(name) = p.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+            params.push((name, *g));
+        } else if p != g {
+            return None;
+        }
+    }
+    Some(params)
+}
+
+fn main() {
+    println!("{:?}", route("/users/{id}/posts/{post}", "/users/7/posts/42"));
+    println!("{:?}", route("/users/{id}", "/users/7/posts"));
+    println!("{:?}", route("/about", "/about"));
+    println!("{:?}", route("/about", "/contacts"));
+}
+```
+```expect
+Some([("id", "7"), ("post", "42")])
+None
+Some([])
+None
+```
+hint: Split the template and the path on `/`. A different number of parts — `None` right away.
+hint: A part like `{name}` is a parameter (`strip_prefix('{')` + `strip_suffix('}')`); otherwise the parts must match.
+
+:: task
+A JSON handler without a framework: `handle(body: &str) -> (u16, String)` takes JSON `{"title": ..., "year": ...}`. Bad JSON — `400`, a year in the future (> 2026) — `422`, otherwise `201` and the JSON of the created book with `id: 1`.
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct NewBook {
+    title: String,
+    year: u32,
+}
+
+#[derive(Serialize)]
+struct Book {
+    id: u32,
+    title: String,
+    year: u32,
+}
+
+fn handle(body: &str) -> (u16, String) {
+    // your code
+}
+
+fn main() {
+    for body in [r#"{"title":"Dune","year":1965}"#, r#"{"title":"X","year":3000}"#, "not json"] {
+        let (code, out) = handle(body);
+        println!("{code} {out}");
+    }
+}
+```
+```solution
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct NewBook {
+    title: String,
+    year: u32,
+}
+
+#[derive(Serialize)]
+struct Book {
+    id: u32,
+    title: String,
+    year: u32,
+}
+
+fn handle(body: &str) -> (u16, String) {
+    let new: NewBook = match serde_json::from_str(body) {
+        Ok(b) => b,
+        Err(_) => return (400, String::from(r#"{"error":"bad json"}"#)),
+    };
+    if new.year > 2026 {
+        return (422, String::from(r#"{"error":"year in the future"}"#));
+    }
+    let book = Book { id: 1, title: new.title, year: new.year };
+    (201, serde_json::to_string(&book).unwrap())
+}
+
+fn main() {
+    for body in [r#"{"title":"Dune","year":1965}"#, r#"{"title":"X","year":3000}"#, "not json"] {
+        let (code, out) = handle(body);
+        println!("{code} {out}");
+    }
+}
+```
+crates: yes
+```expect
+201 {"id":1,"title":"Dune","year":1965}
+422 {"error":"year in the future"}
+400 {"error":"bad json"}
+```
+hint: `serde_json::from_str::<NewBook>(body)` returns a `Result`. An error — `400`.
+hint: The response: `serde_json::to_string(&book)`.
+
+:: task
+A token-bucket request limiter: the bucket holds up to `cap` tokens, and `rate` are added every second. A request takes a token; no token — refused. Time is passed as a number of seconds so the check is exact.
+```rust
+struct Bucket {
+    cap: f64,
+    rate: f64,
+    tokens: f64,
+    last: f64,
+}
+
+impl Bucket {
+    fn new(cap: f64, rate: f64) -> Self {
+        Bucket { cap, rate, tokens: cap, last: 0.0 }
+    }
+    fn allow(&mut self, now: f64) -> bool {
+        // your code
+    }
+}
+
+fn main() {
+    let mut b = Bucket::new(2.0, 1.0);
+    let times = [0.0, 0.1, 0.2, 1.2, 1.3, 5.0, 5.0, 5.0];
+    let res: Vec<bool> = times.iter().map(|&t| b.allow(t)).collect();
+    println!("{res:?}");
+}
+```
+```solution
+struct Bucket {
+    cap: f64,
+    rate: f64,
+    tokens: f64,
+    last: f64,
+}
+
+impl Bucket {
+    fn new(cap: f64, rate: f64) -> Self {
+        Bucket { cap, rate, tokens: cap, last: 0.0 }
+    }
+    fn allow(&mut self, now: f64) -> bool {
+        self.tokens = (self.tokens + (now - self.last) * self.rate).min(self.cap);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+fn main() {
+    let mut b = Bucket::new(2.0, 1.0);
+    let times = [0.0, 0.1, 0.2, 1.2, 1.3, 5.0, 5.0, 5.0];
+    let res: Vec<bool> = times.iter().map(|&t| b.allow(t)).collect();
+    println!("{res:?}");
+}
+```
+```expect
+[true, true, false, true, false, true, true, false]
+```
+hint: First refill: `tokens = min(cap, tokens + (now - last) * rate)`, and remember `last = now`.
+hint: Tokens ≥ 1 — take one and return `true`.
+
+:: recap
+- A router: compare path parts and collect parameters.
+- A handler is a "body → code + response" function; serde handles the JSON.
+- A token bucket is the classic overload protection (tower has a ready `RateLimitLayer`).
