@@ -1,0 +1,823 @@
+# MODULE x01 | Types, deeper | Const generics, PhantomData, blanket impls, Sized
+
+## LESSON x01-1 | Const generics | 8
+:: goals
+- Make generics over numbers, not just types
+- Write functions for arrays of any length
+
+:: text A number as a type parameter
+Generics can be over a type `<T>`, but also over a **value**: `<const N: usize>`. Then `N` is part of the type, and `Matrix<2>` and `Matrix<3>` are different types.
+
+```rust
+struct Buffer<const N: usize> {
+    data: [u8; N],
+}
+```
+You've seen this already: the array `[T; N]` is exactly a const generic.
+
+> **Analogy:** egg cartons for 6 and for 10. Built the same way, but you can't mix them up: ten eggs don't fit in the six-pack.
+
+:: code
+```rust
+fn sum<const N: usize>(a: [i32; N]) -> i32 {
+    a.iter().sum()
+}
+
+fn first_last<T: Copy, const N: usize>(a: [T; N]) -> Option<(T, T)> {
+    if N == 0 { None } else { Some((a[0], a[N - 1])) }
+}
+
+fn main() {
+    println!("{}", sum([1, 2, 3]));
+    println!("{}", sum([10; 5]));
+    println!("{:?}", first_last(['a', 'b', 'c']));
+    println!("{:?}", first_last::<u8, 0>([]));
+}
+```
+```out
+6
+50
+Some(('a', 'c'))
+None
+```
+`N` is known **at compile time**. `sum` for an array of 3 and of 5 elements are two different copies of the code.
+
+:: text Where it helps
+- Fixed-size vectors and matrices: `Vec3 = Vector<3>`.
+- Heap-free buffers for embedded systems (`heapless::Vec<T, 16>`).
+- Size checks at compile time: the compiler won't let you add a `Vector<3>` and a `Vector<4>`.
+
+:: quiz
+What is `N` in `struct Ring<const N: usize>`?
+[ ] A field of the struct => It's a type parameter; it isn't stored in memory.
+[x] A number that becomes part of the type => Right. `Ring<4>` and `Ring<8>` are different types.
+[ ] A variable you can change => The value is known at compile time and doesn't change.
+
+:: task
+Make `Vector<const N: usize>` with an `[f64; N]` field and a `dot` method that computes the dot product with another vector of **the same** size.
+```rust
+struct Vector<const N: usize>([f64; N]);
+
+impl<const N: usize> Vector<N> {
+    fn dot(&self, other: &Vector<N>) -> f64 {
+        // your code
+    }
+}
+
+fn main() {
+    let a = Vector([1.0, 2.0, 3.0]);
+    let b = Vector([4.0, 5.0, 6.0]);
+    println!("{}", a.dot(&b));
+}
+```
+```solution
+struct Vector<const N: usize>([f64; N]);
+
+impl<const N: usize> Vector<N> {
+    fn dot(&self, other: &Vector<N>) -> f64 {
+        self.0.iter().zip(other.0.iter()).map(|(x, y)| x * y).sum()
+    }
+}
+
+fn main() {
+    let a = Vector([1.0, 2.0, 3.0]);
+    let b = Vector([4.0, 5.0, 6.0]);
+    println!("{}", a.dot(&b));
+}
+```
+```expect
+32
+```
+hint: `self.0.iter().zip(other.0.iter()).map(|(x, y)| x * y).sum()`.
+
+:: task
+The ring buffer `Ring<const N: usize>` keeps the last `N` numbers. Finish `push` (overwrites the oldest) and `items` (returns them from oldest to newest).
+```rust
+struct Ring<const N: usize> {
+    buf: [i32; N],
+    start: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    fn new() -> Self {
+        Ring { buf: [0; N], start: 0, len: 0 }
+    }
+    fn push(&mut self, x: i32) {
+        // your code
+    }
+    fn items(&self) -> Vec<i32> {
+        // your code
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    for x in 1..=5 {
+        r.push(x);
+    }
+    println!("{:?}", r.items());
+}
+```
+```solution
+struct Ring<const N: usize> {
+    buf: [i32; N],
+    start: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    fn new() -> Self {
+        Ring { buf: [0; N], start: 0, len: 0 }
+    }
+    fn push(&mut self, x: i32) {
+        if self.len < N {
+            self.buf[(self.start + self.len) % N] = x;
+            self.len += 1;
+        } else {
+            self.buf[self.start] = x;
+            self.start = (self.start + 1) % N;
+        }
+    }
+    fn items(&self) -> Vec<i32> {
+        (0..self.len).map(|i| self.buf[(self.start + i) % N]).collect()
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    for x in 1..=5 {
+        r.push(x);
+    }
+    println!("{:?}", r.items());
+}
+```
+```expect
+[3, 4, 5]
+```
+hint: While the buffer isn't full, write at `(start + len) % N` and increase `len`.
+hint: When it's full, write at `start` (the oldest) and move `start` by one.
+
+:: recap
+- `<const N: usize>` — a generic over a number. `N` is part of the type.
+- Functions for arrays of any length: `fn f<const N: usize>(a: [T; N])`.
+- Sizes are checked at compile time.
+
+## LESSON x01-2 | PhantomData and marker types | 8
+:: goals
+- Tag a type with information that isn't in the data
+- Make units of measure that can't be mixed up
+
+:: text Same data, different meaning
+`Distance<Meters>` and `Distance<Feet>` both hold the same `f64` inside. But you can't add them together.
+
+The `Unit` parameter isn't used in the data. The compiler doesn't like that: "parameter is never used". That's what `PhantomData<Unit>` is for — a zero-size field that says "this type is sort of here".
+
+> **Analogy:** colored stickers on identical jars. Same jar, but red is for spices and blue is for grains.
+
+:: code
+```rust
+use std::marker::PhantomData;
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy)]
+struct Meters;
+#[derive(Debug, Clone, Copy)]
+struct Feet;
+
+#[derive(Debug, Clone, Copy)]
+struct Distance<U> {
+    value: f64,
+    unit: PhantomData<U>,
+}
+
+impl<U> Distance<U> {
+    fn new(value: f64) -> Self {
+        Distance { value, unit: PhantomData }
+    }
+}
+
+impl<U> Add for Distance<U> {
+    type Output = Distance<U>;
+    fn add(self, o: Self) -> Self {
+        Distance::new(self.value + o.value)
+    }
+}
+
+fn main() {
+    let a: Distance<Meters> = Distance::new(5.0);
+    let b: Distance<Meters> = Distance::new(2.5);
+    println!("{}", (a + b).value);
+    println!("{}", std::mem::size_of::<Distance<Feet>>());
+    // let c: Distance<Feet> = Distance::new(1.0);
+    // a + c; // error: different units
+}
+```
+```out
+7.5
+8
+```
+`Distance<Feet>` is 8 bytes, like a single `f64`. The marker weighs nothing.
+
+:: quiz
+How much memory does a `PhantomData<T>` field take?
+[x] Zero bytes => Right. It's only information for the compiler.
+[ ] As much as `T` => No, `T` isn't stored there.
+[ ] One pointer => There's no pointer at all.
+
+:: task
+Add a `to_feet` method to `Distance<Meters>` that returns a `Distance<Feet>` (1 m = 3.28084 ft). The method must exist **only** on meters.
+```rust
+use std::marker::PhantomData;
+
+struct Meters;
+struct Feet;
+
+struct Distance<U> {
+    value: f64,
+    unit: PhantomData<U>,
+}
+
+impl<U> Distance<U> {
+    fn new(value: f64) -> Self {
+        Distance { value, unit: PhantomData }
+    }
+}
+
+// your code
+
+fn main() {
+    let m: Distance<Meters> = Distance::new(10.0);
+    let f: Distance<Feet> = m.to_feet();
+    println!("{:.1}", f.value);
+}
+```
+```solution
+use std::marker::PhantomData;
+
+struct Meters;
+struct Feet;
+
+struct Distance<U> {
+    value: f64,
+    unit: PhantomData<U>,
+}
+
+impl<U> Distance<U> {
+    fn new(value: f64) -> Self {
+        Distance { value, unit: PhantomData }
+    }
+}
+
+impl Distance<Meters> {
+    fn to_feet(&self) -> Distance<Feet> {
+        Distance::new(self.value * 3.28084)
+    }
+}
+
+fn main() {
+    let m: Distance<Meters> = Distance::new(10.0);
+    let f: Distance<Feet> = m.to_feet();
+    println!("{:.1}", f.value);
+}
+```
+```expect
+32.8
+```
+hint: A separate `impl Distance<Meters> { ... }` block — methods only for meters.
+
+:: task
+Typed identifiers: `Id<User>` and `Id<Order>` both hold a `u64`, but can't be mixed up. Finish `Id::new` and the `find_user` function, which accepts only `Id<User>`.
+```rust
+use std::marker::PhantomData;
+
+struct User;
+struct Order;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Id<T> {
+    raw: u64,
+    kind: PhantomData<T>,
+}
+
+impl<T> Id<T> {
+    // your code: fn new(raw: u64) -> Self
+}
+
+fn find_user(id: Id<User>) -> &'static str {
+    // return "Ada" if raw == 1, otherwise "nobody"
+}
+
+fn main() {
+    let u: Id<User> = Id::new(1);
+    let _o: Id<Order> = Id::new(1);
+    println!("{}", find_user(u));
+    println!("{}", find_user(Id::new(7)));
+}
+```
+```solution
+use std::marker::PhantomData;
+
+struct User;
+struct Order;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Id<T> {
+    raw: u64,
+    kind: PhantomData<T>,
+}
+
+impl<T> Id<T> {
+    fn new(raw: u64) -> Self {
+        Id { raw, kind: PhantomData }
+    }
+}
+
+fn find_user(id: Id<User>) -> &'static str {
+    if id.raw == 1 { "Ada" } else { "nobody" }
+}
+
+fn main() {
+    let u: Id<User> = Id::new(1);
+    let _o: Id<Order> = Id::new(1);
+    println!("{}", find_user(u));
+    println!("{}", find_user(Id::new(7)));
+}
+```
+```expect
+Ada
+nobody
+```
+hint: `fn new(raw: u64) -> Self { Id { raw, kind: PhantomData } }`.
+
+:: deep derive and PhantomData: a catch
+`#[derive(Clone, Copy, PartialEq)]` on `Id<T>` requires that **`T` too** is `Clone`/`Copy`/`PartialEq`. Even though `T` isn't stored inside! That's how `derive` works: it adds a bound on every parameter.
+
+So the `Id<User>` from the task won't be `Copy` unless `User` is `Copy`. The workaround is a manual implementation:
+
+```rust
+impl<T> Clone for Id<T> { fn clone(&self) -> Self { *self } }
+impl<T> Copy for Id<T> {}
+```
+Or crates like `derive-where`, where you can state the bounds by hand.
+
+:: recap
+- `PhantomData<T>` is a zero-size type marker.
+- Same data + different markers = different types.
+- `impl Type<Marker>` — methods only for a specific marker.
+
+## LESSON x01-3 | Blanket impls and extension traits | 8
+:: goals
+- Implement a trait for all fitting types at once
+- Add your own methods to other people's types
+
+:: text An implementation "for everyone"
+A **blanket impl** implements a trait for **any** type that meets a condition:
+
+```rust
+impl<T: Display> MyTrait for T { ... }
+```
+The standard library is built this way: `impl<T: Display> ToString for T` — that's why everything that can `Display` has `.to_string()`.
+
+:: text Extension trait
+You can't add a method directly to `str` or `Vec` — they aren't yours. But you can declare **your own** trait with a method and implement it for someone else's type. This is called an **extension trait**:
+
+```rust
+trait Shout {
+    fn shout(&self) -> String;
+}
+impl Shout for str {
+    fn shout(&self) -> String { self.to_uppercase() + "!" }
+}
+// "hello".shout() == "HELLO!"
+```
+The orphan rule isn't broken: the trait is yours.
+
+> **Analogy:** a drill attachment. The drill isn't yours, but the attachment is — and the drill gets a new function.
+
+:: code
+An extension for **every iterator** of numbers — a blanket impl and an extension trait together:
+```rust
+trait Stats: Iterator<Item = i32> + Sized {
+    fn mean(self) -> Option<f64> {
+        let (sum, n) = self.fold((0i64, 0u32), |(s, n), x| (s + x as i64, n + 1));
+        if n == 0 { None } else { Some(sum as f64 / n as f64) }
+    }
+}
+
+impl<I: Iterator<Item = i32>> Stats for I {}
+
+fn main() {
+    println!("{:?}", vec![1, 2, 3, 4].into_iter().mean());
+    println!("{:?}", (1..=10).filter(|x| x % 2 == 0).mean());
+    println!("{:?}", std::iter::empty::<i32>().mean());
+}
+```
+```out
+Some(2.5)
+Some(6.0)
+None
+```
+Now **any** `i32` iterator has `.mean()` — even ones that don't exist yet.
+
+:: quiz
+Why does every type with `Display` have a `.to_string()` method?
+[ ] Someone wrote it by hand for each type => That would be impossible.
+[x] The standard library has a blanket impl of `ToString` for all `T: Display` => Right.
+[ ] The compiler adds it by itself => It's ordinary library code.
+
+:: task
+Make an extension trait `CountWords` with a method `word_count(&self) -> usize` and implement it for `str`.
+```rust
+// your code
+
+fn main() {
+    println!("{}", "  the cat   sat ".word_count());
+    let s = String::from("one two");
+    println!("{}", s.word_count());
+}
+```
+```solution
+trait CountWords {
+    fn word_count(&self) -> usize;
+}
+
+impl CountWords for str {
+    fn word_count(&self) -> usize {
+        self.split_whitespace().count()
+    }
+}
+
+fn main() {
+    println!("{}", "  the cat   sat ".word_count());
+    let s = String::from("one two");
+    println!("{}", s.word_count());
+}
+```
+```expect
+3
+2
+```
+hint: `impl CountWords for str { ... }` — and `String` gets the method too, through `Deref` to `str`.
+
+:: task
+A blanket impl: the `Describe` trait has a method `describe(&self) -> String` that returns `<value> (N chars)`. Implement it for all `T: Display` at once.
+```rust
+use std::fmt::Display;
+
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+// your code
+
+fn main() {
+    println!("{}", 42.describe());
+    println!("{}", "crab".describe());
+}
+```
+```solution
+use std::fmt::Display;
+
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+impl<T: Display> Describe for T {
+    fn describe(&self) -> String {
+        let s = self.to_string();
+        format!("{} ({} chars)", s, s.chars().count())
+    }
+}
+
+fn main() {
+    println!("{}", 42.describe());
+    println!("{}", "crab".describe());
+}
+```
+```expect
+42 (2 chars)
+crab (4 chars)
+```
+hint: `impl<T: Display> Describe for T { ... }`.
+hint: Inside: `let s = self.to_string();` and `s.chars().count()`.
+
+:: recap
+- Blanket impl: `impl<T: Condition> Trait for T`.
+- An extension trait adds methods to other people's types.
+- Together they give methods to whole families of types.
+
+## LESSON x01-4 | Sized and ?Sized | 7
+:: goals
+- Understand what a type without a known size is
+- Write functions that accept `str`, `[T]` and `dyn Trait`
+
+:: text Not every type has a known size
+Most types have a size known at compile time: `i32` is 4 bytes, `String` is 24 bytes. That's the `Sized` trait.
+
+But some types have **no** known size:
+- `str` — a string of any length;
+- `[T]` — a slice of any length;
+- `dyn Trait` — some type with a trait.
+
+You can't put them in a variable directly — only behind a pointer: `&str`, `Box<[T]>`, `&dyn Trait`.
+
+:: text Implicit Sized
+Every `<T>` in a generic really means `<T: Sized>`. The compiler adds it by itself. To allow unsized types as well, you write `?Sized` — "maybe not Sized":
+
+```rust
+fn show<T: Display + ?Sized>(x: &T) { println!("{x}"); }
+```
+Now `show` accepts `&i32`, `&str` and `&dyn Display`.
+
+> **Analogy:** a fixed-size suitcase (`Sized`) versus luggage "of any size, but only on a trolley" (`?Sized` behind a pointer).
+
+:: code
+```rust
+use std::fmt::Display;
+
+fn show<T: Display + ?Sized>(label: &str, x: &T) {
+    println!("{label}: {x} ({} bytes behind the reference)", std::mem::size_of_val(x));
+}
+
+fn main() {
+    show("number", &7u8);
+    show("string", "hello");
+    let d: &dyn Display = &3.5f64;
+    show("dyn", d);
+}
+```
+```out
+number: 7 (1 bytes behind the reference)
+string: hello (5 bytes behind the reference)
+dyn: 3.5 (8 bytes behind the reference)
+```
+`size_of_val` finds the size at run time: the string "hello" is 5 bytes.
+
+:: quiz
+What does `T: ?Sized` mean?
+[ ] `T` definitely has no size => Not "definitely without", but "may be without".
+[x] `T` may be unsized, so it's used only behind a pointer => Right.
+[ ] `T` is always on the heap => Not necessarily: a `&str` can point anywhere.
+
+:: task
+`longest_of` must accept a slice of **anything** that can turn into `&str` (`String`, `&str`) and return the longest length in characters. `print_all` must also accept a `str`. Add the missing bound.
+```rust
+fn longest_of<T: AsRef<str>>(items: &[T]) -> usize {
+    items.iter().map(|s| s.as_ref().chars().count()).max().unwrap_or(0)
+}
+
+fn print_all<T: std::fmt::Display>(items: &T) {
+    println!("{items}");
+}
+
+fn main() {
+    println!("{}", longest_of(&["cat", "crocodile"]));
+    println!("{}", longest_of(&[String::from("ab")]));
+    print_all("an unsized string");
+}
+```
+```solution
+fn longest_of<T: AsRef<str>>(items: &[T]) -> usize {
+    items.iter().map(|s| s.as_ref().chars().count()).max().unwrap_or(0)
+}
+
+fn print_all<T: std::fmt::Display + ?Sized>(items: &T) {
+    println!("{items}");
+}
+
+fn main() {
+    println!("{}", longest_of(&["cat", "crocodile"]));
+    println!("{}", longest_of(&[String::from("ab")]));
+    print_all("an unsized string");
+}
+```
+```expect
+9
+2
+an unsized string
+```
+hint: `print_all("...")` passes a `&str`, so `T = str` — unsized. You need `?Sized`.
+
+:: recap
+- `Sized` — the size is known at compile time. Every `<T>` has it by default.
+- `str`, `[T]`, `dyn Trait` are unsized and live behind a pointer.
+- `T: ?Sized` + `&T` — accept such types too.
+
+## LESSON x01-p | Practice: types | 20 | practice
+:: goals
+- Use const generics, PhantomData, blanket impls and ?Sized
+
+:: task
+A matrix `Matrix<const R: usize, const C: usize>` and its transpose: an `R×C` matrix becomes `C×R`. Finish `transpose`.
+```rust
+#[derive(Debug)]
+struct Matrix<const R: usize, const C: usize>([[i32; C]; R]);
+
+impl<const R: usize, const C: usize> Matrix<R, C> {
+    fn transpose(&self) -> Matrix<C, R> {
+        // your code
+    }
+}
+
+fn main() {
+    let m = Matrix([[1, 2, 3], [4, 5, 6]]);
+    println!("{:?}", m.transpose());
+}
+```
+```solution
+#[derive(Debug)]
+struct Matrix<const R: usize, const C: usize>([[i32; C]; R]);
+
+impl<const R: usize, const C: usize> Matrix<R, C> {
+    fn transpose(&self) -> Matrix<C, R> {
+        let mut out = [[0; R]; C];
+        for r in 0..R {
+            for c in 0..C {
+                out[c][r] = self.0[r][c];
+            }
+        }
+        Matrix(out)
+    }
+}
+
+fn main() {
+    let m = Matrix([[1, 2, 3], [4, 5, 6]]);
+    println!("{:?}", m.transpose());
+}
+```
+```expect
+Matrix([[1, 4], [2, 5], [3, 6]])
+```
+hint: Create `[[0; R]; C]` and copy `out[c][r] = self.0[r][c]`.
+
+:: task
+Money in different currencies: `Money<Usd>` and `Money<Eur>` can't be added together. Implement `Add` only for the same currency, and `Display`, which prints the amount with the currency code from the associated constant `CODE`.
+```rust
+use std::fmt;
+use std::marker::PhantomData;
+use std::ops::Add;
+
+trait Currency {
+    const CODE: &'static str;
+}
+struct Usd;
+struct Eur;
+impl Currency for Usd { const CODE: &'static str = "USD"; }
+impl Currency for Eur { const CODE: &'static str = "EUR"; }
+
+struct Money<C> {
+    cents: i64,
+    cur: PhantomData<C>,
+}
+
+impl<C> Money<C> {
+    fn new(cents: i64) -> Self {
+        Money { cents, cur: PhantomData }
+    }
+}
+
+// your code: Add and Display
+
+fn main() {
+    let a: Money<Usd> = Money::new(1050);
+    let b: Money<Usd> = Money::new(275);
+    println!("{}", a + b);
+    println!("{}", Money::<Eur>::new(99));
+}
+```
+```solution
+use std::fmt;
+use std::marker::PhantomData;
+use std::ops::Add;
+
+trait Currency {
+    const CODE: &'static str;
+}
+struct Usd;
+struct Eur;
+impl Currency for Usd { const CODE: &'static str = "USD"; }
+impl Currency for Eur { const CODE: &'static str = "EUR"; }
+
+struct Money<C> {
+    cents: i64,
+    cur: PhantomData<C>,
+}
+
+impl<C> Money<C> {
+    fn new(cents: i64) -> Self {
+        Money { cents, cur: PhantomData }
+    }
+}
+
+impl<C> Add for Money<C> {
+    type Output = Money<C>;
+    fn add(self, o: Self) -> Self {
+        Money::new(self.cents + o.cents)
+    }
+}
+
+impl<C: Currency> fmt::Display for Money<C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}.{:02} {}", self.cents / 100, self.cents % 100, C::CODE)
+    }
+}
+
+fn main() {
+    let a: Money<Usd> = Money::new(1050);
+    let b: Money<Usd> = Money::new(275);
+    println!("{}", a + b);
+    println!("{}", Money::<Eur>::new(99));
+}
+```
+```expect
+13.25 USD
+0.99 EUR
+```
+hint: `impl<C> Add for Money<C>` — only matching `C`s add up.
+hint: `Display` needs `C: Currency` to read `C::CODE`.
+
+:: task
+An extension trait `ChunkSum` for **all slices** of numbers: the method `chunk_sums(n)` returns the sums of chunks of `n` items. Write a blanket implementation for `[T]` where `T: Copy + std::iter::Sum`.
+```rust
+trait ChunkSum<T> {
+    fn chunk_sums(&self, n: usize) -> Vec<T>;
+}
+
+// your code
+
+fn main() {
+    println!("{:?}", [1, 2, 3, 4, 5].chunk_sums(2));
+    println!("{:?}", vec![0.5, 1.5, 2.0].chunk_sums(3));
+}
+```
+```solution
+trait ChunkSum<T> {
+    fn chunk_sums(&self, n: usize) -> Vec<T>;
+}
+
+impl<T: Copy + std::iter::Sum> ChunkSum<T> for [T] {
+    fn chunk_sums(&self, n: usize) -> Vec<T> {
+        self.chunks(n).map(|c| c.iter().copied().sum()).collect()
+    }
+}
+
+fn main() {
+    println!("{:?}", [1, 2, 3, 4, 5].chunk_sums(2));
+    println!("{:?}", vec![0.5, 1.5, 2.0].chunk_sums(3));
+}
+```
+```expect
+[3, 7, 5]
+[4.0]
+```
+hint: `impl<T: Copy + std::iter::Sum> ChunkSum<T> for [T]`.
+hint: `self.chunks(n).map(|c| c.iter().copied().sum()).collect()`.
+
+:: task
+`print_ref` prints any value, including unsized ones and `dyn Display`. Fix its signature so every call compiles.
+```rust
+use std::fmt::Display;
+
+fn print_ref<T: Display>(x: &T) {
+    println!("> {x}");
+}
+
+fn main() {
+    print_ref(&5);
+    print_ref("str");
+    let items: Vec<Box<dyn Display>> = vec![Box::new(1.5), Box::new("two")];
+    for it in &items {
+        print_ref(it.as_ref());
+    }
+}
+```
+```solution
+use std::fmt::Display;
+
+fn print_ref<T: Display + ?Sized>(x: &T) {
+    println!("> {x}");
+}
+
+fn main() {
+    print_ref(&5);
+    print_ref("str");
+    let items: Vec<Box<dyn Display>> = vec![Box::new(1.5), Box::new("two")];
+    for it in &items {
+        print_ref(it.as_ref());
+    }
+}
+```
+```expect
+> 5
+> str
+> 1.5
+> two
+```
+hint: Both `str` and `dyn Display` are unsized. Add `?Sized`.
+
+:: recap
+- Constants in types — sizes checked at compile time.
+- `PhantomData` + associated constants — markers that carry data for printing.
+- A blanket impl for `[T]` — methods for every slice.
+- `?Sized` — accept `str` and `dyn Trait`.

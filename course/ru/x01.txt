@@ -1,0 +1,823 @@
+# MODULE x01 | Типы глубже | Константы в обобщениях, PhantomData, blanket impl, Sized
+
+## LESSON x01-1 | Константные обобщения | 8
+:: goals
+- Делать обобщения не только по типу, но и по числу
+- Писать функции для массивов любой длины
+
+:: text Число как параметр типа
+Обобщения бывают не только по типу `<T>`, но и по **значению**: `<const N: usize>`. Тогда `N` — часть типа, и `Matrix<2>` и `Matrix<3>` — разные типы.
+
+```rust
+struct Buffer<const N: usize> {
+    data: [u8; N],
+}
+```
+Ты уже это видел: массив `[T; N]` — как раз константное обобщение.
+
+> **Аналогия:** коробки для яиц на 6 и на 10. Устроены одинаково, но перепутать нельзя: в коробку на 6 десяток не положишь.
+
+:: code
+```rust
+fn sum<const N: usize>(a: [i32; N]) -> i32 {
+    a.iter().sum()
+}
+
+fn first_last<T: Copy, const N: usize>(a: [T; N]) -> Option<(T, T)> {
+    if N == 0 { None } else { Some((a[0], a[N - 1])) }
+}
+
+fn main() {
+    println!("{}", sum([1, 2, 3]));
+    println!("{}", sum([10; 5]));
+    println!("{:?}", first_last(['a', 'b', 'c']));
+    println!("{:?}", first_last::<u8, 0>([]));
+}
+```
+```out
+6
+50
+Some(('a', 'c'))
+None
+```
+`N` известен **при компиляции**. Функция `sum` для массива из 3 и из 5 элементов — это две разные копии кода.
+
+:: text Где пригождается
+- Векторы и матрицы фиксированного размера: `Vec3 = Vector<3>`.
+- Буферы без кучи для встраиваемых систем (`heapless::Vec<T, 16>`).
+- Проверка размеров при компиляции: сложить `Vector<3>` и `Vector<4>` не даст компилятор.
+
+:: quiz
+Что такое `N` в `struct Ring<const N: usize>`?
+[ ] Поле структуры => Это параметр типа, в памяти его нет.
+[x] Число, которое становится частью типа => Верно. `Ring<4>` и `Ring<8>` — разные типы.
+[ ] Переменная, которую можно менять => Значение известно при компиляции и не меняется.
+
+:: task
+Сделай `Vector<const N: usize>` с полем `[f64; N]` и метод `dot`, который считает скалярное произведение с другим вектором **того же** размера.
+```rust
+struct Vector<const N: usize>([f64; N]);
+
+impl<const N: usize> Vector<N> {
+    fn dot(&self, other: &Vector<N>) -> f64 {
+        // твой код
+    }
+}
+
+fn main() {
+    let a = Vector([1.0, 2.0, 3.0]);
+    let b = Vector([4.0, 5.0, 6.0]);
+    println!("{}", a.dot(&b));
+}
+```
+```solution
+struct Vector<const N: usize>([f64; N]);
+
+impl<const N: usize> Vector<N> {
+    fn dot(&self, other: &Vector<N>) -> f64 {
+        self.0.iter().zip(other.0.iter()).map(|(x, y)| x * y).sum()
+    }
+}
+
+fn main() {
+    let a = Vector([1.0, 2.0, 3.0]);
+    let b = Vector([4.0, 5.0, 6.0]);
+    println!("{}", a.dot(&b));
+}
+```
+```expect
+32
+```
+hint: `self.0.iter().zip(other.0.iter()).map(|(x, y)| x * y).sum()`.
+
+:: task
+Кольцевой буфер `Ring<const N: usize>` хранит последние `N` чисел. Допиши `push` (перезаписывает самое старое) и `items` (возвращает от старого к новому).
+```rust
+struct Ring<const N: usize> {
+    buf: [i32; N],
+    start: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    fn new() -> Self {
+        Ring { buf: [0; N], start: 0, len: 0 }
+    }
+    fn push(&mut self, x: i32) {
+        // твой код
+    }
+    fn items(&self) -> Vec<i32> {
+        // твой код
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    for x in 1..=5 {
+        r.push(x);
+    }
+    println!("{:?}", r.items());
+}
+```
+```solution
+struct Ring<const N: usize> {
+    buf: [i32; N],
+    start: usize,
+    len: usize,
+}
+
+impl<const N: usize> Ring<N> {
+    fn new() -> Self {
+        Ring { buf: [0; N], start: 0, len: 0 }
+    }
+    fn push(&mut self, x: i32) {
+        if self.len < N {
+            self.buf[(self.start + self.len) % N] = x;
+            self.len += 1;
+        } else {
+            self.buf[self.start] = x;
+            self.start = (self.start + 1) % N;
+        }
+    }
+    fn items(&self) -> Vec<i32> {
+        (0..self.len).map(|i| self.buf[(self.start + i) % N]).collect()
+    }
+}
+
+fn main() {
+    let mut r: Ring<3> = Ring::new();
+    for x in 1..=5 {
+        r.push(x);
+    }
+    println!("{:?}", r.items());
+}
+```
+```expect
+[3, 4, 5]
+```
+hint: Пока буфер не полон — пиши в `(start + len) % N` и увеличивай `len`.
+hint: Когда полон — пиши на место `start` (самое старое) и сдвигай `start` на один.
+
+:: recap
+- `<const N: usize>` — обобщение по числу. `N` — часть типа.
+- Функции для массивов любой длины: `fn f<const N: usize>(a: [T; N])`.
+- Размеры проверяются при компиляции.
+
+## LESSON x01-2 | PhantomData и типы-метки | 8
+:: goals
+- Пометить тип информацией, которой нет в данных
+- Сделать единицы измерения, которые нельзя перепутать
+
+:: text Данные одни, смысл разный
+`Distance<Meters>` и `Distance<Feet>` — внутри одно и то же число `f64`. Но складывать их нельзя.
+
+Параметр `Unit` в данных не используется. Компилятор такого не любит: «параметр не используется». Для этого есть `PhantomData<Unit>` — поле нулевого размера, которое говорит: «этот тип как бы тут есть».
+
+> **Аналогия:** цветная наклейка на одинаковых банках. Банка та же, но красная — для специй, синяя — для круп.
+
+:: code
+```rust
+use std::marker::PhantomData;
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy)]
+struct Meters;
+#[derive(Debug, Clone, Copy)]
+struct Feet;
+
+#[derive(Debug, Clone, Copy)]
+struct Distance<U> {
+    value: f64,
+    unit: PhantomData<U>,
+}
+
+impl<U> Distance<U> {
+    fn new(value: f64) -> Self {
+        Distance { value, unit: PhantomData }
+    }
+}
+
+impl<U> Add for Distance<U> {
+    type Output = Distance<U>;
+    fn add(self, o: Self) -> Self {
+        Distance::new(self.value + o.value)
+    }
+}
+
+fn main() {
+    let a: Distance<Meters> = Distance::new(5.0);
+    let b: Distance<Meters> = Distance::new(2.5);
+    println!("{}", (a + b).value);
+    println!("{}", std::mem::size_of::<Distance<Feet>>());
+    // let c: Distance<Feet> = Distance::new(1.0);
+    // a + c; // ошибка: разные единицы
+}
+```
+```out
+7.5
+8
+```
+Размер `Distance<Feet>` — 8 байт, как у одного `f64`. Метка ничего не весит.
+
+:: quiz
+Сколько памяти занимает поле `PhantomData<T>`?
+[x] Ноль байт => Верно. Это только информация для компилятора.
+[ ] Столько же, сколько `T` => Нет, `T` там не хранится.
+[ ] Один указатель => Никакого указателя нет.
+
+:: task
+Добавь метод `to_feet` для `Distance<Meters>`, который возвращает `Distance<Feet>` (1 м = 3.28084 фута). Метод должен быть **только** у метров.
+```rust
+use std::marker::PhantomData;
+
+struct Meters;
+struct Feet;
+
+struct Distance<U> {
+    value: f64,
+    unit: PhantomData<U>,
+}
+
+impl<U> Distance<U> {
+    fn new(value: f64) -> Self {
+        Distance { value, unit: PhantomData }
+    }
+}
+
+// твой код
+
+fn main() {
+    let m: Distance<Meters> = Distance::new(10.0);
+    let f: Distance<Feet> = m.to_feet();
+    println!("{:.1}", f.value);
+}
+```
+```solution
+use std::marker::PhantomData;
+
+struct Meters;
+struct Feet;
+
+struct Distance<U> {
+    value: f64,
+    unit: PhantomData<U>,
+}
+
+impl<U> Distance<U> {
+    fn new(value: f64) -> Self {
+        Distance { value, unit: PhantomData }
+    }
+}
+
+impl Distance<Meters> {
+    fn to_feet(&self) -> Distance<Feet> {
+        Distance::new(self.value * 3.28084)
+    }
+}
+
+fn main() {
+    let m: Distance<Meters> = Distance::new(10.0);
+    let f: Distance<Feet> = m.to_feet();
+    println!("{:.1}", f.value);
+}
+```
+```expect
+32.8
+```
+hint: Отдельный блок `impl Distance<Meters> { ... }` — методы только для метров.
+
+:: task
+Типизированные идентификаторы: `Id<User>` и `Id<Order>` — оба внутри `u64`, но перепутать их нельзя. Допиши `Id::new` и функцию `find_user`, которая принимает только `Id<User>`.
+```rust
+use std::marker::PhantomData;
+
+struct User;
+struct Order;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Id<T> {
+    raw: u64,
+    kind: PhantomData<T>,
+}
+
+impl<T> Id<T> {
+    // твой код: fn new(raw: u64) -> Self
+}
+
+fn find_user(id: Id<User>) -> &'static str {
+    // вернуть "Ада", если raw == 1, иначе "никто"
+}
+
+fn main() {
+    let u: Id<User> = Id::new(1);
+    let _o: Id<Order> = Id::new(1);
+    println!("{}", find_user(u));
+    println!("{}", find_user(Id::new(7)));
+}
+```
+```solution
+use std::marker::PhantomData;
+
+struct User;
+struct Order;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Id<T> {
+    raw: u64,
+    kind: PhantomData<T>,
+}
+
+impl<T> Id<T> {
+    fn new(raw: u64) -> Self {
+        Id { raw, kind: PhantomData }
+    }
+}
+
+fn find_user(id: Id<User>) -> &'static str {
+    if id.raw == 1 { "Ада" } else { "никто" }
+}
+
+fn main() {
+    let u: Id<User> = Id::new(1);
+    let _o: Id<Order> = Id::new(1);
+    println!("{}", find_user(u));
+    println!("{}", find_user(Id::new(7)));
+}
+```
+```expect
+Ада
+никто
+```
+hint: `fn new(raw: u64) -> Self { Id { raw, kind: PhantomData } }`.
+
+:: deep derive и PhantomData: подвох
+`#[derive(Clone, Copy, PartialEq)]` для `Id<T>` требует, чтобы **`T` тоже** был `Clone`/`Copy`/`PartialEq`. Хотя `T` внутри даже не хранится! Так устроен `derive`: он добавляет ограничение на каждый параметр.
+
+Поэтому `Id<User>` из задачи не будет `Copy`, если `User` не `Copy`. Обходят это ручной реализацией:
+
+```rust
+impl<T> Clone for Id<T> { fn clone(&self) -> Self { *self } }
+impl<T> Copy for Id<T> {}
+```
+Или крейтами вроде `derive-where`, где можно указать ограничения вручную.
+
+:: recap
+- `PhantomData<T>` — метка типа нулевого размера.
+- Одинаковые данные + разные метки = разные типы.
+- `impl Тип<Метка>` — методы только для конкретной метки.
+
+## LESSON x01-3 | Blanket impl и трейты-расширения | 8
+:: goals
+- Реализовать трейт сразу для всех подходящих типов
+- Добавить свои методы чужим типам
+
+:: text Реализация «для всех»
+**Blanket impl** — реализация трейта для **любого** типа, который удовлетворяет условию:
+
+```rust
+impl<T: Display> MyTrait for T { ... }
+```
+Так устроена стандартная библиотека: `impl<T: Display> ToString for T` — поэтому у всего, что умеет `Display`, есть `.to_string()`.
+
+:: text Трейт-расширение
+Нельзя добавить метод прямо в `str` или `Vec` — они чужие. Но можно объявить **свой** трейт с методом и реализовать его для чужого типа. Это называют **extension trait**:
+
+```rust
+trait Shout {
+    fn shout(&self) -> String;
+}
+impl Shout for str {
+    fn shout(&self) -> String { self.to_uppercase() + "!" }
+}
+// "привет".shout() == "ПРИВЕТ!"
+```
+Правило сироты не нарушено: трейт — твой.
+
+> **Аналогия:** насадка на дрель. Дрель чужая, но насадка твоя — и у дрели появилась новая функция.
+
+:: code
+Расширение для **всех итераторов** чисел — blanket impl + extension trait вместе:
+```rust
+trait Stats: Iterator<Item = i32> + Sized {
+    fn mean(self) -> Option<f64> {
+        let (sum, n) = self.fold((0i64, 0u32), |(s, n), x| (s + x as i64, n + 1));
+        if n == 0 { None } else { Some(sum as f64 / n as f64) }
+    }
+}
+
+impl<I: Iterator<Item = i32>> Stats for I {}
+
+fn main() {
+    println!("{:?}", vec![1, 2, 3, 4].into_iter().mean());
+    println!("{:?}", (1..=10).filter(|x| x % 2 == 0).mean());
+    println!("{:?}", std::iter::empty::<i32>().mean());
+}
+```
+```out
+Some(2.5)
+Some(6.0)
+None
+```
+Теперь `.mean()` есть у **любого** итератора чисел `i32` — даже у тех, что появятся позже.
+
+:: quiz
+Почему у любого типа с `Display` есть метод `.to_string()`?
+[ ] Его вручную написали для каждого типа => Это было бы невозможно.
+[x] В стандартной библиотеке есть blanket impl `ToString` для всех `T: Display` => Верно.
+[ ] Компилятор добавляет его сам => Это обычный код библиотеки.
+
+:: task
+Сделай трейт-расширение `CountWords` с методом `word_count(&self) -> usize` и реализуй его для `str`.
+```rust
+// твой код
+
+fn main() {
+    println!("{}", "  мама мыла   раму ".word_count());
+    let s = String::from("one two");
+    println!("{}", s.word_count());
+}
+```
+```solution
+trait CountWords {
+    fn word_count(&self) -> usize;
+}
+
+impl CountWords for str {
+    fn word_count(&self) -> usize {
+        self.split_whitespace().count()
+    }
+}
+
+fn main() {
+    println!("{}", "  мама мыла   раму ".word_count());
+    let s = String::from("one two");
+    println!("{}", s.word_count());
+}
+```
+```expect
+3
+2
+```
+hint: `impl CountWords for str { ... }` — и `String` тоже получит метод: через `Deref` к `str`.
+
+:: task
+Blanket impl: трейт `Describe` с методом `describe(&self) -> String`, который возвращает `<значение> (N символов)`. Реализуй его сразу для всех `T: Display`.
+```rust
+use std::fmt::Display;
+
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+// твой код
+
+fn main() {
+    println!("{}", 42.describe());
+    println!("{}", "краб".describe());
+}
+```
+```solution
+use std::fmt::Display;
+
+trait Describe {
+    fn describe(&self) -> String;
+}
+
+impl<T: Display> Describe for T {
+    fn describe(&self) -> String {
+        let s = self.to_string();
+        format!("{} ({} символов)", s, s.chars().count())
+    }
+}
+
+fn main() {
+    println!("{}", 42.describe());
+    println!("{}", "краб".describe());
+}
+```
+```expect
+42 (2 символов)
+краб (4 символов)
+```
+hint: `impl<T: Display> Describe for T { ... }`.
+hint: Внутри: `let s = self.to_string();` и `s.chars().count()`.
+
+:: recap
+- Blanket impl: `impl<T: Условие> Трейт for T`.
+- Трейт-расширение добавляет методы чужим типам.
+- Вместе они дают методы целым семействам типов.
+
+## LESSON x01-4 | Sized и ?Sized | 7
+:: goals
+- Понять, что такое тип без известного размера
+- Писать функции, которые принимают и `str`, и `[T]`, и `dyn Trait`
+
+:: text Не у всех типов известен размер
+Большинство типов имеют размер, известный при компиляции: `i32` — 4 байта, `String` — 24 байта. Это трейт `Sized`.
+
+Но есть типы **без** известного размера:
+- `str` — строка любой длины;
+- `[T]` — срез любой длины;
+- `dyn Trait` — какой-то тип с трейтом.
+
+Их нельзя положить в переменную напрямую — только за указателем: `&str`, `Box<[T]>`, `&dyn Trait`.
+
+:: text Неявное Sized
+Каждый `<T>` в обобщении на самом деле значит `<T: Sized>`. Компилятор добавляет это сам. Чтобы разрешить и безразмерные типы, пишут `?Sized` — «может быть и не Sized»:
+
+```rust
+fn show<T: Display + ?Sized>(x: &T) { println!("{x}"); }
+```
+Теперь `show` принимает и `&i32`, и `&str`, и `&dyn Display`.
+
+> **Аналогия:** чемодан с фиксированным размером (`Sized`) и багаж «любого размера, но только на тележке» (`?Sized` за указателем).
+
+:: code
+```rust
+use std::fmt::Display;
+
+fn show<T: Display + ?Sized>(label: &str, x: &T) {
+    println!("{label}: {x} ({} байт за ссылкой)", std::mem::size_of_val(x));
+}
+
+fn main() {
+    show("число", &7u8);
+    show("строка", "привет");
+    let d: &dyn Display = &3.5f64;
+    show("dyn", d);
+}
+```
+```out
+число: 7 (1 байт за ссылкой)
+строка: привет (12 байт за ссылкой)
+dyn: 3.5 (8 байт за ссылкой)
+```
+`size_of_val` узнаёт размер во время работы: строка «привет» — 12 байт.
+
+:: quiz
+Что значит `T: ?Sized`?
+[ ] `T` точно без размера => Не «точно без», а «может быть и без».
+[x] `T` может быть безразмерным, поэтому его используют только за указателем => Верно.
+[ ] `T` всегда в куче => Не обязательно: `&str` может указывать куда угодно.
+
+:: task
+Функция `longest_of` должна принимать срез **чего угодно**, что можно превратить в `&str` (`String`, `&str`), и возвращать самую длинную длину в символах. Добавь нужное ограничение.
+```rust
+fn longest_of<T: AsRef<str>>(items: &[T]) -> usize {
+    items.iter().map(|s| s.as_ref().chars().count()).max().unwrap_or(0)
+}
+
+fn print_all<T: std::fmt::Display>(items: &T) {
+    println!("{items}");
+}
+
+fn main() {
+    println!("{}", longest_of(&["кот", "крокодил"]));
+    println!("{}", longest_of(&[String::from("ab")]));
+    print_all("строка без размера");
+}
+```
+```solution
+fn longest_of<T: AsRef<str>>(items: &[T]) -> usize {
+    items.iter().map(|s| s.as_ref().chars().count()).max().unwrap_or(0)
+}
+
+fn print_all<T: std::fmt::Display + ?Sized>(items: &T) {
+    println!("{items}");
+}
+
+fn main() {
+    println!("{}", longest_of(&["кот", "крокодил"]));
+    println!("{}", longest_of(&[String::from("ab")]));
+    print_all("строка без размера");
+}
+```
+```expect
+8
+2
+строка без размера
+```
+hint: `print_all("...")` передаёт `&str`, значит `T = str` — безразмерный. Нужен `?Sized`.
+
+:: recap
+- `Sized` — размер известен при компиляции. По умолчанию у каждого `<T>`.
+- `str`, `[T]`, `dyn Trait` — безразмерные, живут за указателем.
+- `T: ?Sized` + `&T` — принимать и такие типы.
+
+## LESSON x01-p | Практика: типы | 20 | practice
+:: goals
+- Применить const generics, PhantomData, blanket impl и ?Sized
+
+:: task
+Матрица `Matrix<const R: usize, const C: usize>` и транспонирование: из `R×C` получается `C×R`. Допиши `transpose`.
+```rust
+#[derive(Debug)]
+struct Matrix<const R: usize, const C: usize>([[i32; C]; R]);
+
+impl<const R: usize, const C: usize> Matrix<R, C> {
+    fn transpose(&self) -> Matrix<C, R> {
+        // твой код
+    }
+}
+
+fn main() {
+    let m = Matrix([[1, 2, 3], [4, 5, 6]]);
+    println!("{:?}", m.transpose());
+}
+```
+```solution
+#[derive(Debug)]
+struct Matrix<const R: usize, const C: usize>([[i32; C]; R]);
+
+impl<const R: usize, const C: usize> Matrix<R, C> {
+    fn transpose(&self) -> Matrix<C, R> {
+        let mut out = [[0; R]; C];
+        for r in 0..R {
+            for c in 0..C {
+                out[c][r] = self.0[r][c];
+            }
+        }
+        Matrix(out)
+    }
+}
+
+fn main() {
+    let m = Matrix([[1, 2, 3], [4, 5, 6]]);
+    println!("{:?}", m.transpose());
+}
+```
+```expect
+Matrix([[1, 4], [2, 5], [3, 6]])
+```
+hint: Создай `[[0; R]; C]` и перенеси `out[c][r] = self.0[r][c]`.
+
+:: task
+Деньги в разных валютах: `Money<Usd>` и `Money<Eur>` нельзя складывать между собой. Реализуй `Add` только для одинаковых валют и `Display`, который печатает сумму с кодом валюты из ассоциированной константы `CODE`.
+```rust
+use std::fmt;
+use std::marker::PhantomData;
+use std::ops::Add;
+
+trait Currency {
+    const CODE: &'static str;
+}
+struct Usd;
+struct Eur;
+impl Currency for Usd { const CODE: &'static str = "USD"; }
+impl Currency for Eur { const CODE: &'static str = "EUR"; }
+
+struct Money<C> {
+    cents: i64,
+    cur: PhantomData<C>,
+}
+
+impl<C> Money<C> {
+    fn new(cents: i64) -> Self {
+        Money { cents, cur: PhantomData }
+    }
+}
+
+// твой код: Add и Display
+
+fn main() {
+    let a: Money<Usd> = Money::new(1050);
+    let b: Money<Usd> = Money::new(275);
+    println!("{}", a + b);
+    println!("{}", Money::<Eur>::new(99));
+}
+```
+```solution
+use std::fmt;
+use std::marker::PhantomData;
+use std::ops::Add;
+
+trait Currency {
+    const CODE: &'static str;
+}
+struct Usd;
+struct Eur;
+impl Currency for Usd { const CODE: &'static str = "USD"; }
+impl Currency for Eur { const CODE: &'static str = "EUR"; }
+
+struct Money<C> {
+    cents: i64,
+    cur: PhantomData<C>,
+}
+
+impl<C> Money<C> {
+    fn new(cents: i64) -> Self {
+        Money { cents, cur: PhantomData }
+    }
+}
+
+impl<C> Add for Money<C> {
+    type Output = Money<C>;
+    fn add(self, o: Self) -> Self {
+        Money::new(self.cents + o.cents)
+    }
+}
+
+impl<C: Currency> fmt::Display for Money<C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}.{:02} {}", self.cents / 100, self.cents % 100, C::CODE)
+    }
+}
+
+fn main() {
+    let a: Money<Usd> = Money::new(1050);
+    let b: Money<Usd> = Money::new(275);
+    println!("{}", a + b);
+    println!("{}", Money::<Eur>::new(99));
+}
+```
+```expect
+13.25 USD
+0.99 EUR
+```
+hint: `impl<C> Add for Money<C>` — складываются только одинаковые `C`.
+hint: В `Display` нужен `C: Currency`, чтобы взять `C::CODE`.
+
+:: task
+Трейт-расширение `ChunkSum` для **всех срезов** чисел: метод `chunk_sums(n)` возвращает суммы кусков по `n` элементов. Сделай blanket-реализацию для `[T]`, где `T: Copy + std::iter::Sum`.
+```rust
+trait ChunkSum<T> {
+    fn chunk_sums(&self, n: usize) -> Vec<T>;
+}
+
+// твой код
+
+fn main() {
+    println!("{:?}", [1, 2, 3, 4, 5].chunk_sums(2));
+    println!("{:?}", vec![0.5, 1.5, 2.0].chunk_sums(3));
+}
+```
+```solution
+trait ChunkSum<T> {
+    fn chunk_sums(&self, n: usize) -> Vec<T>;
+}
+
+impl<T: Copy + std::iter::Sum> ChunkSum<T> for [T] {
+    fn chunk_sums(&self, n: usize) -> Vec<T> {
+        self.chunks(n).map(|c| c.iter().copied().sum()).collect()
+    }
+}
+
+fn main() {
+    println!("{:?}", [1, 2, 3, 4, 5].chunk_sums(2));
+    println!("{:?}", vec![0.5, 1.5, 2.0].chunk_sums(3));
+}
+```
+```expect
+[3, 7, 5]
+[4.0]
+```
+hint: `impl<T: Copy + std::iter::Sum> ChunkSum<T> for [T]`.
+hint: `self.chunks(n).map(|c| c.iter().copied().sum()).collect()`.
+
+:: task
+Функция `log_all` печатает любые значения через `dyn Display`, включая безразмерные. Допиши сигнатуру `print_ref`, чтобы все вызовы скомпилировались.
+```rust
+use std::fmt::Display;
+
+fn print_ref<T: Display>(x: &T) {
+    println!("> {x}");
+}
+
+fn main() {
+    print_ref(&5);
+    print_ref("str");
+    let items: Vec<Box<dyn Display>> = vec![Box::new(1.5), Box::new("два")];
+    for it in &items {
+        print_ref(it.as_ref());
+    }
+}
+```
+```solution
+use std::fmt::Display;
+
+fn print_ref<T: Display + ?Sized>(x: &T) {
+    println!("> {x}");
+}
+
+fn main() {
+    print_ref(&5);
+    print_ref("str");
+    let items: Vec<Box<dyn Display>> = vec![Box::new(1.5), Box::new("два")];
+    for it in &items {
+        print_ref(it.as_ref());
+    }
+}
+```
+```expect
+> 5
+> str
+> 1.5
+> два
+```
+hint: И `str`, и `dyn Display` — безразмерные. Добавь `?Sized`.
+
+:: recap
+- Константы в типах — размеры, проверяемые при компиляции.
+- `PhantomData` + ассоциированные константы — метки с данными для печати.
+- Blanket impl для `[T]` — методы для всех срезов.
+- `?Sized` — принимать `str` и `dyn Trait`.
