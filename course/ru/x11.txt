@@ -1,0 +1,653 @@
+# MODULE x11 | Веб и WebAssembly | HTTP изнутри, tower Service, axum, JSON и Rust в браузере
+
+## LESSON x11-1 | HTTP изнутри | 8
+:: goals
+- Понять, что HTTP — это просто текст
+- Разобрать строку запроса и заголовки руками
+
+:: text Запрос и ответ
+Браузер отправляет серверу **текст**:
+
+```text
+GET /books?limit=2 HTTP/1.1
+Host: example.com
+Accept: application/json
+
+```
+Первая строка — **метод**, **путь** и версия. Потом заголовки «Имя: значение». Пустая строка — конец заголовков, дальше может быть тело.
+
+Сервер отвечает тоже текстом: `HTTP/1.1 200 OK`, заголовки, пустая строка, тело.
+
+Фреймворки (axum, actix) делают это за тебя. Но полезно один раз увидеть, что внутри.
+
+> **Аналогия:** письмо. Сверху адрес и тема, потом пустая строка, потом текст письма.
+
+:: code
+```rust
+use std::collections::BTreeMap;
+
+#[derive(Debug)]
+struct Request<'a> {
+    method: &'a str,
+    path: &'a str,
+    query: Option<&'a str>,
+    headers: BTreeMap<String, &'a str>,
+}
+
+fn parse(raw: &str) -> Option<Request<'_>> {
+    let mut lines = raw.lines();
+    let mut first = lines.next()?.split_whitespace();
+    let method = first.next()?;
+    let target = first.next()?;
+    let (path, query) = match target.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (target, None),
+    };
+    let mut headers = BTreeMap::new();
+    for line in lines.take_while(|l| !l.is_empty()) {
+        let (name, value) = line.split_once(':')?;
+        headers.insert(name.trim().to_ascii_lowercase(), value.trim());
+    }
+    Some(Request { method, path, query, headers })
+}
+
+fn main() {
+    let raw = "GET /books?limit=2 HTTP/1.1\r\nHost: example.com\r\nAccept: application/json\r\n\r\n";
+    let req = parse(raw).unwrap();
+    println!("{} {} {:?}", req.method, req.path, req.query);
+    println!("{:?}", req.headers);
+}
+```
+```out
+GET /books Some("limit=2")
+{"accept": "application/json", "host": "example.com"}
+```
+Имена заголовков не зависят от регистра, поэтому мы приводим их к маленьким буквам.
+
+:: quiz
+Что отделяет заголовки HTTP-запроса от тела?
+[x] Пустая строка => Верно.
+[ ] Слово `BODY` => Такого слова в HTTP нет.
+[ ] Заголовок `Content-Type` => Он говорит, *что* в теле, но не отделяет его.
+
+:: task
+Напиши `parse_query`, который превращает `"limit=2&sort=year&q=rust"` в `BTreeMap<&str, &str>`. Пара без `=` — значение пустое.
+```rust
+use std::collections::BTreeMap;
+
+fn parse_query(q: &str) -> BTreeMap<&str, &str> {
+    // твой код
+}
+
+fn main() {
+    println!("{:?}", parse_query("limit=2&sort=year&q=rust"));
+    println!("{:?}", parse_query("debug&x=1"));
+}
+```
+```solution
+use std::collections::BTreeMap;
+
+fn parse_query(q: &str) -> BTreeMap<&str, &str> {
+    q.split('&')
+        .filter(|p| !p.is_empty())
+        .map(|p| p.split_once('=').unwrap_or((p, "")))
+        .collect()
+}
+
+fn main() {
+    println!("{:?}", parse_query("limit=2&sort=year&q=rust"));
+    println!("{:?}", parse_query("debug&x=1"));
+}
+```
+```expect
+{"limit": "2", "q": "rust", "sort": "year"}
+{"debug": "", "x": "1"}
+```
+hint: `q.split('&')`, для каждой пары — `split_once('=')`, нет `=` — `(p, "")`.
+hint: Итератор пар `(&str, &str)` сразу собирается в `BTreeMap` через `collect`.
+
+:: recap
+- HTTP — текст: строка запроса, заголовки, пустая строка, тело.
+- Путь и параметры разделяет `?`, параметры — `&` и `=`.
+- Фреймворки разбирают это за нас, но устройство полезно знать.
+
+## LESSON x11-2 | tower: всё — это Service | 9
+:: goals
+- Понять трейт `Service`: «запрос → будущий ответ»
+- Сделать обработчик и обёртку-middleware
+
+:: text Service
+Почти весь веб на Rust (axum, hyper, tonic) построен на крейте **tower** и одном трейте:
+
+```rust
+trait Service<Request> {
+    type Response;
+    type Error;
+    type Future: Future<Output = Result<Self::Response, Self::Error>>;
+    fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>>;
+    fn call(&mut self, req: Request) -> Self::Future;
+}
+```
+Смысл простой: **дай запрос — получишь Future с ответом**. `poll_ready` — «готов ли принять ещё запрос» (для ограничения нагрузки).
+
+**Middleware** — это Service, который оборачивает другой Service: логирование, тайм-ауты, повторы, авторизация.
+
+> **Аналогия:** окошко выдачи. Отдал талон — получил «ожидайте». Middleware — охранник перед окошком: проверил, записал, пропустил.
+
+:: code
+```rust
+use std::convert::Infallible;
+use tower::{service_fn, Service, ServiceExt};
+
+async fn handle(path: String) -> Result<String, Infallible> {
+    Ok(match path.as_str() {
+        "/" => String::from("200 главная"),
+        "/about" => String::from("200 о нас"),
+        _ => format!("404 нет страницы {path}"),
+    })
+}
+
+#[tokio::main]
+async fn main() {
+    let mut svc = service_fn(handle);
+    for p in ["/", "/about", "/admin"] {
+        let resp = svc.ready().await.unwrap().call(p.to_string()).await.unwrap();
+        println!("{resp}");
+    }
+    // oneshot: дождаться готовности и вызвать один раз
+    let r = service_fn(handle).oneshot(String::from("/")).await.unwrap();
+    println!("{r}");
+}
+```
+crates: yes
+```out
+200 главная
+200 о нас
+404 нет страницы /admin
+200 главная
+```
+`oneshot` — самый удобный способ проверить обработчик в тесте без сети. Так тестируют и axum.
+
+:: code
+Своя middleware: считает запросы и добавляет номер к ответу.
+```rust
+use std::convert::Infallible;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll};
+use tower::{service_fn, Service, ServiceExt};
+
+struct Counted<S> {
+    inner: S,
+    count: Arc<AtomicU32>,
+}
+
+impl<S> Service<String> for Counted<S>
+where
+    S: Service<String, Response = String>,
+    S::Future: Send + 'static,
+{
+    type Response = String;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<String, S::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), S::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: String) -> Self::Future {
+        let n = self.count.fetch_add(1, Ordering::Relaxed) + 1;
+        let fut = self.inner.call(req);
+        Box::pin(async move {
+            let resp = fut.await?;
+            Ok(format!("#{n} {resp}"))
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let count = Arc::new(AtomicU32::new(0));
+    let mut svc = Counted {
+        inner: service_fn(|p: String| async move { Ok::<_, Infallible>(format!("ответ на {p}")) }),
+        count: count.clone(),
+    };
+    for p in ["/a", "/b"] {
+        println!("{}", svc.ready().await.unwrap().call(p.to_string()).await.unwrap());
+    }
+    println!("всего: {}", count.load(Ordering::Relaxed));
+}
+```
+crates: yes
+```out
+#1 ответ на /a
+#2 ответ на /b
+всего: 2
+```
+
+:: quiz
+Что такое middleware в мире tower?
+[x] Service, который оборачивает другой Service и добавляет поведение => Верно.
+[ ] Отдельный сервер между браузером и программой => Это прокси, другое.
+[ ] Функция, которая запускается при старте => Middleware работает на каждом запросе.
+
+:: recap
+- `Service`: запрос → Future с ответом. `poll_ready` — готовность.
+- `service_fn` — Service из async-функции; `oneshot` — вызвать один раз.
+- Middleware — обёртка над Service.
+
+## LESSON x11-3 | axum: веб-сервер | 9
+:: goals
+- Узнать, как устроен сервер на axum: маршруты, обработчики, экстракторы
+- Понять, как тестировать сервер без сети
+
+:: text Маршрутизатор и обработчики
+**axum** — самый популярный веб-фреймворк на Rust, от авторов tokio. В Playground его нет, поэтому код сервера ты запустишь в домашнем задании. Здесь — как он устроен.
+
+```rust
+use axum::{routing::{get, post}, Router, Json, extract::{Path, State}};
+
+let app = Router::new()
+    .route("/books", get(list_books).post(add_book))
+    .route("/books/{id}", get(get_book))
+    .with_state(state);
+```
+- **маршрут** — путь + метод → обработчик;
+- **обработчик** — обычная `async fn`;
+- `{id}` — часть пути, которую достаёт экстрактор `Path`.
+
+:: text Экстракторы
+Аргументы обработчика — **экстракторы**: axum сам достаёт их из запроса по типу.
+
+```rust
+async fn get_book(
+    State(db): State<AppState>,     // общее состояние
+    Path(id): Path<u32>,            // /books/7 → 7
+) -> Result<Json<Book>, StatusCode> {
+    db.find(id).map(Json).ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn add_book(State(db): State<AppState>, Json(new): Json<NewBook>) -> StatusCode {
+    db.insert(new);
+    StatusCode::CREATED
+}
+```
+- `Json<T>` во входе — разобрать тело как JSON в `T` (через serde);
+- `Json<T>` в ответе — превратить `T` в JSON;
+- `Result<_, StatusCode>` — ошибка становится кодом ответа.
+
+Неправильный JSON или нечисловой `id` — axum сам ответит `400` или `404`, до вызова твоего кода.
+
+> **Аналогия:** приёмная. Секретарь (axum) проверяет документы по списку (типы аргументов) и пускает к тебе (обработчик) только тех, у кого всё в порядке.
+
+:: text Тест без сети
+`Router` — это tower `Service`. Значит, его можно вызвать через `oneshot`, как в прошлом уроке:
+
+```rust
+let resp = app
+    .oneshot(Request::get("/books/1").body(Body::empty()).unwrap())
+    .await
+    .unwrap();
+assert_eq!(resp.status(), StatusCode::OK);
+```
+Ни порта, ни сети — тест быстрый и надёжный.
+
+:: quiz
+Откуда обработчик axum получает `Path(id): Path<u32>`?
+[ ] Его нужно вручную вынуть из строки запроса => Это делает axum.
+[x] axum достаёт его из пути по шаблону маршрута и типу аргумента => Верно. Это экстрактор.
+[ ] Из переменной окружения => Нет, из URL.
+
+:: homework Книжный API на axum
+Собери настоящий веб-сервис.
+
+1. Создай проект и добавь зависимости:
+```sh
+cargo new books-api && cd books-api
+cargo add axum tokio --features tokio/full
+cargo add serde --features derive
+cargo add serde_json
+cargo add tower --features util --dev
+```
+2. Состояние: `Arc<RwLock<Vec<Book>>>` (или `Mutex`), `Book { id, title, year }`.
+3. Маршруты: `GET /books`, `GET /books/{id}` (404, если нет), `POST /books` (JSON, ответ 201), `DELETE /books/{id}`.
+4. Запуск: `tokio::net::TcpListener::bind("127.0.0.1:3000")` + `axum::serve`. Проверь через браузер или `curl`.
+5. Тесты: создай `Router` в функции `app()` и проверь каждый маршрут через `oneshot`.
+6. По желанию: middleware `tower_http::trace::TraceLayer` и хранение в SQLite из модуля x10.
+[ ] `curl localhost:3000/books` возвращает JSON-массив
+[ ] `GET /books/999` отвечает 404, плохой JSON в `POST` — 400 или 422
+[ ] Есть тесты через `oneshot`, и `cargo test` проходит без запуска сервера
+[ ] Обработчики не используют `unwrap` на данных пользователя
+
+:: recap
+- axum: `Router` + маршруты + `async fn`-обработчики.
+- Экстракторы: `Path`, `Query`, `Json`, `State` — по типу аргумента.
+- `Router` — это tower Service; тесты через `oneshot` без сети.
+
+## LESSON x11-4 | WebAssembly: Rust в браузере | 8
+:: goals
+- Понять, что такое WebAssembly и как туда попадает Rust
+- Отделять чистую логику от «клея» с JavaScript
+
+:: text Wasm
+**WebAssembly** (wasm) — формат программ, который понимают все браузеры. Rust умеет собираться в него: `cargo build --target wasm32-unknown-unknown`. Получается файл `.wasm`, который браузер выполняет почти со скоростью обычной программы.
+
+Для связи с JavaScript есть **wasm-bindgen**: помечаешь функцию — и её можно вызвать из JS.
+
+```rust
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn fib(n: u32) -> u64 {
+    let (mut a, mut b) = (0u64, 1u64);
+    for _ in 0..n { (a, b) = (b, a + b); }
+    a
+}
+```
+```text
+import init, { fib } from "./pkg/my_wasm.js";
+await init();
+console.log(fib(50));
+```
+
+:: text Как устроить проект
+Лучшая практика — **разделить**:
+- **ядро** — чистые функции и структуры без wasm и без JS. Их можно тестировать обычным `cargo test`;
+- **клей** — тонкий слой с `#[wasm_bindgen]`, который зовёт ядро.
+
+Так ядро работает и в браузере, и в CLI, и на сервере.
+
+> **Аналогия:** двигатель и разные корпуса. Один мотор ставят и в машину, и в лодку — меняется только крепление.
+
+:: code
+Ядро «Жизни» Конвея: чистая логика, которую потом можно отдать в браузер через wasm-bindgen.
+```rust
+#[derive(Clone, PartialEq)]
+pub struct World {
+    w: usize,
+    h: usize,
+    cells: Vec<bool>,
+}
+
+impl World {
+    pub fn from_str(rows: &[&str]) -> World {
+        let h = rows.len();
+        let w = rows[0].len();
+        let cells = rows.iter().flat_map(|r| r.chars().map(|c| c == '#')).collect();
+        World { w, h, cells }
+    }
+
+    fn alive(&self, x: isize, y: isize) -> bool {
+        let x = x.rem_euclid(self.w as isize) as usize;
+        let y = y.rem_euclid(self.h as isize) as usize;
+        self.cells[y * self.w + x]
+    }
+
+    pub fn step(&self) -> World {
+        let mut next = self.clone();
+        for y in 0..self.h {
+            for x in 0..self.w {
+                let mut n = 0;
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        if (dx, dy) != (0, 0) && self.alive(x as isize + dx, y as isize + dy) {
+                            n += 1;
+                        }
+                    }
+                }
+                let me = self.cells[y * self.w + x];
+                next.cells[y * self.w + x] = matches!((me, n), (true, 2) | (_, 3));
+            }
+        }
+        next
+    }
+
+    pub fn render(&self) -> String {
+        self.cells.chunks(self.w).map(|r| r.iter().map(|&c| if c { '#' } else { '.' }).collect::<String>()).collect::<Vec<_>>().join("\n")
+    }
+}
+
+fn main() {
+    let w = World::from_str(&[".....", "..#..", "..#..", "..#..", "....."]);
+    println!("{}\n", w.render());
+    println!("{}", w.step().render());
+}
+```
+```out
+.....
+..#..
+..#..
+..#..
+.....
+
+.....
+.....
+.###.
+.....
+.....
+```
+«Мигалка»: вертикальная палочка становится горизонтальной. Тот же `World` можно обернуть в `#[wasm_bindgen]` и рисовать на canvas.
+
+:: quiz
+Зачем отделять ядро от `#[wasm_bindgen]`-клея?
+[x] Ядро тестируется обычным `cargo test` и работает везде, не только в браузере => Верно.
+[ ] wasm-bindgen не умеет работать со структурами => Умеет, дело не в этом.
+[ ] Так файл `.wasm` меньше => Размер почти тот же; выигрыш в устройстве кода.
+
+:: homework «Жизнь» в браузере
+Запусти ядро из урока в настоящем браузере.
+
+1. Поставь цель и инструмент сборки:
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+```
+(Если `wasm-pack` недоступен — подойдут `cargo install wasm-bindgen-cli` и сборка `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen`, или сборщик `trunk`.)
+2. `cargo new --lib life && cd life`, в `Cargo.toml`: `crate-type = ["cdylib", "rlib"]` и зависимость `wasm-bindgen`.
+3. Перенеси `World` в `src/lib.rs`, добавь обёртку `#[wasm_bindgen] pub struct Life` с методами `new`, `tick`, `render`.
+4. Собери: `wasm-pack build --target web`.
+5. Сделай `index.html`, который импортирует `pkg/life.js`, вызывает `tick` по таймеру и выводит `render()` в `<pre>`.
+6. Открой через локальный сервер (`python3 -m http.server`), а не двойным кликом по файлу.
+[ ] Сборка создаёт папку `pkg` с `.wasm` и `.js`
+[ ] В браузере фигура меняется каждый шаг
+[ ] Ядро `World` покрыто обычными тестами (`cargo test`), без браузера
+
+:: recap
+- wasm — формат для браузера, Rust собирается в него.
+- wasm-bindgen связывает Rust и JavaScript.
+- Ядро отдельно, клей отдельно: ядро тестируется и переиспользуется.
+
+## LESSON x11-p | Практика: веб | 25 | practice
+:: goals
+- Сделать маршрутизатор, JSON-обработчик и ограничитель запросов
+
+:: task
+Маршрутизатор с параметрами: шаблон `/users/{id}/posts/{post}` и путь `/users/7/posts/42` → `Some([("id", "7"), ("post", "42")])`. Не совпало — `None`.
+```rust
+fn route<'a>(pattern: &'a str, path: &'a str) -> Option<Vec<(&'a str, &'a str)>> {
+    // твой код
+}
+
+fn main() {
+    println!("{:?}", route("/users/{id}/posts/{post}", "/users/7/posts/42"));
+    println!("{:?}", route("/users/{id}", "/users/7/posts"));
+    println!("{:?}", route("/about", "/about"));
+    println!("{:?}", route("/about", "/contacts"));
+}
+```
+```solution
+fn route<'a>(pattern: &'a str, path: &'a str) -> Option<Vec<(&'a str, &'a str)>> {
+    let pat: Vec<&str> = pattern.split('/').collect();
+    let got: Vec<&str> = path.split('/').collect();
+    if pat.len() != got.len() {
+        return None;
+    }
+    let mut params = Vec::new();
+    for (p, g) in pat.iter().zip(got.iter()) {
+        if let Some(name) = p.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+            params.push((name, *g));
+        } else if p != g {
+            return None;
+        }
+    }
+    Some(params)
+}
+
+fn main() {
+    println!("{:?}", route("/users/{id}/posts/{post}", "/users/7/posts/42"));
+    println!("{:?}", route("/users/{id}", "/users/7/posts"));
+    println!("{:?}", route("/about", "/about"));
+    println!("{:?}", route("/about", "/contacts"));
+}
+```
+```expect
+Some([("id", "7"), ("post", "42")])
+None
+Some([])
+None
+```
+hint: Раздели шаблон и путь по `/`. Разное число частей — сразу `None`.
+hint: Часть вида `{имя}` — параметр (`strip_prefix('{')` + `strip_suffix('}')`), иначе части должны совпасть.
+
+:: task
+JSON-обработчик без фреймворка: функция `handle(body: &str) -> (u16, String)` принимает JSON `{"title": ..., "year": ...}`. Неверный JSON — `400`, год в будущем (> 2026) — `422`, иначе `201` и JSON созданной книги с `id: 1`.
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct NewBook {
+    title: String,
+    year: u32,
+}
+
+#[derive(Serialize)]
+struct Book {
+    id: u32,
+    title: String,
+    year: u32,
+}
+
+fn handle(body: &str) -> (u16, String) {
+    // твой код
+}
+
+fn main() {
+    for body in [r#"{"title":"Дюна","year":1965}"#, r#"{"title":"X","year":3000}"#, "не json"] {
+        let (code, out) = handle(body);
+        println!("{code} {out}");
+    }
+}
+```
+```solution
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct NewBook {
+    title: String,
+    year: u32,
+}
+
+#[derive(Serialize)]
+struct Book {
+    id: u32,
+    title: String,
+    year: u32,
+}
+
+fn handle(body: &str) -> (u16, String) {
+    let new: NewBook = match serde_json::from_str(body) {
+        Ok(b) => b,
+        Err(_) => return (400, String::from(r#"{"error":"bad json"}"#)),
+    };
+    if new.year > 2026 {
+        return (422, String::from(r#"{"error":"year in the future"}"#));
+    }
+    let book = Book { id: 1, title: new.title, year: new.year };
+    (201, serde_json::to_string(&book).unwrap())
+}
+
+fn main() {
+    for body in [r#"{"title":"Дюна","year":1965}"#, r#"{"title":"X","year":3000}"#, "не json"] {
+        let (code, out) = handle(body);
+        println!("{code} {out}");
+    }
+}
+```
+crates: yes
+```expect
+201 {"id":1,"title":"Дюна","year":1965}
+422 {"error":"year in the future"}
+400 {"error":"bad json"}
+```
+hint: `serde_json::from_str::<NewBook>(body)` вернёт `Result`. Ошибка — `400`.
+hint: Ответ: `serde_json::to_string(&book)`.
+
+:: task
+Ограничитель запросов «ведро с жетонами»: в ведре до `cap` жетонов, каждую секунду добавляется `rate`. Запрос забирает жетон; нет жетона — отказ. Время передаётся числом секунд, чтобы проверка была точной.
+```rust
+struct Bucket {
+    cap: f64,
+    rate: f64,
+    tokens: f64,
+    last: f64,
+}
+
+impl Bucket {
+    fn new(cap: f64, rate: f64) -> Self {
+        Bucket { cap, rate, tokens: cap, last: 0.0 }
+    }
+    fn allow(&mut self, now: f64) -> bool {
+        // твой код
+    }
+}
+
+fn main() {
+    let mut b = Bucket::new(2.0, 1.0);
+    let times = [0.0, 0.1, 0.2, 1.2, 1.3, 5.0, 5.0, 5.0];
+    let res: Vec<bool> = times.iter().map(|&t| b.allow(t)).collect();
+    println!("{res:?}");
+}
+```
+```solution
+struct Bucket {
+    cap: f64,
+    rate: f64,
+    tokens: f64,
+    last: f64,
+}
+
+impl Bucket {
+    fn new(cap: f64, rate: f64) -> Self {
+        Bucket { cap, rate, tokens: cap, last: 0.0 }
+    }
+    fn allow(&mut self, now: f64) -> bool {
+        self.tokens = (self.tokens + (now - self.last) * self.rate).min(self.cap);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+fn main() {
+    let mut b = Bucket::new(2.0, 1.0);
+    let times = [0.0, 0.1, 0.2, 1.2, 1.3, 5.0, 5.0, 5.0];
+    let res: Vec<bool> = times.iter().map(|&t| b.allow(t)).collect();
+    println!("{res:?}");
+}
+```
+```expect
+[true, true, false, true, false, true, true, false]
+```
+hint: Сначала пополни: `tokens = min(cap, tokens + (now - last) * rate)`, запомни `last = now`.
+hint: Жетонов ≥ 1 — забери один и верни `true`.
+
+:: recap
+- Маршрутизатор: сравнение частей пути и сбор параметров.
+- Обработчик — функция «тело → код + ответ»; serde берёт на себя JSON.
+- Ведро с жетонами — классическая защита от перегрузки (в tower есть готовый `RateLimitLayer`).
