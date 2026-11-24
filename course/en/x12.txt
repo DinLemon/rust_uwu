@@ -1,0 +1,770 @@
+# MODULE x12 | Serious testing | Case tables, property tests, shrinking, fakes, fuzzing and benchmarks
+
+## LESSON x12-1 | Table tests and where tests live | 8
+:: goals
+- Write many cases in one test
+- Know where unit, integration and doc tests live
+
+:: text A table of cases
+When there are many cases, don't write ten identical `#[test]`s. Make a **table**: input and expected output, and one loop.
+
+```rust
+#[test]
+fn roman_table() {
+    let cases = [(1, "I"), (4, "IV"), (9, "IX"), (14, "XIV"), (1994, "MCMXCIV")];
+    for (n, want) in cases {
+        assert_eq!(roman(n), want, "for number {n}");
+    }
+}
+```
+The third argument of `assert_eq!` is a message. Without it, a failure doesn't tell you **which** case broke.
+
+> **Analogy:** a test with the answers at the back of the book. One table, and you check every problem in a row.
+
+:: text Where tests live
+- **Unit tests** — `mod tests` with `#[cfg(test)]` in the same file. They see private functions.
+- **Integration tests** — files in the `tests/` folder next to `src/`. They see only the public API, like a real user.
+- **Doc tests** — examples in `///` comments. `cargo test` compiles and runs them: the documentation doesn't lie.
+
+```rust
+/// Doubles a number.
+///
+/// ```
+/// assert_eq!(mylib::double(4), 8);
+/// ```
+pub fn double(x: i32) -> i32 { x * 2 }
+```
+Handy details:
+- `#[should_panic(expected = "text")]` — the test expects a panic;
+- a test can return `Result<(), E>` and use `?`;
+- `#[ignore]` — a slow test, run with `cargo test -- --ignored`.
+
+:: task
+Finish `roman` so the table test passes.
+```rust
+pub fn roman(mut n: u32) -> String {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table() {
+        let cases = [(1, "I"), (3, "III"), (4, "IV"), (9, "IX"), (14, "XIV"), (40, "XL"), (90, "XC"), (400, "CD"), (1994, "MCMXCIV"), (2026, "MMXXVI")];
+        for (n, want) in cases {
+            assert_eq!(roman(n), want, "for number {n}");
+        }
+    }
+}
+```
+```solution
+pub fn roman(mut n: u32) -> String {
+    const TABLE: [(u32, &str); 13] = [
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ];
+    let mut out = String::new();
+    for (value, sym) in TABLE {
+        while n >= value {
+            out.push_str(sym);
+            n -= value;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table() {
+        let cases = [(1, "I"), (3, "III"), (4, "IV"), (9, "IX"), (14, "XIV"), (40, "XL"), (90, "XC"), (400, "CD"), (1994, "MCMXCIV"), (2026, "MMXXVI")];
+        for (n, want) in cases {
+            assert_eq!(roman(n), want, "for number {n}");
+        }
+    }
+}
+```
+tests: yes
+hint: Make a "value → symbols" table from largest to smallest, including the pairs `900 CM`, `400 CD`, `90 XC`, `40 XL`, `9 IX`, `4 IV`.
+hint: For each table row: while `n >= value`, add the symbols and subtract.
+
+:: quiz
+Why the third argument in `assert_eq!(roman(n), want, "for number {n}")`?
+[ ] The code won't compile without it => It's optional.
+[x] So a failure shows which case of the table broke => Right.
+[ ] It sets an allowed error margin => It's just a message.
+
+:: recap
+- A table test: an array of cases and one loop with a clear message.
+- Unit tests next to the code, integration tests in `tests/`, doc tests in `///`.
+- `should_panic`, `Result` from a test, `#[ignore]` — for special cases.
+
+## LESSON x12-2 | Property tests | 10
+:: goals
+- Get the idea: check a rule, not specific examples
+- Build a small random test generator of your own
+
+:: text A property instead of an example
+A normal test: "for `[3, 1, 2]` the answer is `[1, 2, 3]`". You made up the example yourself — and could have missed something yourself.
+
+A **property test** says: "for **any** list, the sorted result is ordered and has the same elements". And the machine generates the examples — hundreds of random ones.
+
+Good properties:
+- **there and back**: `decode(encode(x)) == x`;
+- **an invariant**: the result is always sorted, the length didn't change;
+- **compare with a simple version**: the fast function answers like the slow, obvious one.
+
+> **Analogy:** testing a lock not with one key but with a bunch of random ones. If even one stranger's key opens it, the lock is bad.
+
+:: code
+Our own mini tester: a random list generator and property checks. The generator has a fixed seed, so a failure repeats on every run.
+```rust
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        // xorshift: a simple, fast generator
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+    fn range(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+    fn vec(&mut self) -> Vec<i32> {
+        let len = self.range(8) as usize;
+        (0..len).map(|_| self.range(10) as i32).collect()
+    }
+}
+
+fn check(name: &str, cases: u32, prop: impl Fn(&[i32]) -> bool) {
+    let mut rng = Rng(42);
+    for i in 0..cases {
+        let v = rng.vec();
+        if !prop(&v) {
+            println!("{name}: FAILED on attempt {i}: {v:?}");
+            return;
+        }
+    }
+    println!("{name}: ok, {cases} attempts");
+}
+
+// Removes repeats in a row. It has a bug.
+fn dedup(v: &[i32]) -> Vec<i32> {
+    let mut out = Vec::new();
+    for w in v.windows(2) {
+        if w[0] != w[1] {
+            out.push(w[0]);
+        }
+    }
+    out
+}
+
+fn main() {
+    check("reverse twice", 100, |v| {
+        let mut r = v.to_vec();
+        r.reverse();
+        r.reverse();
+        r == v
+    });
+    check("dedup: no equal neighbors", 100, |v| {
+        dedup(v).windows(2).all(|w| w[0] != w[1])
+    });
+    check("dedup: all values kept", 100, |v| {
+        let d = dedup(v);
+        v.iter().all(|x| d.contains(x))
+    });
+}
+```
+```out
+reverse twice: ok, 100 attempts
+dedup: no equal neighbors: ok, 100 attempts
+dedup: all values kept: FAILED on attempt 0: [1, 4]
+```
+The first `dedup` property passed; the second caught the bug: the last element gets lost. One property isn't enough — you need a set.
+
+:: quiz
+Which property fits an `encode`/`decode` pair well?
+[x] `decode(encode(x)) == x` for any `x` => Right. "There and back".
+[ ] `encode(x)` is always longer than `x` => Not always true, and says nothing about correctness.
+[ ] `encode("abc")` equals a specific string => That's an ordinary example, not a property.
+
+:: fill
+Fill in the blanks: the property "sorting doesn't change the length".
+```rust
+check("length", 100, |v| {
+    let mut s = v.___();
+    s.sort();
+    s.___() == v.len()
+});
+```
+= to_vec
+= len
+explain: Copy the slice into a `Vec`, sort the copy and compare the lengths.
+
+:: recap
+- A property is a rule for any input data.
+- A generator with a fixed seed makes failures repeatable.
+- Look for properties: there and back, invariants, comparison with a simple version.
+
+## LESSON x12-3 | Shrinking: from a big failure to a small one | 9
+:: goals
+- Understand why a found example should be shrunk
+- Build simple shrinking for lists
+
+:: text Shrinking
+A random failure is often huge: a list of 80 numbers. That's hard to read. **Shrinking** tries to simplify the example while it still breaks the property:
+
+- remove one element;
+- replace a number with `0` or with half of it.
+
+If the simpler example fails too, take it and try again. Nothing fails any more — done: this is a **minimal** example you can read at a glance.
+
+proptest and quickcheck do this themselves. Now — our own, to understand the mechanics.
+
+> **Analogy:** a doctor hunting an allergen. They remove one food at a time from the menu until only the one that causes the rash is left.
+
+:: code
+```rust
+fn dedup(v: &[i32]) -> Vec<i32> {
+    let mut out = Vec::new();
+    for w in v.windows(2) {
+        if w[0] != w[1] {
+            out.push(w[0]);
+        }
+    }
+    out
+}
+
+fn keeps_values(v: &[i32]) -> bool {
+    let d = dedup(v);
+    v.iter().all(|x| d.contains(x))
+}
+
+fn shrink(v: &[i32], prop: impl Fn(&[i32]) -> bool) -> Vec<i32> {
+    let mut cur = v.to_vec();
+    'outer: loop {
+        // 1) try removing one element
+        for i in 0..cur.len() {
+            let mut c = cur.clone();
+            c.remove(i);
+            if !prop(&c) {
+                cur = c;
+                continue 'outer;
+            }
+        }
+        // 2) try replacing a number with zero
+        for i in 0..cur.len() {
+            if cur[i] != 0 {
+                let mut c = cur.clone();
+                c[i] = 0;
+                if !prop(&c) {
+                    cur = c;
+                    continue 'outer;
+                }
+            }
+        }
+        return cur;
+    }
+}
+
+fn main() {
+    let big = [7, 3, 3, 9, 2, 8, 8, 5];
+    println!("fails: {}", !keeps_values(&big));
+    println!("shrunk to: {:?}", shrink(&big, keeps_values));
+}
+```
+```out
+fails: true
+shrunk to: [0]
+```
+The minimal example: a list of one number. `windows(2)` is empty for it, so the loop adds nothing. The bug is obvious right away.
+
+:: quiz
+When does shrinking stop?
+[ ] After 100 attempts => The number of attempts isn't the point.
+[x] When no simplification breaks the property any more => Right.
+[ ] When the list becomes empty => An empty list may well not break the property.
+
+:: recap
+- Shrinking simplifies a failure while it stays a failure.
+- Steps: remove an element, make a number smaller.
+- A small example explains a bug better than any debugger.
+
+## LESSON x12-4 | proptest and fuzzing | 9
+:: goals
+- See what real tools look like: proptest and cargo-fuzz
+- Understand how fuzzing differs from property tests
+
+:: text proptest
+**proptest** does everything from the last lessons by itself: generates, checks, shrinks, and remembers failures in a file.
+
+```rust
+use proptest::prelude::*;
+
+proptest! {
+    #[test]
+    fn sort_keeps_len(mut v in prop::collection::vec(any::<i32>(), 0..100)) {
+        let len = v.len();
+        v.sort();
+        prop_assert_eq!(v.len(), len);
+    }
+
+    #[test]
+    fn roundtrip(s in "[a-z]{0,20}") {
+        prop_assert_eq!(decode(&encode(&s)), s);
+    }
+}
+```
+- `any::<i32>()` — any number;
+- `vec(..., 0..100)` — a list up to 100 long;
+- `"[a-z]{0,20}"` — strings from a regular expression.
+
+A found failure is saved into `proptest-regressions/` and checked first on every run.
+
+:: text Fuzzing
+A **fuzzer** (cargo-fuzz, built on libFuzzer) feeds random **bytes** to a function and watches code coverage: which branches ran. Bytes that opened a new branch get mutated further.
+
+That's how it finds panics, overflows and hangs in parsers that no human would think of.
+
+```rust
+// fuzz/fuzz_targets/parse.rs
+#![no_main]
+use libfuzzer_sys::fuzz_target;
+
+fuzz_target!(|data: &[u8]| {
+    if let Ok(s) = std::str::from_utf8(data) {
+        let _ = mylib::parse(s); // must not panic
+    }
+});
+```
+The difference:
+- **proptest** — checks your properties on structured data, runs in `cargo test`;
+- **a fuzzer** — hunts for crashes on any bytes for hours, needs nightly.
+
+> **Analogy:** proptest is an examiner with questions on the topic. A fuzzer is a child pressing every button in a row and finding the one that breaks everything.
+
+:: quiz
+What input does a fuzzer consider "interesting"?
+[ ] The longest one => Length isn't the point.
+[x] One that ran code branches not reached before => Right. That's coverage-guided fuzzing.
+[ ] One with only letters => A fuzzer works with any bytes.
+
+:: homework Properties and a fuzzer for your own parser
+Take a parser from earlier modules (for example, `parse_query` from x11 or the color parser from x00) or write a new one.
+
+1. Add proptest:
+```sh
+cargo add proptest --dev
+```
+2. Write at least three properties: "doesn't panic on any string", "there and back" (if there is an inverse function), "the result satisfies an invariant".
+3. Find at least one failure (you can plant a bug on purpose) and see what proptest shrank it to.
+4. Fuzzing (needs nightly and Linux or macOS):
+```sh
+cargo install cargo-fuzz
+cargo +nightly fuzz init
+cargo +nightly fuzz add parse
+cargo +nightly fuzz run parse -- -max_total_time=60
+```
+5. If the fuzzer found a crash, the input file is in `fuzz/artifacts/`. Turn it into an ordinary `#[test]` and fix the bug.
+[ ] Three proptest properties pass in `cargo test`
+[ ] You saw proptest shrink a failure to a small example
+[ ] The fuzzer ran for a minute (or you found and fixed a crash)
+[ ] Found failures are turned into ordinary tests
+
+:: recap
+- proptest: generation, checking, shrinking and memory of failures.
+- A fuzzer feeds bytes and follows code coverage.
+- A found failure always becomes an ordinary test, so it won't come back.
+
+## LESSON x12-5 | Fakes instead of the outside world | 8
+:: goals
+- Test code that depends on time, the network or the disk
+- Swap a dependency through a trait
+
+:: text A seam
+Code that calls `SystemTime::now()` or goes to the network by itself is hard to test: time moves on, the network fails.
+
+The solution is a **seam**: the dependency is passed in through a trait.
+- in the program — the real implementation (a clock, an HTTP client);
+- in a test — a **fake**: a simple struct you control.
+
+Mocking frameworks (mockall) exist, but a hand-written 10-line fake is often enough.
+
+> **Analogy:** a flight simulator. The same yoke, but the instructor switches on the weather and the failures.
+
+:: code
+```rust
+use std::cell::Cell;
+
+trait Clock {
+    fn now(&self) -> u64; // seconds
+}
+
+struct Session<C: Clock> {
+    clock: C,
+    started: u64,
+    ttl: u64,
+}
+
+impl<C: Clock> Session<C> {
+    fn new(clock: C, ttl: u64) -> Self {
+        let started = clock.now();
+        Session { clock, started, ttl }
+    }
+    fn expired(&self) -> bool {
+        self.clock.now() - self.started >= self.ttl
+    }
+}
+
+// A fake: we move time by hand
+struct FakeClock(Cell<u64>);
+
+impl Clock for &FakeClock {
+    fn now(&self) -> u64 {
+        self.0.get()
+    }
+}
+
+fn main() {
+    let clock = FakeClock(Cell::new(1000));
+    let s = Session::new(&clock, 60);
+    println!("right away: {}", s.expired());
+    clock.0.set(1059);
+    println!("after 59 s: {}", s.expired());
+    clock.0.set(1060);
+    println!("after 60 s: {}", s.expired());
+}
+```
+```out
+right away: false
+after 59 s: false
+after 60 s: true
+```
+The test is instant and exact: no `sleep(60)`. The "exactly 60 seconds" boundary is checked.
+
+:: quiz
+Why does `Session` get its clock through the `Clock` trait?
+[ ] It runs faster that way => Speed has nothing to do with it.
+[x] So a test can plug in a fake clock and control time => Right.
+[ ] Without a trait you can't store a number => You can; the point is swapping.
+
+:: recap
+- The outside world (time, network, disk) goes behind a trait.
+- In a test — a fake you control.
+- Tests without `sleep` or network: fast and stable.
+
+## LESSON x12-6 | Benchmarks without fooling yourself | 7
+:: goals
+- Know why a naive measurement lies
+- Meet criterion and `black_box`
+
+:: text Why a measurement lies
+`Instant::now()` before and after is the simplest measurement. But:
+- in a **debug** build code is 10–50 times slower. Measure only with `--release`;
+- the optimizer can **throw away** a computation whose result isn't used. You'd be measuring nothing;
+- one measurement is noise: cache, other programs, CPU frequency.
+
+`std::hint::black_box(x)` tells the optimizer: "assume someone uses `x`". The computation won't be thrown away.
+
+:: code
+```rust
+use std::hint::black_box;
+use std::time::Instant;
+
+fn sum_squares(n: u64) -> u64 {
+    (1..=n).map(|x| x * x).sum()
+}
+
+fn main() {
+    let start = Instant::now();
+    let mut total = 0;
+    for _ in 0..1000 {
+        total += sum_squares(black_box(1000));
+    }
+    let elapsed = start.elapsed();
+    black_box(elapsed);
+    println!("sum: {total}");
+}
+```
+```out
+sum: 333833500000
+```
+We don't print the time: it differs on every computer. The technique is what matters: many repeats, `black_box` on the input.
+
+:: text criterion
+**criterion** measures honestly: it warms up, repeats hundreds of times, computes statistics and compares with the previous run ("12% slower").
+
+```rust
+// benches/sum.rs
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+
+fn bench(c: &mut Criterion) {
+    c.bench_function("sum_squares 1000", |b| b.iter(|| mylib::sum_squares(black_box(1000))));
+}
+
+criterion_group!(benches, bench);
+criterion_main!(benches);
+```
+In `Cargo.toml`:
+```toml
+[[bench]]
+name = "sum"
+harness = false
+```
+
+:: homework An honest benchmark
+Compare two versions of one function.
+
+1. Pick a task with an obvious version and a fast one: for example, `sum_squares` with a loop and with the formula `n(n+1)(2n+1)/6`, or searching a `Vec` versus a `HashSet`.
+2. First a property test: both versions give the same answer on random inputs.
+3. Add criterion:
+```sh
+cargo add criterion --dev
+```
+4. Write a benchmark for both versions and several input sizes (`BenchmarkGroup` + `bench_with_input`).
+5. Run `cargo bench` and open the report `target/criterion/report/index.html`.
+[ ] A test confirms the versions answer the same
+[ ] The benchmark uses `black_box`
+[ ] You can see at which input size the fast version starts to win
+[ ] You can explain the result in one sentence
+
+:: recap
+- Measure only in `--release`, with many repeats.
+- `black_box` keeps the optimizer from throwing work away.
+- criterion — statistics and comparison with the previous run.
+
+## LESSON x12-p | Practice: testing | 25 | practice
+:: goals
+- Write code for a table test, shrinking for numbers and a property check
+
+:: task
+Finish `parse_duration`: `"1h30m"` → `Some(5400)` seconds. The parts `h`, `m`, `s` can come in any subset, but in this order; an empty string, junk, or a number without a letter — `None`.
+```rust
+pub fn parse_duration(s: &str) -> Option<u32> {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table() {
+        let cases = [
+            ("1h30m", Some(5400)),
+            ("45s", Some(45)),
+            ("2h", Some(7200)),
+            ("1h2m3s", Some(3723)),
+            ("10m5s", Some(605)),
+            ("", None),
+            ("5", None),
+            ("3x", None),
+            ("m", None),
+        ];
+        for (input, want) in cases {
+            assert_eq!(parse_duration(input), want, "for {input:?}");
+        }
+    }
+}
+```
+```solution
+pub fn parse_duration(s: &str) -> Option<u32> {
+    if s.is_empty() {
+        return None;
+    }
+    let mut total = 0;
+    let mut num = String::new();
+    for c in s.chars() {
+        if c.is_ascii_digit() {
+            num.push(c);
+            continue;
+        }
+        let mult = match c {
+            'h' => 3600,
+            'm' => 60,
+            's' => 1,
+            _ => return None,
+        };
+        let n: u32 = num.parse().ok()?;
+        total += n * mult;
+        num.clear();
+    }
+    if !num.is_empty() {
+        return None;
+    }
+    Some(total)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table() {
+        let cases = [
+            ("1h30m", Some(5400)),
+            ("45s", Some(45)),
+            ("2h", Some(7200)),
+            ("1h2m3s", Some(3723)),
+            ("10m5s", Some(605)),
+            ("", None),
+            ("5", None),
+            ("3x", None),
+            ("m", None),
+        ];
+        for (input, want) in cases {
+            assert_eq!(parse_duration(input), want, "for {input:?}");
+        }
+    }
+}
+```
+tests: yes
+hint: Collect digits into a `num` string. On a letter, parse `num` into a number (`parse().ok()?`), multiply, and clear `num`.
+hint: After the loop `num` must be empty: otherwise a number was left without a letter.
+
+:: task
+Shrinking for numbers: starting from `start`, try the candidates `0`, `n / 2`, `n - 1`. The first one that is smaller than `n` and still breaks the check becomes the new `n`. None fits — return `n`.
+
+Note the second case: greedy shrinking finds not the smallest example but one that "can't be shrunk further".
+```rust
+fn shrink_u32(start: u32, fails: impl Fn(u32) -> bool) -> u32 {
+    // your code
+}
+
+fn main() {
+    println!("{}", shrink_u32(1000, |n| n * n > 2000));
+    println!("{}", shrink_u32(98765, |n| n.to_string().contains('7')));
+    println!("{}", shrink_u32(5, |n| n > 100));
+}
+```
+```solution
+fn shrink_u32(start: u32, fails: impl Fn(u32) -> bool) -> u32 {
+    let mut n = start;
+    loop {
+        let next = [0, n / 2, n.saturating_sub(1)]
+            .into_iter()
+            .find(|&c| c < n && fails(c));
+        match next {
+            Some(c) => n = c,
+            None => return n,
+        }
+    }
+}
+
+fn main() {
+    println!("{}", shrink_u32(1000, |n| n * n > 2000));
+    println!("{}", shrink_u32(98765, |n| n.to_string().contains('7')));
+    println!("{}", shrink_u32(5, |n| n > 100));
+}
+```
+```expect
+45
+24687
+5
+```
+hint: A candidate array `[0, n / 2, n.saturating_sub(1)]` and `find` with the condition `c < n && fails(c)`.
+hint: The third case: `5` doesn't break the check anyway, but we simply return the start number since there's nothing to shrink.
+
+:: task
+Write the property `sort_ok(input, output)`: the output is ordered and has the same numbers the same number of times. The tester will find the bug in `bad_sort`.
+```rust
+use std::collections::BTreeSet;
+
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+    fn vec(&mut self) -> Vec<i32> {
+        let len = (self.next() % 6) as usize;
+        (0..len).map(|_| (self.next() % 5) as i32).collect()
+    }
+}
+
+// Bug: a set throws away repeats
+fn bad_sort(v: &[i32]) -> Vec<i32> {
+    v.iter().copied().collect::<BTreeSet<_>>().into_iter().collect()
+}
+
+fn sort_ok(input: &[i32], output: &[i32]) -> bool {
+    // your code
+}
+
+fn main() {
+    let mut rng = Rng(7);
+    for i in 0..100 {
+        let v = rng.vec();
+        if !sort_ok(&v, &bad_sort(&v)) {
+            println!("failed on attempt {i}: {v:?} -> {:?}", bad_sort(&v));
+            return;
+        }
+    }
+    println!("ok");
+}
+```
+```solution
+use std::collections::BTreeSet;
+
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+    fn vec(&mut self) -> Vec<i32> {
+        let len = (self.next() % 6) as usize;
+        (0..len).map(|_| (self.next() % 5) as i32).collect()
+    }
+}
+
+// Bug: a set throws away repeats
+fn bad_sort(v: &[i32]) -> Vec<i32> {
+    v.iter().copied().collect::<BTreeSet<_>>().into_iter().collect()
+}
+
+fn sort_ok(input: &[i32], output: &[i32]) -> bool {
+    let sorted = output.windows(2).all(|w| w[0] <= w[1]);
+    let mut a = input.to_vec();
+    let mut b = output.to_vec();
+    a.sort();
+    b.sort();
+    sorted && a == b
+}
+
+fn main() {
+    let mut rng = Rng(7);
+    for i in 0..100 {
+        let v = rng.vec();
+        if !sort_ok(&v, &bad_sort(&v)) {
+            println!("failed on attempt {i}: {v:?} -> {:?}", bad_sort(&v));
+            return;
+        }
+    }
+    println!("ok");
+}
+```
+```expect
+failed on attempt 0: [2, 3, 2] -> [2, 3]
+```
+hint: Ordered: `output.windows(2).all(|w| w[0] <= w[1])`.
+hint: "The same numbers the same number of times": sort copies of the input and the output and compare them whole.
+
+:: recap
+- A table test is the fastest exact specification.
+- Greedy shrinking gives an "unshrinkable" example, not always the smallest one.
+- The sorting property: ordered + the same numbers with their repeats.
