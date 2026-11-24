@@ -1,0 +1,360 @@
+# MODULE a00 | Bridge from the basics | A quick check that everything is in place before Level 2
+
+## LESSON a00-1 | How Level 2 works | 5
+:: goals
+- See how Level 2 differs from Level 1
+- Know what to do if it gets hard
+
+:: text Welcome to Level 2
+You finished the basics. Now we go **deeper**: how traits, iterators, threads, async, macros and `unsafe` really work.
+
+Same rules as before:
+- One lesson, one idea.
+- Short steps. Press "Next" at your own pace.
+- "Deep dive" cards can be skipped. They are for people who want to know how things work inside.
+
+> **Analogy:** Level 1 taught you to drive. Level 2 opens the hood so you can see the engine.
+
+:: text What is a bit different
+- Examples are longer. Sometimes 20–30 lines. Read them top to bottom, one piece at a time.
+- Sometimes we use **crates** (other people's libraries): `tokio`, `serde`, `rayon`. Rust Playground already has them, nothing to install.
+- More tasks where you write a piece of a real program, not just print a line.
+
+:: text If it gets hard
+That's normal. Level 2 topics are harder. What helps:
+- Go back to the Level 1 lesson on the same topic. The text will point to it.
+- Take a break and do the lesson tomorrow. Your progress is saved.
+- Run the example and change one thing in it. See what changes.
+
+:: quiz
+What do you do with a "Deep dive" card if it doesn't interest you right now?
+[ ] You must read it, or you can't go on => No, it is optional.
+[x] Press "Next" and skip it => Right. You can come back to it later.
+[ ] Start the lesson over => No need.
+
+:: recap
+- Level 2 has the same format, deeper topics.
+- Crates are already in the Playground.
+- If it's hard, go back to the basics or take a break.
+
+## LESSON a00-2 | Review: ownership and borrowing | 7
+:: goals
+- Recall the three ownership rules
+- Recall the difference between `&` and `&mut`
+
+:: text Three ownership rules
+1. Every value has an **owner** — one variable.
+2. There can be only **one** owner.
+3. When the owner goes out of scope, the value is dropped.
+
+If you forgot the details, see the Level 1 lesson "Ownership".
+
+:: code
+```rust
+fn main() {
+    let a = String::from("cat");
+    let b = a; // ownership moved to b
+    println!("{b}");
+}
+```
+```out
+cat
+```
+After `let b = a;` you can't use `a` anymore. Try adding `println!("{a}");` and run it.
+
+:: text Borrowing
+- `&x` — let someone **look**. You can have as many of these as you like.
+- `&mut x` — let someone **change** it. There can be only **one** such reference, and while it exists there are no others.
+
+> **Analogy:** many people can read a library book. But you can only fix it when it's in your hands alone.
+
+:: quiz
+How many `&mut` references to one value can exist at the same time?
+[ ] As many as you like => That's `&`.
+[x] One => Right. And while it lives, there are no plain `&` either.
+[ ] Zero, you can't create them => You can, if the variable is declared with `mut`.
+
+:: fill
+Fill in the blanks so the function changes the string and `main` prints it.
+```rust
+fn shout(s: ___ String) {
+    s.push('!');
+}
+
+fn main() {
+    let mut word = String::from("yay");
+    shout(___ word);
+    println!("{word}");
+}
+```
+= &mut
+= &mut
+explain: To change someone else's value, the function takes `&mut String`, and the call passes `&mut word`.
+
+:: task
+The function `longest` must return the length of the longest string in the list. It must not take the list: after the call, `main` prints it again.
+```rust
+fn longest(words: Vec<String>) -> usize {
+    let mut best = 0;
+    for w in words {
+        if w.len() > best {
+            best = w.len();
+        }
+    }
+    best
+}
+
+fn main() {
+    let words = vec![String::from("cat"), String::from("hello"), String::from("Rust")];
+    println!("{}", longest(words));
+    println!("{}", words.len());
+}
+```
+```solution
+fn longest(words: &[String]) -> usize {
+    let mut best = 0;
+    for w in words {
+        if w.len() > best {
+            best = w.len();
+        }
+    }
+    best
+}
+
+fn main() {
+    let words = vec![String::from("cat"), String::from("hello"), String::from("Rust")];
+    println!("{}", longest(&words));
+    println!("{}", words.len());
+}
+```
+```expect
+5
+3
+```
+hint: Let the function take a reference: `words: &[String]`, and call it as `longest(&words)`.
+hint: `len()` counts bytes. For English letters that's the same as the number of letters.
+
+:: recap
+- One owner. Pass it on and the value moves.
+- `&` — look (many), `&mut` — change (one).
+- Functions usually get a reference, not the value itself.
+
+## LESSON a00-3 | Review: enum, Result, traits | 7
+:: goals
+- Recall `match` on an `enum`
+- Recall `Result` and `?`
+- Recall what a trait is
+
+:: text enum and match
+`enum` means "one of several". `match` handles every variant.
+
+```rust
+enum Light { Red, Yellow, Green }
+
+fn action(l: Light) -> &'static str {
+    match l {
+        Light::Red => "stop",
+        Light::Yellow => "wait",
+        Light::Green => "go",
+    }
+}
+```
+`match` must cover **all** variants. Forget one and the compiler reminds you.
+
+:: text Result and ?
+`Result<T, E>` is either `Ok(value)` or `Err(error)`.
+
+A `?` after a call means: "if it's an error, return it upward right away; if it's a success, take the value out".
+
+:: code
+```rust
+fn double(text: &str) -> Result<i32, std::num::ParseIntError> {
+    let n: i32 = text.parse()?;
+    Ok(n * 2)
+}
+
+fn main() {
+    println!("{:?}", double("21"));
+    println!("{}", double("cat").is_err());
+}
+```
+```out
+Ok(42)
+true
+```
+
+:: text A trait is a skill
+A trait describes **what a type can do**. For example, `Display` means "I can be printed with `{}`".
+
+```rust
+trait Speak {
+    fn speak(&self) -> String;
+}
+```
+Any type can implement a trait with `impl Speak for Type`.
+
+:: quiz
+What does `?` after `text.parse()` do?
+[ ] Prints the error and goes on => No, it returns the error from the function.
+[x] On error, leaves the function and returns it; on success, gives the value => Right.
+[ ] Turns the error into 0 => That's what `unwrap_or(0)` does.
+
+:: task
+Implement the `Speak` trait for `Cat` and `Dog`. The cat says `Meow`, the dog says `Woof`.
+```rust
+trait Speak {
+    fn speak(&self) -> String;
+}
+
+struct Cat;
+struct Dog;
+
+// your code
+
+fn main() {
+    println!("{}", Cat.speak());
+    println!("{}", Dog.speak());
+}
+```
+```solution
+trait Speak {
+    fn speak(&self) -> String;
+}
+
+struct Cat;
+struct Dog;
+
+impl Speak for Cat {
+    fn speak(&self) -> String {
+        String::from("Meow")
+    }
+}
+
+impl Speak for Dog {
+    fn speak(&self) -> String {
+        String::from("Woof")
+    }
+}
+
+fn main() {
+    println!("{}", Cat.speak());
+    println!("{}", Dog.speak());
+}
+```
+```expect
+Meow
+Woof
+```
+hint: Start like this: `impl Speak for Cat { fn speak(&self) -> String { ... } }`.
+
+:: recap
+- `enum` + `match` — handle every variant.
+- `Result` + `?` — errors travel upward by themselves.
+- A trait is a set of skills; `impl Trait for Type` teaches a type.
+
+## LESSON a00-p | Practice: warm-up | 12 | practice
+:: goals
+- Warm up before Level 2
+- Combine structs, `Vec`, `Option` and iterators
+
+:: task
+Find the first number greater than 10 in the list and print it. If there is none, print `none`.
+```rust
+fn main() {
+    let nums = vec![3, 8, 15, 4, 22];
+    // your code
+}
+```
+```solution
+fn main() {
+    let nums = vec![3, 8, 15, 4, 22];
+    match nums.iter().find(|&&n| n > 10) {
+        Some(n) => println!("{n}"),
+        None => println!("none"),
+    }
+}
+```
+```expect
+15
+```
+hint: Iterators have a `find` method. It returns an `Option`.
+hint: `nums.iter().find(|&&n| n > 10)` — double `&`, because `find` gives a reference to a reference.
+
+:: task
+The `Item` struct holds a name and a price in cents. Add up the cart and print the total in dollars with two digits: `Total: 377.50`.
+```rust
+struct Item {
+    name: String,
+    cents: u32,
+}
+
+fn main() {
+    let cart = vec![
+        Item { name: String::from("bread"), cents: 5500 },
+        Item { name: String::from("cheese"), cents: 25000 },
+        Item { name: String::from("tea"), cents: 7250 },
+    ];
+    // your code
+}
+```
+```solution
+struct Item {
+    name: String,
+    cents: u32,
+}
+
+fn main() {
+    let cart = vec![
+        Item { name: String::from("bread"), cents: 5500 },
+        Item { name: String::from("cheese"), cents: 25000 },
+        Item { name: String::from("tea"), cents: 7250 },
+    ];
+    let total: u32 = cart.iter().map(|i| i.cents).sum();
+    println!("Total: {}.{:02}", total / 100, total % 100);
+}
+```
+```expect
+Total: 377.50
+```
+hint: `cart.iter().map(|i| i.cents).sum()` gives the sum. Write the type: `let total: u32 = ...`.
+hint: Dollars are `total / 100`, cents are `total % 100`. `{:02}` adds a leading zero: `5` → `05`.
+
+:: task
+The function `parse_age` turns text into an age. An empty string is the error `"empty"`, not a number is the error `"not a number"`. Use `?` or `match`.
+```rust
+fn parse_age(text: &str) -> Result<u32, String> {
+    // your code
+}
+
+fn main() {
+    println!("{:?}", parse_age("30"));
+    println!("{:?}", parse_age(""));
+    println!("{:?}", parse_age("thirty"));
+}
+```
+```solution
+fn parse_age(text: &str) -> Result<u32, String> {
+    if text.is_empty() {
+        return Err(String::from("empty"));
+    }
+    text.parse::<u32>().map_err(|_| String::from("not a number"))
+}
+
+fn main() {
+    println!("{:?}", parse_age("30"));
+    println!("{:?}", parse_age(""));
+    println!("{:?}", parse_age("thirty"));
+}
+```
+```expect
+Ok(30)
+Err("empty")
+Err("not a number")
+```
+hint: First check `text.is_empty()` and return `Err(...)`.
+hint: `map_err(|_| ...)` swaps one error for another.
+
+:: recap
+- `find` looks for the first match and returns an `Option`.
+- `map` + `sum` give a total in one line.
+- `map_err` changes the error type.

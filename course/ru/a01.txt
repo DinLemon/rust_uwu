@@ -1,0 +1,774 @@
+# MODULE a01 | Трейты глубже | Методы по умолчанию, dyn, ассоциированные типы, операторы
+
+## LESSON a01-1 | Методы по умолчанию и трейт над трейтом | 7
+:: goals
+- Дать методу трейта готовую реализацию
+- Потребовать один трейт для другого
+
+:: text Метод по умолчанию
+В трейте можно не только объявить метод, но и **сразу написать** его тело. Тогда типу не обязательно его реализовывать.
+
+```rust
+trait Greet {
+    fn name(&self) -> String;          // обязательно
+    fn hello(&self) -> String {        // по умолчанию
+        format!("Привет, {}!", self.name())
+    }
+}
+```
+Тип реализует только `name`, а `hello` получает бесплатно.
+
+> **Аналогия:** шаблон письма. Ты вписываешь только имя, остальной текст уже готов.
+
+:: code
+```rust
+trait Greet {
+    fn name(&self) -> String;
+    fn hello(&self) -> String {
+        format!("Привет, {}!", self.name())
+    }
+}
+
+struct Cat;
+struct Robot;
+
+impl Greet for Cat {
+    fn name(&self) -> String { String::from("Мурка") }
+}
+
+impl Greet for Robot {
+    fn name(&self) -> String { String::from("R2") }
+    fn hello(&self) -> String { String::from("БИП-БУП") } // своё
+}
+
+fn main() {
+    println!("{}", Cat.hello());
+    println!("{}", Robot.hello());
+}
+```
+```out
+Привет, Мурка!
+БИП-БУП
+```
+`Robot` заменил метод по умолчанию своим. Так тоже можно.
+
+:: quiz
+Тип реализует трейт, но не пишет метод, у которого есть тело по умолчанию. Что будет?
+[ ] Ошибка компиляции => Нет, для того и тело по умолчанию.
+[x] Тип получит готовую версию метода => Верно.
+[ ] Метод будет пустым => Он будет делать то, что написано в трейте.
+
+:: text Трейт над трейтом
+Иногда трейту нужен другой трейт. Например: «чтобы уметь `Report`, тип должен уметь печататься через `{}`».
+
+```rust
+use std::fmt::Display;
+
+trait Report: Display {
+    fn report(&self) -> String {
+        format!("[отчёт] {}", self)
+    }
+}
+```
+`trait Report: Display` читается «Report требует Display». Такой «родительский» трейт называют **supertrait**.
+
+:: code
+```rust
+use std::fmt;
+
+trait Report: fmt::Display {
+    fn report(&self) -> String {
+        format!("[отчёт] {}", self)
+    }
+}
+
+struct Temp(i32);
+
+impl fmt::Display for Temp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}°C", self.0)
+    }
+}
+
+impl Report for Temp {}
+
+fn main() {
+    println!("{}", Temp(21).report());
+}
+```
+```out
+[отчёт] 21°C
+```
+`impl Report for Temp {}` — пустой: всё есть по умолчанию. Убери `impl fmt::Display` и посмотри ошибку.
+
+:: task
+Добавь в трейт `Shape` метод по умолчанию `describe`, который возвращает `площадь: X`, где X — результат `area()`. Квадрат реализует только `area`.
+```rust
+trait Shape {
+    fn area(&self) -> u32;
+    // добавь describe
+}
+
+struct Square(u32);
+
+impl Shape for Square {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn main() {
+    println!("{}", Square(4).describe());
+}
+```
+```solution
+trait Shape {
+    fn area(&self) -> u32;
+    fn describe(&self) -> String {
+        format!("площадь: {}", self.area())
+    }
+}
+
+struct Square(u32);
+
+impl Shape for Square {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn main() {
+    println!("{}", Square(4).describe());
+}
+```
+```expect
+площадь: 16
+```
+hint: Внутри метода по умолчанию можно вызывать другие методы трейта: `self.area()`.
+
+:: deep Правило сироты
+Реализовать трейт для типа можно, только если **трейт или тип твои** (объявлены в твоём крейте).
+
+Нельзя написать `impl Display for Vec<i32>`: и `Display`, и `Vec` чужие. Иначе два разных крейта могли бы сделать это по-разному, и Rust не знал бы, чья версия главная.
+
+Это называют **правилом сироты** (orphan rule). Обходят его через обёртку: `struct MyList(Vec<i32>);` — это уже твой тип, и для него можно всё.
+
+:: recap
+- Метод с телом в трейте — метод по умолчанию. Его можно переопределить.
+- `trait A: B` — чтобы быть `A`, тип должен быть `B`.
+- Чужой трейт для чужого типа реализовать нельзя.
+
+## LESSON a01-2 | Ассоциированные типы | 7
+:: goals
+- Понять, что такое `type Item` в трейте
+- Написать трейт со своим ассоциированным типом
+
+:: text Тип внутри трейта
+Помнишь итераторы? У трейта `Iterator` есть строка:
+
+```rust
+trait Iterator {
+    type Item;
+    fn next(&mut self) -> Option<Self::Item>;
+}
+```
+`type Item;` — **ассоциированный тип**. Каждый итератор сам говорит, **что** он выдаёт: числа, строки, что угодно.
+
+> **Аналогия:** автомат с едой. Трейт говорит «умею выдавать товар». Какой именно товар — решает каждый автомат: один шоколадки, другой воду.
+
+:: code
+```rust
+trait Container {
+    type Item;
+    fn get(&self, i: usize) -> Option<&Self::Item>;
+    fn first(&self) -> Option<&Self::Item> {
+        self.get(0)
+    }
+}
+
+struct Shelf {
+    books: Vec<String>,
+}
+
+impl Container for Shelf {
+    type Item = String;
+    fn get(&self, i: usize) -> Option<&String> {
+        self.books.get(i)
+    }
+}
+
+fn main() {
+    let s = Shelf { books: vec![String::from("Дюна"), String::from("Хоббит")] };
+    println!("{:?}", s.first());
+    println!("{:?}", s.get(5));
+}
+```
+```out
+Some("Дюна")
+None
+```
+`type Item = String;` — полка выдаёт строки.
+
+:: text Почему не обобщение?
+Можно было бы написать `trait Container<T>`. Разница:
+- `Container<T>` — тип может реализовать его **много раз**: для `T = i32`, для `T = String`…
+- `type Item` — **ровно один раз**. У полки один вид содержимого.
+
+Если ответ «один тип на реализацию» — бери ассоциированный тип. Код с ним проще: не надо везде писать `<T>`.
+
+:: quiz
+Сколько раз один тип может реализовать трейт с ассоциированным типом `type Item`?
+[x] Один раз => Верно. И `Item` у него один.
+[ ] Сколько угодно, с разными `Item` => Так работает обобщённый трейт `Trait<T>`.
+[ ] Ни разу, такие трейты только в стандартной библиотеке => Свои тоже можно писать.
+
+:: fill
+Заполни пропуски: счётчик выдаёт числа `u32`.
+```rust
+struct Counter { n: u32 }
+
+impl Iterator for Counter {
+    type ___ = u32;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.n < 3 {
+            self.n += 1;
+            ___(self.n)
+        } else {
+            None
+        }
+    }
+}
+```
+= Item
+= Some
+explain: Ассоциированный тип у `Iterator` называется `Item`, а значение возвращают в `Some(...)`.
+
+:: recap
+- `type Item;` в трейте — тип, который выбирает каждая реализация.
+- В реализации пишут `type Item = Конкретный;`.
+- Один тип — одна реализация — один `Item`.
+
+## LESSON a01-3 | impl Trait и dyn Trait | 8
+:: goals
+- Понять разницу между `impl Trait` и `dyn Trait`
+- Сложить разные типы в один `Vec`
+
+:: text Проблема: разные типы в одном списке
+`Vec` хранит значения **одного** типа. А если хочется список фигур: круги, квадраты, треугольники?
+
+```rust
+let shapes = vec![Circle, Square]; // ошибка: типы разные
+```
+Решение — `Box<dyn Shape>`: «коробка с чем-то, что умеет Shape».
+
+:: code
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+    fn name(&self) -> &str;
+}
+
+struct Circle { r: f64 }
+struct Square { side: f64 }
+
+impl Shape for Circle {
+    fn area(&self) -> f64 { 3.14 * self.r * self.r }
+    fn name(&self) -> &str { "круг" }
+}
+
+impl Shape for Square {
+    fn area(&self) -> f64 { self.side * self.side }
+    fn name(&self) -> &str { "квадрат" }
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Circle { r: 1.0 }),
+        Box::new(Square { side: 2.0 }),
+    ];
+    for s in &shapes {
+        println!("{}: {:.2}", s.name(), s.area());
+    }
+}
+```
+```out
+круг: 3.14
+квадрат: 4.00
+```
+
+:: text Два способа сказать «любой Shape»
+- `impl Shape` — «какой-то **один** конкретный тип, компилятор знает какой». Работает быстро: компилятор делает отдельную копию кода под каждый тип.
+- `dyn Shape` — «**любой**, узнаем во время работы». Нужен, когда типы смешаны. Чуть медленнее: метод ищется по таблице.
+
+> **Аналогия:** `impl` — заказ пиццы, где ты заранее знаешь, какая приедет. `dyn` — коробка-сюрприз: открыл и посмотрел.
+
+:: code
+```rust
+use std::fmt::Display;
+
+// impl в аргументе: подойдёт любой тип с Display
+fn show(x: impl Display) {
+    println!("<{x}>");
+}
+
+// impl в возврате: «верну итератор, не важно какой»
+fn evens(max: u32) -> impl Iterator<Item = u32> {
+    (0..=max).filter(|n| n % 2 == 0)
+}
+
+fn main() {
+    show(5);
+    show("кот");
+    let v: Vec<u32> = evens(6).collect();
+    println!("{v:?}");
+}
+```
+```out
+<5>
+<кот>
+[0, 2, 4, 6]
+```
+`impl Iterator<Item = u32>` в возврате очень частый приём: настоящий тип итератора длинный и страшный, а так его не нужно писать.
+
+:: quiz
+Нужен `Vec`, где лежат и `Circle`, и `Square`. Что выбрать?
+[ ] `Vec<impl Shape>` => `impl` означает один конкретный тип, смешать нельзя.
+[x] `Vec<Box<dyn Shape>>` => Верно. `dyn` позволяет хранить разные типы.
+[ ] `Vec<Shape>` => Так не скомпилируется: нужен `dyn` и коробка.
+
+:: text Почему нужна коробка
+`dyn Shape` может быть кругом (8 байт) или квадратом (8 байт), а может быть чем-то на 100 байт. Размер заранее **неизвестен**, а `Vec` хочет одинаковые ячейки.
+
+`Box` решает это: в ячейке лежит только указатель (размер известен), а сама фигура — в куче. Вместо `Box` подойдёт и ссылка: `&dyn Shape`.
+
+:: deep Как работает dyn: таблица методов
+`Box<dyn Shape>` на самом деле хранит **два** указателя:
+1. на данные (сам круг или квадрат);
+2. на **vtable** — таблицу методов этого типа: «вот где `area`, вот где `name`».
+
+Когда ты вызываешь `s.area()`, программа смотрит в таблицу и прыгает на нужную функцию. Это называют **динамической диспетчеризацией**.
+
+С `impl` (и с обобщениями `<T: Shape>`) компилятор знает тип заранее и вызывает функцию напрямую. Это **статическая диспетчеризация**: быстрее, но код копируется под каждый тип.
+
+Не всякий трейт можно сделать `dyn`. Например, если метод возвращает `Self` или сам обобщён — таблицу не построить. Такие трейты называют не **dyn-совместимыми**.
+
+:: task
+Сделай список животных `Vec<Box<dyn Animal>>` из кота и собаки и выведи их голоса в цикле.
+```rust
+trait Animal {
+    fn voice(&self) -> String;
+}
+
+struct Cat;
+struct Dog;
+
+impl Animal for Cat {
+    fn voice(&self) -> String { String::from("мяу") }
+}
+
+impl Animal for Dog {
+    fn voice(&self) -> String { String::from("гав") }
+}
+
+fn main() {
+    // твой код
+}
+```
+```solution
+trait Animal {
+    fn voice(&self) -> String;
+}
+
+struct Cat;
+struct Dog;
+
+impl Animal for Cat {
+    fn voice(&self) -> String { String::from("мяу") }
+}
+
+impl Animal for Dog {
+    fn voice(&self) -> String { String::from("гав") }
+}
+
+fn main() {
+    let zoo: Vec<Box<dyn Animal>> = vec![Box::new(Cat), Box::new(Dog)];
+    for a in &zoo {
+        println!("{}", a.voice());
+    }
+}
+```
+```expect
+мяу
+гав
+```
+contains: dyn Animal
+hint: Тип списка: `Vec<Box<dyn Animal>>`. Элементы: `Box::new(Cat)`, `Box::new(Dog)`.
+
+:: recap
+- `impl Trait` — один конкретный тип, известен компилятору. Быстро.
+- `dyn Trait` — любой тип, выясняется при работе. Нужен для смешанных списков.
+- `dyn` живёт за указателем: `Box<dyn T>` или `&dyn T`.
+
+## LESSON a01-4 | Операторы и From | 7
+:: goals
+- Научить свой тип складываться через `+`
+- Сделать преобразование типов через `From` и `into()`
+
+:: text Операторы — тоже трейты
+Когда ты пишешь `a + b`, Rust вызывает метод `add` из трейта `std::ops::Add`. Реализуешь `Add` для своего типа — и `+` заработает.
+
+> **Аналогия:** знак `+` — это кнопка. Трейт `Add` — инструкция, что делать при нажатии.
+
+:: code
+```rust
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Add for Point {
+    type Output = Point;
+    fn add(self, other: Point) -> Point {
+        Point { x: self.x + other.x, y: self.y + other.y }
+    }
+}
+
+fn main() {
+    let a = Point { x: 1, y: 2 };
+    let b = Point { x: 10, y: 20 };
+    println!("{:?}", a + b);
+}
+```
+```out
+Point { x: 11, y: 22 }
+```
+Видишь `type Output`? Это ассоциированный тип из прошлого урока: «что получится в результате сложения».
+
+:: text Другие операторы
+Все они живут в `std::ops`:
+- `Sub` — `-`, `Mul` — `*`, `Div` — `/`
+- `Neg` — минус перед значением: `-a`
+- `AddAssign` — `+=`
+- `Index` — квадратные скобки: `a[i]`
+
+Сравнения `==` и `<` — это `PartialEq` и `PartialOrd`. Их обычно получают через `#[derive]`.
+
+:: text From и into
+`From` — трейт «как сделать мой тип из другого».
+
+```rust
+struct Meters(f64);
+
+impl From<f64> for Meters {
+    fn from(x: f64) -> Self { Meters(x) }
+}
+```
+Бонус: реализовал `From<A> for B` — и у `A` сам появился метод `.into()`, который превращает его в `B`.
+
+:: code
+```rust
+struct Celsius(f64);
+struct Fahrenheit(f64);
+
+impl From<Celsius> for Fahrenheit {
+    fn from(c: Celsius) -> Self {
+        Fahrenheit(c.0 * 9.0 / 5.0 + 32.0)
+    }
+}
+
+fn main() {
+    let f = Fahrenheit::from(Celsius(100.0));
+    println!("{}", f.0);
+    let g: Fahrenheit = Celsius(0.0).into();
+    println!("{}", g.0);
+}
+```
+```out
+212
+32
+```
+У `into()` нужно указать, **во что** превращаем: `let g: Fahrenheit = ...`. Иначе компилятор не поймёт.
+
+:: quiz
+Ты реализовал `impl From<u8> for Level`. Что ещё появилось само?
+[ ] Ничего => Появилось кое-что полезное.
+[x] Метод `.into()` у `u8`, который делает `Level` => Верно. `Into` получается из `From` бесплатно.
+[ ] `From<Level> for u8` => Обратное преобразование нужно писать отдельно.
+
+:: order
+Собери реализацию `Mul` для `Money`, чтобы `Money(5) * 3` давало `Money(15)`.
+```rust
+use std::ops::Mul;
+impl Mul<u32> for Money {
+    type Output = Money;
+    fn mul(self, k: u32) -> Money {
+        Money(self.0 * k)
+    }
+}
+```
+explain: Сначала `use`, потом `impl Mul<u32> for Money`, внутри тип результата и сам метод.
+
+:: task
+Реализуй `Sub` для `Point`, чтобы `b - a` работало.
+```rust
+use std::ops::Sub;
+
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+// твой код
+
+fn main() {
+    let a = Point { x: 1, y: 2 };
+    let b = Point { x: 10, y: 20 };
+    println!("{:?}", b - a);
+}
+```
+```solution
+use std::ops::Sub;
+
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Sub for Point {
+    type Output = Point;
+    fn sub(self, other: Point) -> Point {
+        Point { x: self.x - other.x, y: self.y - other.y }
+    }
+}
+
+fn main() {
+    let a = Point { x: 1, y: 2 };
+    let b = Point { x: 10, y: 20 };
+    println!("{:?}", b - a);
+}
+```
+```expect
+Point { x: 9, y: 18 }
+```
+hint: Всё как с `Add`, только метод называется `sub`.
+
+:: recap
+- Операторы — это трейты из `std::ops`: `Add`, `Sub`, `Mul`…
+- `From<A> for B` — как сделать `B` из `A`. `.into()` появится сам.
+- У `into()` укажи тип результата.
+
+## LESSON a01-p | Практика: трейты | 15 | practice
+:: goals
+- Закрепить методы по умолчанию, `dyn` и `From`
+
+:: task
+Трейт `Priced` имеет метод `price()` в копейках и метод по умолчанию `with_tax()`, который добавляет 20%. Реализуй `Priced` для `Book` (цена 50000) и выведи обе цены.
+```rust
+trait Priced {
+    fn price(&self) -> u32;
+    fn with_tax(&self) -> u32 {
+        // твой код
+    }
+}
+
+struct Book;
+
+// твой код
+
+fn main() {
+    let b = Book;
+    println!("{}", b.price());
+    println!("{}", b.with_tax());
+}
+```
+```solution
+trait Priced {
+    fn price(&self) -> u32;
+    fn with_tax(&self) -> u32 {
+        self.price() * 120 / 100
+    }
+}
+
+struct Book;
+
+impl Priced for Book {
+    fn price(&self) -> u32 { 50000 }
+}
+
+fn main() {
+    let b = Book;
+    println!("{}", b.price());
+    println!("{}", b.with_tax());
+}
+```
+```expect
+50000
+60000
+```
+hint: 20% сверху — это умножить на 120 и поделить на 100.
+
+:: task
+Функция `total_area` принимает срез фигур `&[Box<dyn Shape>]` и возвращает сумму площадей. Напиши её.
+```rust
+trait Shape {
+    fn area(&self) -> u32;
+}
+
+struct Rect { w: u32, h: u32 }
+struct Sq(u32);
+
+impl Shape for Rect {
+    fn area(&self) -> u32 { self.w * self.h }
+}
+impl Shape for Sq {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn total_area(shapes: &[Box<dyn Shape>]) -> u32 {
+    // твой код
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Rect { w: 2, h: 3 }),
+        Box::new(Sq(4)),
+        Box::new(Sq(1)),
+    ];
+    println!("{}", total_area(&shapes));
+}
+```
+```solution
+trait Shape {
+    fn area(&self) -> u32;
+}
+
+struct Rect { w: u32, h: u32 }
+struct Sq(u32);
+
+impl Shape for Rect {
+    fn area(&self) -> u32 { self.w * self.h }
+}
+impl Shape for Sq {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn total_area(shapes: &[Box<dyn Shape>]) -> u32 {
+    shapes.iter().map(|s| s.area()).sum()
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Rect { w: 2, h: 3 }),
+        Box::new(Sq(4)),
+        Box::new(Sq(1)),
+    ];
+    println!("{}", total_area(&shapes));
+}
+```
+```expect
+23
+```
+hint: `shapes.iter().map(|s| s.area()).sum()`.
+
+:: task
+Сделай `impl From<&str> for Color`: `"red"` → `Color::Red`, `"green"` → `Color::Green`, всё остальное → `Color::Unknown`. Потом вызови `.into()`.
+```rust
+#[derive(Debug)]
+enum Color {
+    Red,
+    Green,
+    Unknown,
+}
+
+// твой код
+
+fn main() {
+    let a: Color = "red".into();
+    let b: Color = "green".into();
+    let c: Color = "purple".into();
+    println!("{a:?} {b:?} {c:?}");
+}
+```
+```solution
+#[derive(Debug)]
+enum Color {
+    Red,
+    Green,
+    Unknown,
+}
+
+impl From<&str> for Color {
+    fn from(s: &str) -> Self {
+        match s {
+            "red" => Color::Red,
+            "green" => Color::Green,
+            _ => Color::Unknown,
+        }
+    }
+}
+
+fn main() {
+    let a: Color = "red".into();
+    let b: Color = "green".into();
+    let c: Color = "purple".into();
+    println!("{a:?} {b:?} {c:?}");
+}
+```
+```expect
+Red Green Unknown
+```
+hint: Внутри `from` сделай `match s { "red" => ..., "green" => ..., _ => ... }`.
+
+:: task
+Трейт `Describe` требует `Debug` (supertrait). Метод по умолчанию `describe` возвращает `Это: ` и отладочную печать значения. Допиши трейт и реализуй его для `Pet`.
+```rust
+use std::fmt::Debug;
+
+trait Describe {
+    fn describe(&self) -> String {
+        format!("Это: {:?}", self)
+    }
+}
+
+#[derive(Debug)]
+struct Pet {
+    name: String,
+}
+
+fn main() {
+    let p = Pet { name: String::from("Бублик") };
+    println!("{}", p.describe());
+}
+```
+```solution
+use std::fmt::Debug;
+
+trait Describe: Debug {
+    fn describe(&self) -> String {
+        format!("Это: {:?}", self)
+    }
+}
+
+#[derive(Debug)]
+struct Pet {
+    name: String,
+}
+
+impl Describe for Pet {}
+
+fn main() {
+    let p = Pet { name: String::from("Бублик") };
+    println!("{}", p.describe());
+}
+```
+```expect
+Это: Pet { name: "Бублик" }
+```
+hint: Сейчас трейт не знает, что `self` можно печатать через `{:?}`. Напиши `trait Describe: Debug`.
+hint: Реализация может быть пустой: `impl Describe for Pet {}`.
+
+:: recap
+- Методы по умолчанию экономят код.
+- `dyn` собирает разные типы в один список.
+- `From` делает преобразования, `.into()` приходит бонусом.

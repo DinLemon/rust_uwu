@@ -1,0 +1,774 @@
+# MODULE a01 | Traits, deeper | Default methods, dyn, associated types, operators
+
+## LESSON a01-1 | Default methods and traits on top of traits | 7
+:: goals
+- Give a trait method a ready-made body
+- Require one trait for another
+
+:: text Default method
+A trait can not only declare a method but also **write its body right away**. Then a type doesn't have to implement it.
+
+```rust
+trait Greet {
+    fn name(&self) -> String;          // required
+    fn hello(&self) -> String {        // default
+        format!("Hello, {}!", self.name())
+    }
+}
+```
+The type implements only `name` and gets `hello` for free.
+
+> **Analogy:** a letter template. You fill in the name, the rest of the text is already there.
+
+:: code
+```rust
+trait Greet {
+    fn name(&self) -> String;
+    fn hello(&self) -> String {
+        format!("Hello, {}!", self.name())
+    }
+}
+
+struct Cat;
+struct Robot;
+
+impl Greet for Cat {
+    fn name(&self) -> String { String::from("Kitty") }
+}
+
+impl Greet for Robot {
+    fn name(&self) -> String { String::from("R2") }
+    fn hello(&self) -> String { String::from("BEEP-BOOP") } // its own
+}
+
+fn main() {
+    println!("{}", Cat.hello());
+    println!("{}", Robot.hello());
+}
+```
+```out
+Hello, Kitty!
+BEEP-BOOP
+```
+`Robot` replaced the default method with its own. That's allowed too.
+
+:: quiz
+A type implements a trait but doesn't write a method that has a default body. What happens?
+[ ] Compile error => No, that's what the default body is for.
+[x] The type gets the ready-made version => Right.
+[ ] The method will be empty => It does what the trait says.
+
+:: text A trait on top of a trait
+Sometimes a trait needs another trait. For example: "to be able to `Report`, a type must be printable with `{}`".
+
+```rust
+use std::fmt::Display;
+
+trait Report: Display {
+    fn report(&self) -> String {
+        format!("[report] {}", self)
+    }
+}
+```
+`trait Report: Display` reads "Report requires Display". Such a "parent" trait is called a **supertrait**.
+
+:: code
+```rust
+use std::fmt;
+
+trait Report: fmt::Display {
+    fn report(&self) -> String {
+        format!("[report] {}", self)
+    }
+}
+
+struct Temp(i32);
+
+impl fmt::Display for Temp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}°C", self.0)
+    }
+}
+
+impl Report for Temp {}
+
+fn main() {
+    println!("{}", Temp(21).report());
+}
+```
+```out
+[report] 21°C
+```
+`impl Report for Temp {}` is empty: everything has a default. Remove `impl fmt::Display` and see the error.
+
+:: task
+Add a default method `describe` to the `Shape` trait that returns `area: X`, where X is the result of `area()`. The square implements only `area`.
+```rust
+trait Shape {
+    fn area(&self) -> u32;
+    // add describe
+}
+
+struct Square(u32);
+
+impl Shape for Square {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn main() {
+    println!("{}", Square(4).describe());
+}
+```
+```solution
+trait Shape {
+    fn area(&self) -> u32;
+    fn describe(&self) -> String {
+        format!("area: {}", self.area())
+    }
+}
+
+struct Square(u32);
+
+impl Shape for Square {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn main() {
+    println!("{}", Square(4).describe());
+}
+```
+```expect
+area: 16
+```
+hint: A default method can call other trait methods: `self.area()`.
+
+:: deep The orphan rule
+You can implement a trait for a type only if **the trait or the type is yours** (declared in your crate).
+
+You can't write `impl Display for Vec<i32>`: both `Display` and `Vec` belong to someone else. Otherwise two crates could do it in different ways, and Rust wouldn't know whose version wins.
+
+This is the **orphan rule**. The usual way around it is a wrapper: `struct MyList(Vec<i32>);` is your own type, and you can do anything with it.
+
+:: recap
+- A method with a body in a trait is a default method. It can be overridden.
+- `trait A: B` — to be `A`, a type must be `B`.
+- You can't implement someone else's trait for someone else's type.
+
+## LESSON a01-2 | Associated types | 7
+:: goals
+- Understand `type Item` inside a trait
+- Write a trait with your own associated type
+
+:: text A type inside a trait
+Remember iterators? The `Iterator` trait has this line:
+
+```rust
+trait Iterator {
+    type Item;
+    fn next(&mut self) -> Option<Self::Item>;
+}
+```
+`type Item;` is an **associated type**. Each iterator says **what** it yields: numbers, strings, anything.
+
+> **Analogy:** a vending machine. The trait says "I can hand out a product". Which product is up to each machine: one sells chocolate, another sells water.
+
+:: code
+```rust
+trait Container {
+    type Item;
+    fn get(&self, i: usize) -> Option<&Self::Item>;
+    fn first(&self) -> Option<&Self::Item> {
+        self.get(0)
+    }
+}
+
+struct Shelf {
+    books: Vec<String>,
+}
+
+impl Container for Shelf {
+    type Item = String;
+    fn get(&self, i: usize) -> Option<&String> {
+        self.books.get(i)
+    }
+}
+
+fn main() {
+    let s = Shelf { books: vec![String::from("Dune"), String::from("The Hobbit")] };
+    println!("{:?}", s.first());
+    println!("{:?}", s.get(5));
+}
+```
+```out
+Some("Dune")
+None
+```
+`type Item = String;` — the shelf holds strings.
+
+:: text Why not a generic?
+You could write `trait Container<T>` instead. The difference:
+- `Container<T>` — a type can implement it **many times**: for `T = i32`, for `T = String`…
+- `type Item` — **exactly once**. A shelf holds one kind of thing.
+
+If the answer is "one type per implementation", use an associated type. The code is simpler: no `<T>` everywhere.
+
+:: quiz
+How many times can one type implement a trait with an associated type `type Item`?
+[x] Once => Right. And it has one `Item`.
+[ ] Any number of times, with different `Item`s => That's how a generic trait `Trait<T>` works.
+[ ] Never, such traits exist only in the standard library => You can write your own.
+
+:: fill
+Fill in the blanks: the counter yields `u32` numbers.
+```rust
+struct Counter { n: u32 }
+
+impl Iterator for Counter {
+    type ___ = u32;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.n < 3 {
+            self.n += 1;
+            ___(self.n)
+        } else {
+            None
+        }
+    }
+}
+```
+= Item
+= Some
+explain: The associated type of `Iterator` is called `Item`, and the value is returned inside `Some(...)`.
+
+:: recap
+- `type Item;` in a trait is a type that each implementation chooses.
+- The implementation writes `type Item = Concrete;`.
+- One type, one implementation, one `Item`.
+
+## LESSON a01-3 | impl Trait and dyn Trait | 8
+:: goals
+- See the difference between `impl Trait` and `dyn Trait`
+- Put different types into one `Vec`
+
+:: text Problem: different types in one list
+A `Vec` holds values of **one** type. What if you want a list of shapes: circles, squares, triangles?
+
+```rust
+let shapes = vec![Circle, Square]; // error: the types differ
+```
+The fix is `Box<dyn Shape>`: "a box with something that can do Shape".
+
+:: code
+```rust
+trait Shape {
+    fn area(&self) -> f64;
+    fn name(&self) -> &str;
+}
+
+struct Circle { r: f64 }
+struct Square { side: f64 }
+
+impl Shape for Circle {
+    fn area(&self) -> f64 { 3.14 * self.r * self.r }
+    fn name(&self) -> &str { "circle" }
+}
+
+impl Shape for Square {
+    fn area(&self) -> f64 { self.side * self.side }
+    fn name(&self) -> &str { "square" }
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Circle { r: 1.0 }),
+        Box::new(Square { side: 2.0 }),
+    ];
+    for s in &shapes {
+        println!("{}: {:.2}", s.name(), s.area());
+    }
+}
+```
+```out
+circle: 3.14
+square: 4.00
+```
+
+:: text Two ways to say "any Shape"
+- `impl Shape` — "some **one** concrete type, the compiler knows which". Fast: the compiler makes a separate copy of the code for each type.
+- `dyn Shape` — "**any** type, we'll find out while running". Needed when types are mixed. A bit slower: the method is looked up in a table.
+
+> **Analogy:** `impl` is a pizza order where you know in advance which pizza arrives. `dyn` is a surprise box: open it and see.
+
+:: code
+```rust
+use std::fmt::Display;
+
+// impl in an argument: any type with Display fits
+fn show(x: impl Display) {
+    println!("<{x}>");
+}
+
+// impl in a return type: "I return an iterator, which one doesn't matter"
+fn evens(max: u32) -> impl Iterator<Item = u32> {
+    (0..=max).filter(|n| n % 2 == 0)
+}
+
+fn main() {
+    show(5);
+    show("cat");
+    let v: Vec<u32> = evens(6).collect();
+    println!("{v:?}");
+}
+```
+```out
+<5>
+<cat>
+[0, 2, 4, 6]
+```
+`impl Iterator<Item = u32>` as a return type is very common: the real iterator type is long and scary, and this way you don't have to write it.
+
+:: quiz
+You need a `Vec` holding both `Circle` and `Square`. What do you pick?
+[ ] `Vec<impl Shape>` => `impl` means one concrete type, you can't mix.
+[x] `Vec<Box<dyn Shape>>` => Right. `dyn` lets you store different types.
+[ ] `Vec<Shape>` => That won't compile: you need `dyn` and a box.
+
+:: text Why a box is needed
+A `dyn Shape` might be a circle (8 bytes), a square (8 bytes) or something of 100 bytes. Its size is **unknown** in advance, but a `Vec` wants equal slots.
+
+`Box` fixes that: the slot holds only a pointer (known size), and the shape itself lives on the heap. A reference works too: `&dyn Shape`.
+
+:: deep How dyn works: the method table
+A `Box<dyn Shape>` actually holds **two** pointers:
+1. to the data (the circle or square itself);
+2. to a **vtable** — this type's table of methods: "here is `area`, here is `name`".
+
+When you call `s.area()`, the program looks in the table and jumps to the right function. This is called **dynamic dispatch**.
+
+With `impl` (and generics `<T: Shape>`) the compiler knows the type in advance and calls the function directly. This is **static dispatch**: faster, but the code is copied for every type.
+
+Not every trait can be used as `dyn`. For example, if a method returns `Self` or is generic itself, the table can't be built. Such traits are not **dyn compatible**.
+
+:: task
+Make a list of animals `Vec<Box<dyn Animal>>` with a cat and a dog, and print their voices in a loop.
+```rust
+trait Animal {
+    fn voice(&self) -> String;
+}
+
+struct Cat;
+struct Dog;
+
+impl Animal for Cat {
+    fn voice(&self) -> String { String::from("meow") }
+}
+
+impl Animal for Dog {
+    fn voice(&self) -> String { String::from("woof") }
+}
+
+fn main() {
+    // your code
+}
+```
+```solution
+trait Animal {
+    fn voice(&self) -> String;
+}
+
+struct Cat;
+struct Dog;
+
+impl Animal for Cat {
+    fn voice(&self) -> String { String::from("meow") }
+}
+
+impl Animal for Dog {
+    fn voice(&self) -> String { String::from("woof") }
+}
+
+fn main() {
+    let zoo: Vec<Box<dyn Animal>> = vec![Box::new(Cat), Box::new(Dog)];
+    for a in &zoo {
+        println!("{}", a.voice());
+    }
+}
+```
+```expect
+meow
+woof
+```
+contains: dyn Animal
+hint: The list type is `Vec<Box<dyn Animal>>`. The items are `Box::new(Cat)`, `Box::new(Dog)`.
+
+:: recap
+- `impl Trait` — one concrete type known to the compiler. Fast.
+- `dyn Trait` — any type, found out while running. Needed for mixed lists.
+- `dyn` lives behind a pointer: `Box<dyn T>` or `&dyn T`.
+
+## LESSON a01-4 | Operators and From | 7
+:: goals
+- Make your type work with `+`
+- Convert types with `From` and `into()`
+
+:: text Operators are traits too
+When you write `a + b`, Rust calls the `add` method of the `std::ops::Add` trait. Implement `Add` for your type and `+` works.
+
+> **Analogy:** the `+` sign is a button. The `Add` trait is the instruction for what happens when you press it.
+
+:: code
+```rust
+use std::ops::Add;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Add for Point {
+    type Output = Point;
+    fn add(self, other: Point) -> Point {
+        Point { x: self.x + other.x, y: self.y + other.y }
+    }
+}
+
+fn main() {
+    let a = Point { x: 1, y: 2 };
+    let b = Point { x: 10, y: 20 };
+    println!("{:?}", a + b);
+}
+```
+```out
+Point { x: 11, y: 22 }
+```
+See `type Output`? That's an associated type from the last lesson: "what you get from adding".
+
+:: text Other operators
+They all live in `std::ops`:
+- `Sub` — `-`, `Mul` — `*`, `Div` — `/`
+- `Neg` — a minus in front: `-a`
+- `AddAssign` — `+=`
+- `Index` — square brackets: `a[i]`
+
+Comparisons `==` and `<` are `PartialEq` and `PartialOrd`. You usually get them with `#[derive]`.
+
+:: text From and into
+`From` is the trait "how to make my type from another one".
+
+```rust
+struct Meters(f64);
+
+impl From<f64> for Meters {
+    fn from(x: f64) -> Self { Meters(x) }
+}
+```
+Bonus: implement `From<A> for B` and `A` gets an `.into()` method that turns it into `B`.
+
+:: code
+```rust
+struct Celsius(f64);
+struct Fahrenheit(f64);
+
+impl From<Celsius> for Fahrenheit {
+    fn from(c: Celsius) -> Self {
+        Fahrenheit(c.0 * 9.0 / 5.0 + 32.0)
+    }
+}
+
+fn main() {
+    let f = Fahrenheit::from(Celsius(100.0));
+    println!("{}", f.0);
+    let g: Fahrenheit = Celsius(0.0).into();
+    println!("{}", g.0);
+}
+```
+```out
+212
+32
+```
+With `into()` you must say **what** you convert into: `let g: Fahrenheit = ...`. Otherwise the compiler can't tell.
+
+:: quiz
+You implemented `impl From<u8> for Level`. What else appeared by itself?
+[ ] Nothing => Something useful did.
+[x] An `.into()` method on `u8` that makes a `Level` => Right. `Into` comes from `From` for free.
+[ ] `From<Level> for u8` => The reverse conversion must be written separately.
+
+:: order
+Put together an implementation of `Mul` for `Money` so that `Money(5) * 3` gives `Money(15)`.
+```rust
+use std::ops::Mul;
+impl Mul<u32> for Money {
+    type Output = Money;
+    fn mul(self, k: u32) -> Money {
+        Money(self.0 * k)
+    }
+}
+```
+explain: First the `use`, then `impl Mul<u32> for Money`, inside it the result type and the method itself.
+
+:: task
+Implement `Sub` for `Point` so that `b - a` works.
+```rust
+use std::ops::Sub;
+
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+// your code
+
+fn main() {
+    let a = Point { x: 1, y: 2 };
+    let b = Point { x: 10, y: 20 };
+    println!("{:?}", b - a);
+}
+```
+```solution
+use std::ops::Sub;
+
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Sub for Point {
+    type Output = Point;
+    fn sub(self, other: Point) -> Point {
+        Point { x: self.x - other.x, y: self.y - other.y }
+    }
+}
+
+fn main() {
+    let a = Point { x: 1, y: 2 };
+    let b = Point { x: 10, y: 20 };
+    println!("{:?}", b - a);
+}
+```
+```expect
+Point { x: 9, y: 18 }
+```
+hint: Same as `Add`, only the method is called `sub`.
+
+:: recap
+- Operators are traits from `std::ops`: `Add`, `Sub`, `Mul`…
+- `From<A> for B` — how to make a `B` from an `A`. `.into()` appears by itself.
+- Give `into()` the result type.
+
+## LESSON a01-p | Practice: traits | 15 | practice
+:: goals
+- Practice default methods, `dyn` and `From`
+
+:: task
+The `Priced` trait has a `price()` method in cents and a default method `with_tax()` that adds 20%. Implement `Priced` for `Book` (price 50000) and print both prices.
+```rust
+trait Priced {
+    fn price(&self) -> u32;
+    fn with_tax(&self) -> u32 {
+        // your code
+    }
+}
+
+struct Book;
+
+// your code
+
+fn main() {
+    let b = Book;
+    println!("{}", b.price());
+    println!("{}", b.with_tax());
+}
+```
+```solution
+trait Priced {
+    fn price(&self) -> u32;
+    fn with_tax(&self) -> u32 {
+        self.price() * 120 / 100
+    }
+}
+
+struct Book;
+
+impl Priced for Book {
+    fn price(&self) -> u32 { 50000 }
+}
+
+fn main() {
+    let b = Book;
+    println!("{}", b.price());
+    println!("{}", b.with_tax());
+}
+```
+```expect
+50000
+60000
+```
+hint: Adding 20% means multiplying by 120 and dividing by 100.
+
+:: task
+The function `total_area` takes a slice of shapes `&[Box<dyn Shape>]` and returns the sum of their areas. Write it.
+```rust
+trait Shape {
+    fn area(&self) -> u32;
+}
+
+struct Rect { w: u32, h: u32 }
+struct Sq(u32);
+
+impl Shape for Rect {
+    fn area(&self) -> u32 { self.w * self.h }
+}
+impl Shape for Sq {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn total_area(shapes: &[Box<dyn Shape>]) -> u32 {
+    // your code
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Rect { w: 2, h: 3 }),
+        Box::new(Sq(4)),
+        Box::new(Sq(1)),
+    ];
+    println!("{}", total_area(&shapes));
+}
+```
+```solution
+trait Shape {
+    fn area(&self) -> u32;
+}
+
+struct Rect { w: u32, h: u32 }
+struct Sq(u32);
+
+impl Shape for Rect {
+    fn area(&self) -> u32 { self.w * self.h }
+}
+impl Shape for Sq {
+    fn area(&self) -> u32 { self.0 * self.0 }
+}
+
+fn total_area(shapes: &[Box<dyn Shape>]) -> u32 {
+    shapes.iter().map(|s| s.area()).sum()
+}
+
+fn main() {
+    let shapes: Vec<Box<dyn Shape>> = vec![
+        Box::new(Rect { w: 2, h: 3 }),
+        Box::new(Sq(4)),
+        Box::new(Sq(1)),
+    ];
+    println!("{}", total_area(&shapes));
+}
+```
+```expect
+23
+```
+hint: `shapes.iter().map(|s| s.area()).sum()`.
+
+:: task
+Write `impl From<&str> for Color`: `"red"` → `Color::Red`, `"green"` → `Color::Green`, anything else → `Color::Unknown`. Then call `.into()`.
+```rust
+#[derive(Debug)]
+enum Color {
+    Red,
+    Green,
+    Unknown,
+}
+
+// your code
+
+fn main() {
+    let a: Color = "red".into();
+    let b: Color = "green".into();
+    let c: Color = "purple".into();
+    println!("{a:?} {b:?} {c:?}");
+}
+```
+```solution
+#[derive(Debug)]
+enum Color {
+    Red,
+    Green,
+    Unknown,
+}
+
+impl From<&str> for Color {
+    fn from(s: &str) -> Self {
+        match s {
+            "red" => Color::Red,
+            "green" => Color::Green,
+            _ => Color::Unknown,
+        }
+    }
+}
+
+fn main() {
+    let a: Color = "red".into();
+    let b: Color = "green".into();
+    let c: Color = "purple".into();
+    println!("{a:?} {b:?} {c:?}");
+}
+```
+```expect
+Red Green Unknown
+```
+hint: Inside `from`, write `match s { "red" => ..., "green" => ..., _ => ... }`.
+
+:: task
+The `Describe` trait requires `Debug` (a supertrait). Its default method `describe` returns `This is: ` and the debug print of the value. Finish the trait and implement it for `Pet`.
+```rust
+use std::fmt::Debug;
+
+trait Describe {
+    fn describe(&self) -> String {
+        format!("This is: {:?}", self)
+    }
+}
+
+#[derive(Debug)]
+struct Pet {
+    name: String,
+}
+
+fn main() {
+    let p = Pet { name: String::from("Bagel") };
+    println!("{}", p.describe());
+}
+```
+```solution
+use std::fmt::Debug;
+
+trait Describe: Debug {
+    fn describe(&self) -> String {
+        format!("This is: {:?}", self)
+    }
+}
+
+#[derive(Debug)]
+struct Pet {
+    name: String,
+}
+
+impl Describe for Pet {}
+
+fn main() {
+    let p = Pet { name: String::from("Bagel") };
+    println!("{}", p.describe());
+}
+```
+```expect
+This is: Pet { name: "Bagel" }
+```
+hint: Right now the trait doesn't know that `self` can be printed with `{:?}`. Write `trait Describe: Debug`.
+hint: The implementation can be empty: `impl Describe for Pet {}`.
+
+:: recap
+- Default methods save code.
+- `dyn` puts different types into one list.
+- `From` does conversions, and `.into()` comes as a bonus.
