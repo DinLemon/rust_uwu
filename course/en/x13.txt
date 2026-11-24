@@ -1,0 +1,718 @@
+# MODULE x13 | Your own derive macro and the final project | Procedural macros with syn and quote, attributes, errors and a big final project
+
+## LESSON x13-1 | How macros work | 8
+:: goals
+- Recall `macro_rules!` and see where it falls short
+- Meet the three kinds of procedural macros
+
+:: text Two worlds of macros
+**`macro_rules!`** are "by pattern" macros: you describe patterns, the compiler substitutes. Handy for `vec!`-like things.
+
+But `macro_rules!` can't really take a struct apart and walk over its fields. For that there are **procedural macros** — ordinary Rust functions that receive code as a **token stream** and return a new stream.
+
+Three kinds:
+- **derive** — `#[derive(MyTrait)]` over a struct; adds code next to it (usually an `impl`);
+- **attribute** — `#[route(GET, "/")]` over a function; can rewrite the item itself;
+- **function-like** — `sql!(SELECT ...)`; called like an ordinary macro.
+
+They all live in a separate crate with `proc-macro = true`. You can't build such a crate in the Playground, but the logic itself can be written and checked as an ordinary function. That's what we'll do.
+
+> **Analogy:** `macro_rules!` is a stencil: lay it down and trace. A procedural macro is a craftsman who reads the blueprint and decides what to make.
+
+:: code
+`macro_rules!` with repetition: our own `map!`.
+```rust
+use std::collections::BTreeMap;
+
+macro_rules! map {
+    ($($k:expr => $v:expr),+ $(,)?) => {{
+        let mut m = BTreeMap::new();
+        $( m.insert($k, $v); )+
+        m
+    }};
+}
+
+fn main() {
+    let ages = map! {
+        "Anna" => 31,
+        "Bob" => 27,
+    };
+    println!("{ages:?}");
+}
+```
+```out
+{"Anna": 31, "Bob": 27}
+```
+`$( ... ),+` means "one or more, comma-separated". `$(,)?` allows a trailing comma.
+
+:: quiz
+Which kind of procedural macro is written as `#[derive(Describe)]`?
+[x] A derive macro => Right. It adds code next to the type.
+[ ] An attribute macro => Those are written as `#[name(...)]` over an item.
+[ ] A function-like macro => That one is called as `name!(...)`.
+
+:: recap
+- `macro_rules!` — substitution by patterns.
+- A procedural macro is a "tokens → tokens" function.
+- Kinds: derive, attribute, function-like. A crate with `proc-macro = true`.
+
+## LESSON x13-2 | syn and quote: a first derive | 10
+:: goals
+- Parse a struct with syn
+- Generate an `impl` with quote
+
+:: text Two helpers
+- **syn** parses tokens into a tree: `DeriveInput` is the type's name, its fields, attributes, generics.
+- **quote** assembles tokens back: you write code like text, and `#name` substitutes values.
+- **proc_macro2** — a `TokenStream` type that works both inside a macro and in an ordinary program.
+
+The plan of any derive:
+1. parse the input into `DeriveInput`;
+2. pull out what you need: the name, the fields;
+3. assemble an `impl` with `quote!`.
+
+:: code
+Derive `Describe`: the type gets a `describe()` method that returns its name and fields. This is an ordinary function — in a real crate `#[proc_macro_derive]` calls it.
+```rust
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse2, Data, DeriveInput, Fields};
+
+fn derive_describe(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = parse2(input).unwrap();
+    let name = &ast.ident;
+    let fields: Vec<String> = match &ast.data {
+        Data::Struct(s) => match &s.fields {
+            Fields::Named(f) => f
+                .named
+                .iter()
+                .map(|f| f.ident.as_ref().unwrap().to_string())
+                .collect(),
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    };
+    let text = format!("{} {{ {} }}", name, fields.join(", "));
+    quote! {
+        impl Describe for #name {
+            fn describe() -> &'static str {
+                #text
+            }
+        }
+    }
+}
+
+fn main() {
+    let input = quote! {
+        struct Point { x: i32, y: i32 }
+    };
+    println!("{}", derive_describe(input));
+}
+```
+crates: yes
+```out
+impl Describe for Point { fn describe () -> & 'static str { "Point { x, y }" } }
+```
+The spacing looks odd — that's normal: it's how a token stream prints. The compiler doesn't care.
+
+:: text Repetition in quote
+For lists, `quote!` has repetition, like `macro_rules!`:
+
+```rust
+let names = vec!["id", "name"];
+quote! { &[#(#names),*] }      // &["id", "name"]
+
+let getters = fields.iter().map(|f| quote! { ... });
+quote! { impl #name { #(#getters)* } }   // all methods in a row
+```
+`#( ... ),*` — comma-separated, `#( ... )*` — just in a row.
+
+:: quiz
+What does `#name` do inside `quote!`?
+[ ] It's a comment => `quote!` has no such comments.
+[x] It substitutes the value of the `name` variable into the generated code => Right.
+[ ] It declares a new variable => No, it's substitution.
+
+:: fill
+Fill in the blanks: generate a comma-separated list of field names.
+```rust
+let names: Vec<String> = vec!["id".into(), "name".into()];
+let ts = quote! { &[#(#names),___] };
+let ast: DeriveInput = ___(input)?;
+```
+= *
+= parse2
+explain: `#( ... ),*` is comma-separated repetition. `syn::parse2` parses a `proc_macro2::TokenStream`.
+
+:: recap
+- syn: tokens → a tree (`DeriveInput`).
+- quote: a code template → tokens, `#x` is substitution.
+- Repetition: `#(#x),*` and `#(#x)*`.
+
+## LESSON x13-3 | Attributes and clear errors | 9
+:: goals
+- Read your own field attributes: `#[describe(skip)]`
+- Return a compile error, not a panic
+
+:: text Helper attributes
+A derive can declare its own **helper attributes**: `#[proc_macro_derive(Describe, attributes(describe))]`. Then a user writes `#[describe(skip)]` on a field, and the macro reads it:
+
+- `field.attrs` — all of the field's attributes;
+- `attr.path().is_ident("describe")` — is it our attribute;
+- `attr.parse_args::<Ident>()` — what's inside the parentheses.
+
+:: text Errors
+A macro that panics gives the user a scary "proc macro panicked". The right way is to return a **compile error** pointing at the right spot:
+
+```rust
+return Err(syn::Error::new_spanned(name, "Describe works only with structs"));
+```
+`new_spanned` ties the error to a piece of code. `to_compile_error()` turns it into `compile_error!(...)` tokens — the compiler shows it as an ordinary error, with a red squiggle under the right word.
+
+> **Analogy:** a clerk doesn't throw the form back at you but politely points: "this signature here is wrong".
+
+:: code
+```rust
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse2, Data, DeriveInput, Error, Fields, Ident};
+
+fn derive_describe(input: TokenStream) -> TokenStream {
+    match expand(input) {
+        Ok(ts) => ts,
+        Err(e) => e.to_compile_error(),
+    }
+}
+
+fn is_skipped(f: &syn::Field) -> bool {
+    f.attrs.iter().any(|a| {
+        a.path().is_ident("describe")
+            && a.parse_args::<Ident>().map(|i| i == "skip").unwrap_or(false)
+    })
+}
+
+fn expand(input: TokenStream) -> syn::Result<TokenStream> {
+    let ast: DeriveInput = parse2(input)?;
+    let name = &ast.ident;
+    let Data::Struct(data) = &ast.data else {
+        return Err(Error::new_spanned(name, "Describe works only with structs"));
+    };
+    let Fields::Named(named) = &data.fields else {
+        return Err(Error::new_spanned(name, "named fields required"));
+    };
+    let shown: Vec<String> = named
+        .named
+        .iter()
+        .filter(|f| !is_skipped(f))
+        .map(|f| f.ident.as_ref().unwrap().to_string())
+        .collect();
+    let text = format!("{} {{ {} }}", name, shown.join(", "));
+    Ok(quote! {
+        impl Describe for #name {
+            fn describe() -> &'static str { #text }
+        }
+    })
+}
+
+fn main() {
+    let ok = quote! {
+        struct User {
+            name: String,
+            #[describe(skip)]
+            password: String,
+            age: u8,
+        }
+    };
+    println!("{}\n", derive_describe(ok));
+    let bad = quote! { enum Color { Red, Green } };
+    println!("error: {}", derive_describe(bad));
+}
+```
+crates: yes
+```out
+impl Describe for User { fn describe () -> & 'static str { "User { name, age }" } }
+
+error: :: core :: compile_error ! { "Describe works only with structs" }
+```
+The `password` field is skipped. For an enum — a tidy compile error.
+
+:: quiz
+Why is `syn::Error` better than `panic!` in a macro?
+[x] The error shows up as an ordinary compiler error pointing at the right spot => Right.
+[ ] `panic!` is forbidden in macros => It's allowed, but gives a bad message.
+[ ] `syn::Error` is faster => Speed has nothing to do with it.
+
+:: recap
+- Helper attributes: `attributes(name)` and reading `field.attrs`.
+- Write the logic as `fn expand(...) -> syn::Result<TokenStream>`.
+- An error — `Error::new_spanned(...)` and `to_compile_error()`.
+
+## LESSON x13-4 | A real proc-macro crate | 8
+:: goals
+- Set up a project structure with a macro crate
+- Learn how to test macros: cargo expand and trybuild
+
+:: text The layout
+A procedural macro is a **separate crate**. Usually you make a workspace:
+
+```text
+describe/
+├── Cargo.toml          # [workspace] members = ["describe", "describe-derive"]
+├── describe/           # the Describe trait and a re-export of the macro
+└── describe-derive/    # the macro itself
+    ├── Cargo.toml      # [lib] proc-macro = true
+    └── src/lib.rs
+```
+```rust
+// describe-derive/src/lib.rs
+use proc_macro::TokenStream;
+
+#[proc_macro_derive(Describe, attributes(describe))]
+pub fn derive_describe(input: TokenStream) -> TokenStream {
+    expand(input.into())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+fn expand(input: proc_macro2::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
+    // the logic from the last lesson
+}
+```
+`proc_macro::TokenStream` works only inside a macro, so the logic is kept on `proc_macro2` and converted with `.into()`. Exactly as we did in the Playground.
+
+:: text Generated paths
+Generate **full paths**: `::core::option::Option`, `::describe::Describe`. The user might have named their own struct `Option` or not imported the trait — a full path won't break.
+
+Generic types (`struct Wrapper<T>`) need `ast.generics.split_for_impl()`:
+```rust
+let (impl_g, ty_g, where_c) = ast.generics.split_for_impl();
+quote! { impl #impl_g ::describe::Describe for #name #ty_g #where_c { ... } }
+```
+
+:: text How to check
+- **cargo expand** (`cargo install cargo-expand`) shows the code after macro expansion. The first debugging tool.
+- **trybuild** checks that correct code compiles and wrong code fails with the **expected** error text. The texts live in `.stderr` files next to the tests.
+
+```rust
+#[test]
+fn ui() {
+    let t = trybuild::TestCases::new();
+    t.pass("tests/ui/ok_*.rs");
+    t.compile_fail("tests/ui/fail_*.rs");
+}
+```
+
+:: quiz
+Why generate `::core::option::Option` instead of just `Option`?
+[ ] The code compiles faster => Speed has nothing to do with it.
+[x] The user may have their own `Option` type, and a full path always points to the right one => Right. That's macro hygiene.
+[ ] Without `::core` the code doesn't work in `std` => It works; it's about names.
+
+:: homework Your own derive in a real crate
+Make the `Describe` derive (or `Builder`, if you want it harder) as a real crate.
+
+1. A workspace of two crates, as in the lesson. In `describe-derive`:
+```sh
+cargo add syn --features full
+cargo add quote proc-macro2
+```
+2. Move `expand` over from lesson x13-3. Support `#[describe(skip)]` and generic types (`split_for_impl`).
+3. Use full paths in the generated code.
+4. Check it with `cargo expand` on an example.
+5. trybuild tests: two "correct" files and two "wrong" ones (an enum, a tuple struct) with expected errors.
+6. Optionally, instead of `Describe`: `#[derive(Builder)]` generating a `UserBuilder` with setter methods and `build() -> Result<User, String>`.
+[ ] `#[derive(Describe)]` works in another crate
+[ ] `#[describe(skip)]` and generic structs are supported
+[ ] The error on an enum shows a red squiggle under the type name, not a panic
+[ ] The trybuild tests pass
+
+:: recap
+- A macro is a separate crate with `proc-macro = true`.
+- Logic on `proc_macro2`, `.into()` on the way in and out.
+- Full paths, `split_for_impl`, cargo expand and trybuild.
+
+## LESSON x13-5 | The final project | 12
+:: goals
+- Bring everything from level 3 into one program
+- Start with a core you can check in the Playground
+
+:: text Mini-Redis
+The final project is a small "key → value" store over the network, like Redis.
+
+What goes in:
+- **the core**: parsing commands and running them on a `HashMap` — pure functions (x12: table tests and properties);
+- **the network**: a tokio TCP server, a task per client (x04, x11);
+- **shared state**: `Arc<Mutex<...>>` or a sharded map (x08);
+- **a CLI client** with clap (x10);
+- **quality**: tests, proptest and fuzzing of the parser, a benchmark (x12);
+- **optional**: your own derive for replies, a wasm build of the core (x11, x13).
+
+The rule from x11: **the core is separate**. The network is a thin wrapper around the core.
+
+> **Analogy:** first the engine on a test bench, then the body and the wheels.
+
+:: task
+The project core. Finish `parse` and `run`. Commands: `PING`, `GET key`, `SET key value`, `DEL key`. The command name in any case. Replies: `PONG`, the value or `(nil)`, `OK`, `1`/`0` for `DEL`. Extra or missing words — an error.
+```rust
+use std::collections::HashMap;
+
+#[derive(Debug, PartialEq)]
+pub enum Command {
+    Ping,
+    Get(String),
+    Set(String, String),
+    Del(String),
+}
+
+pub fn parse(line: &str) -> Result<Command, String> {
+    todo!()
+}
+
+pub fn run(db: &mut HashMap<String, String>, cmd: Command) -> String {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parsing() {
+        assert_eq!(parse("PING"), Ok(Command::Ping));
+        assert_eq!(parse("get name"), Ok(Command::Get("name".into())));
+        assert_eq!(parse("SET name Alice"), Ok(Command::Set("name".into(), "Alice".into())));
+        assert_eq!(parse("  DEL   name  "), Ok(Command::Del("name".into())));
+        for bad in ["", "GET", "SET a", "SET a b c", "PING x", "FLY a"] {
+            assert!(parse(bad).is_err(), "expected an error for {bad:?}");
+        }
+    }
+
+    #[test]
+    fn session() {
+        let mut db = HashMap::new();
+        let script = [
+            ("PING", "PONG"),
+            ("GET name", "(nil)"),
+            ("SET name Alice", "OK"),
+            ("GET name", "Alice"),
+            ("DEL name", "1"),
+            ("DEL name", "0"),
+        ];
+        for (line, want) in script {
+            let cmd = parse(line).unwrap();
+            assert_eq!(run(&mut db, cmd), want, "command {line:?}");
+        }
+    }
+}
+```
+```solution
+use std::collections::HashMap;
+
+#[derive(Debug, PartialEq)]
+pub enum Command {
+    Ping,
+    Get(String),
+    Set(String, String),
+    Del(String),
+}
+
+pub fn parse(line: &str) -> Result<Command, String> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    let Some((name, args)) = parts.split_first() else {
+        return Err(String::from("empty command"));
+    };
+    match (name.to_ascii_uppercase().as_str(), args) {
+        ("PING", []) => Ok(Command::Ping),
+        ("GET", [k]) => Ok(Command::Get(k.to_string())),
+        ("SET", [k, v]) => Ok(Command::Set(k.to_string(), v.to_string())),
+        ("DEL", [k]) => Ok(Command::Del(k.to_string())),
+        (n, _) => Err(format!("unknown command {n} with {} arguments", args.len())),
+    }
+}
+
+pub fn run(db: &mut HashMap<String, String>, cmd: Command) -> String {
+    match cmd {
+        Command::Ping => String::from("PONG"),
+        Command::Get(k) => db.get(&k).cloned().unwrap_or_else(|| String::from("(nil)")),
+        Command::Set(k, v) => {
+            db.insert(k, v);
+            String::from("OK")
+        }
+        Command::Del(k) => if db.remove(&k).is_some() { "1" } else { "0" }.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parsing() {
+        assert_eq!(parse("PING"), Ok(Command::Ping));
+        assert_eq!(parse("get name"), Ok(Command::Get("name".into())));
+        assert_eq!(parse("SET name Alice"), Ok(Command::Set("name".into(), "Alice".into())));
+        assert_eq!(parse("  DEL   name  "), Ok(Command::Del("name".into())));
+        for bad in ["", "GET", "SET a", "SET a b c", "PING x", "FLY a"] {
+            assert!(parse(bad).is_err(), "expected an error for {bad:?}");
+        }
+    }
+
+    #[test]
+    fn session() {
+        let mut db = HashMap::new();
+        let script = [
+            ("PING", "PONG"),
+            ("GET name", "(nil)"),
+            ("SET name Alice", "OK"),
+            ("GET name", "Alice"),
+            ("DEL name", "1"),
+            ("DEL name", "0"),
+        ];
+        for (line, want) in script {
+            let cmd = parse(line).unwrap();
+            assert_eq!(run(&mut db, cmd), want, "command {line:?}");
+        }
+    }
+}
+```
+tests: yes
+hint: `split_whitespace` + `split_first`, then `match` on the pair (uppercased name, argument slice): `("SET", [k, v])`.
+hint: `run` is a `match` on the command. For `DEL`: `db.remove(&k).is_some()`.
+
+:: homework The whole Mini-Redis
+Build the project step by step. Each step is a working program; commit after each one.
+
+1. **Core**: `parse` and `run` from the task above in `src/lib.rs`. Add `EXPIRE key seconds` using the `Clock` trait from x12 (a fake clock in tests).
+2. **Server**: a tokio `TcpListener` on `127.0.0.1:6380`, `tokio::spawn` per client, line-by-line reading (`BufReader::lines`), a shared `Arc<Mutex<HashMap>>`.
+3. **Client**: a clap CLI: `mini-redis-cli set name Alice`, `mini-redis-cli get name`, an `--interactive` mode.
+4. **Quality**: a table test for the parser, proptest properties "`parse` doesn't panic on any string" and "SET, then GET returns the value", a minute of fuzzing the parser.
+5. **Load**: 100 clients in parallel run 1000 commands each; compare `Mutex<HashMap>` with a sharded map (16 locks) using criterion or a simple measurement in `--release`.
+6. **Tidiness**: a clean shutdown on Ctrl+C (`tokio::signal::ctrl_c`), errors sent to the client as `ERR ...` text rather than dropping the connection.
+7. **Optional**: saving to disk (SQLite from x10), your own derive for formatting replies, a wasm build of the core with a web console page.
+[ ] The server handles several clients at once (checked with two terminals)
+[ ] The core is covered by tests without a network; `cargo test` is green
+[ ] proptest and the fuzzer have run; found failures became tests
+[ ] There's a "one lock versus shards" measurement and a one-sentence conclusion
+[ ] Ctrl+C stops the server without a panic
+[ ] `cargo clippy` has no warnings, and there's a README with example commands
+
+:: recap
+- The final project brings the whole level together: async, network, concurrency, CLI, tests.
+- The core is pure functions; the network is a thin wrapper.
+- Small steps, a commit after each.
+
+## LESSON x13-p | Practice: macros | 25 | practice
+:: goals
+- Write a recursive `macro_rules!` and two derives with syn and quote
+
+:: task
+A recursive `max!` macro: one argument — itself; several — the larger of the first and `max!` of the rest. Each argument is evaluated exactly once.
+```rust
+macro_rules! max {
+    // your code
+}
+
+fn main() {
+    println!("{}", max!(3));
+    println!("{}", max!(3, 9, 2));
+    println!("{}", max!(1.5, -2.0));
+    println!("{}", max!("pear", "apple", "plum"));
+}
+```
+```solution
+macro_rules! max {
+    ($x:expr) => { $x };
+    ($x:expr, $($rest:expr),+) => {{
+        let a = $x;
+        let b = max!($($rest),+);
+        if a > b { a } else { b }
+    }};
+}
+
+fn main() {
+    println!("{}", max!(3));
+    println!("{}", max!(3, 9, 2));
+    println!("{}", max!(1.5, -2.0));
+    println!("{}", max!("pear", "apple", "plum"));
+}
+```
+```expect
+3
+9
+1.5
+plum
+```
+hint: Two arms: `($x:expr) => { $x };` and `($x:expr, $($rest:expr),+) => {{ ... }};`.
+hint: Inside the second: `let a = $x; let b = max!($($rest),+);` — that way each argument is evaluated once.
+
+:: task
+Derive `Getters`: for each named field generate `pub fn field(&self) -> &Type { &self.field }`. Not a struct, or no named fields — `Err`. The program parses the result back and prints the signatures.
+```rust
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse2, Data, DeriveInput, Fields, ImplItem, ItemImpl};
+
+fn derive_getters(input: TokenStream) -> syn::Result<TokenStream> {
+    // your code
+}
+
+fn main() {
+    let input = quote! { struct Book { title: String, year: u32 } };
+    let item: ItemImpl = parse2(derive_getters(input).unwrap()).unwrap();
+    let ty = &item.self_ty;
+    println!("impl {}", quote!(#ty));
+    for it in &item.items {
+        if let ImplItem::Fn(f) = it {
+            let ret = &f.sig.output;
+            println!("fn {} {}", f.sig.ident, quote!(#ret));
+        }
+    }
+    let bad = derive_getters(quote! { enum E { A } });
+    println!("enum -> error: {}", bad.is_err());
+}
+```
+```solution
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse2, Data, DeriveInput, Fields, ImplItem, ItemImpl};
+
+fn derive_getters(input: TokenStream) -> syn::Result<TokenStream> {
+    let ast: DeriveInput = parse2(input)?;
+    let name = &ast.ident;
+    let Data::Struct(data) = &ast.data else {
+        return Err(syn::Error::new_spanned(name, "only structs"));
+    };
+    let Fields::Named(named) = &data.fields else {
+        return Err(syn::Error::new_spanned(name, "named fields only"));
+    };
+    let getters = named.named.iter().map(|f| {
+        let field = f.ident.as_ref().unwrap();
+        let ty = &f.ty;
+        quote! {
+            pub fn #field(&self) -> &#ty {
+                &self.#field
+            }
+        }
+    });
+    Ok(quote! {
+        impl #name {
+            #(#getters)*
+        }
+    })
+}
+
+fn main() {
+    let input = quote! { struct Book { title: String, year: u32 } };
+    let item: ItemImpl = parse2(derive_getters(input).unwrap()).unwrap();
+    let ty = &item.self_ty;
+    println!("impl {}", quote!(#ty));
+    for it in &item.items {
+        if let ImplItem::Fn(f) = it {
+            let ret = &f.sig.output;
+            println!("fn {} {}", f.sig.ident, quote!(#ret));
+        }
+    }
+    let bad = derive_getters(quote! { enum E { A } });
+    println!("enum -> error: {}", bad.is_err());
+}
+```
+crates: yes
+```expect
+impl Book
+fn title -> & String
+fn year -> & u32
+enum -> error: true
+```
+hint: `let Data::Struct(data) = &ast.data else { return Err(...) };`, and the same for `Fields::Named`.
+hint: For each field: `quote! { pub fn #field(&self) -> &#ty { &self.#field } }`, all together — `quote! { impl #name { #(#getters)* } }`.
+
+:: task
+Derive `FieldNames`: generate `pub const FIELDS: &'static [&'static str]` with the field names, except those marked `#[skip]`. A struct without named fields — `Err`.
+```rust
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse2, Data, DeriveInput, Fields, ImplItem, ItemImpl};
+
+fn derive_fields(input: TokenStream) -> syn::Result<TokenStream> {
+    // your code
+}
+
+fn main() {
+    let input = quote! {
+        struct User {
+            id: u32,
+            #[skip]
+            password_hash: String,
+            name: String,
+        }
+    };
+    let item: ItemImpl = parse2(derive_fields(input).unwrap()).unwrap();
+    for it in &item.items {
+        if let ImplItem::Const(c) = it {
+            let expr = &c.expr;
+            println!("{} = {}", c.ident, quote!(#expr));
+        }
+    }
+    let unit = derive_fields(quote! { struct Marker; });
+    println!("unit -> error: {}", unit.is_err());
+}
+```
+```solution
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{parse2, Data, DeriveInput, Fields, ImplItem, ItemImpl};
+
+fn derive_fields(input: TokenStream) -> syn::Result<TokenStream> {
+    let ast: DeriveInput = parse2(input)?;
+    let name = &ast.ident;
+    let Data::Struct(data) = &ast.data else {
+        return Err(syn::Error::new_spanned(name, "only structs"));
+    };
+    let Fields::Named(named) = &data.fields else {
+        return Err(syn::Error::new_spanned(name, "named fields only"));
+    };
+    let names: Vec<String> = named
+        .named
+        .iter()
+        .filter(|f| !f.attrs.iter().any(|a| a.path().is_ident("skip")))
+        .map(|f| f.ident.as_ref().unwrap().to_string())
+        .collect();
+    Ok(quote! {
+        impl #name {
+            pub const FIELDS: &'static [&'static str] = &[#(#names),*];
+        }
+    })
+}
+
+fn main() {
+    let input = quote! {
+        struct User {
+            id: u32,
+            #[skip]
+            password_hash: String,
+            name: String,
+        }
+    };
+    let item: ItemImpl = parse2(derive_fields(input).unwrap()).unwrap();
+    for it in &item.items {
+        if let ImplItem::Const(c) = it {
+            let expr = &c.expr;
+            println!("{} = {}", c.ident, quote!(#expr));
+        }
+    }
+    let unit = derive_fields(quote! { struct Marker; });
+    println!("unit -> error: {}", unit.is_err());
+}
+```
+crates: yes
+```expect
+FIELDS = & ["id" , "name"]
+unit -> error: true
+```
+hint: Filter the fields: `!f.attrs.iter().any(|a| a.path().is_ident("skip"))`; the names go into a `Vec<String>`.
+hint: Strings in `quote!` become string literals: `&[#(#names),*]`.
+
+:: recap
+- `macro_rules!` can recurse: the head + `max!` of the tail.
+- derive = parse (`syn`), walk the fields, assemble (`quote!`).
+- Errors go through `Result`, not a panic.

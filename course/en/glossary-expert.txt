@@ -1,0 +1,35 @@
+// term | short form or syntax | explanation  (Level 3 glossary)
+Const generic | const N: usize | A number parameter of a type: `struct Buf<const N: usize>`. The size is known at compile time.
+PhantomData | PhantomData<T> | A zero-sized field that tells the compiler: "this type acts as if it owns a `T`".
+Blanket impl | impl<T: Bound> | An implementation of a trait for all matching types at once: `impl<T: Display> MyTrait for T`.
+Extension trait |  | Your own trait with methods for someone else's type, for example for `str` or `Iterator`.
+Dyn compatibility | dyn Trait | A trait property that allows writing `dyn Trait`. Generic methods, for example, prevent it.
+Generic associated type | GAT | An associated type with its own parameter: `type Item<'a> where Self: 'a;`.
+Variance |  | The rule for whether `T<longer>` can be used where `T<shorter>` is expected.
+Subtyping |  | In Rust it's mostly about lifetimes: `&'static str` fits where `&'a str` is expected.
+Waker | Waker | An object through which a Future asks the executor to poll it again.
+Executor |  | Code that polls Futures until they finish. For example, tokio.
+Pin | Pin<P> | A wrapper that promises the value won't move in memory any more.
+Allocator | #[global_allocator] | Code that hands out and takes back heap memory. Your own is plugged in with `#[global_allocator]`.
+Layout | Layout | The size and alignment of a memory block requested from an allocator.
+Arena |  | A big chunk of memory from which objects are handed out quickly and freed all at once.
+Niche |  | A forbidden value of a type where Rust hides the `None` variant. That's why `Option<&T>` is no bigger than `&T`.
+Raw pointer | *const T, *mut T | A pointer without borrowing rules. Dereferencing it needs `unsafe`.
+MaybeUninit | MaybeUninit<T> | A wrapper for memory that doesn't hold a valid value yet.
+Miri | cargo miri | A Rust interpreter that catches undefined behavior in `unsafe` code.
+Memory ordering | Ordering | Rules for how writes become visible between threads: `Relaxed`, `Acquire`, `Release`, `SeqCst`.
+Lock-free |  | A data structure built on atomic operations, without mutexes.
+no_std | #![no_std] | A mode without the standard library, only `core` (and optionally `alloc`). For microcontrollers.
+Register |  | A hardware cell at a fixed address. Its bits switch on and configure devices.
+Subcommand |  | A mode of a CLI program: `git commit`, `notes add`. In clap, an enum with `#[derive(Subcommand)]`.
+Migration |  | A file with a database schema change, applied in order.
+Service | tower::Service | A tower trait: request → a Future with the response. axum and hyper are built on it.
+Middleware |  | A Service wrapper that adds behavior: logging, timeouts, limits.
+Extractor | Path, Json, State | An axum handler argument the framework pulls out of the request by type.
+WebAssembly | wasm | A program format for the browser. Rust can build into it.
+Property test | proptest | A test that checks a rule on hundreds of random inputs.
+Shrinking |  | Simplifying a found failure into a small example that still fails.
+Fuzzing | cargo fuzz | Feeding random bytes into a program, guided by code coverage, to find crashes.
+Fake |  | A simple test replacement for an outside dependency: a clock, the network, the disk.
+Procedural macro | proc-macro | A "tokens → tokens" function that generates code at compile time.
+TokenStream | TokenStream | Code as a sequence of tokens — the input and output of a procedural macro.
