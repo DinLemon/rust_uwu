@@ -1,0 +1,540 @@
+# MODULE a09 | Async изнутри | Future, своя мини-среда, tokio, join, spawn, select
+
+## LESSON a09-1 | Что такое Future | 8
+:: goals
+- Понять, что `async fn` возвращает «обещание», а не результат
+- Увидеть, что Future ничего не делает, пока его не опрашивают
+
+:: text Повторим главное
+В первом уровне было: async — это «ждать, не простаивая». Пока одна задача ждёт сеть, другая работает.
+
+Теперь заглянем внутрь. `async fn` при вызове **не выполняется**. Она возвращает **Future** — объект «результат будет потом».
+
+> **Аналогия:** номерок в гардеробе. Ты получил его сразу, а куртку — когда подойдёт очередь. Сам номерок куртку не принесёт: нужен гардеробщик.
+
+:: text Как устроен Future
+У трейта `Future` один главный метод — `poll` («опросить»):
+
+```rust
+trait Future {
+    type Output;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output>;
+}
+```
+`poll` возвращает:
+- `Poll::Ready(значение)` — готово;
+- `Poll::Pending` — ещё нет, позови меня позже.
+
+Кто-то должен вызывать `poll`. Этого «кого-то» называют **средой выполнения** (runtime, executor). Самая популярная — `tokio`.
+
+:: code
+Своя крошечная среда — 10 строк. Она просто опрашивает Future, пока тот не скажет «готово»:
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn add(a: i32, b: i32) -> i32 {
+    println!("считаю");
+    a + b
+}
+
+fn main() {
+    let f = add(2, 3);
+    println!("future создан");
+    let r = block_on(f);
+    println!("результат: {r}");
+}
+```
+```out
+future создан
+считаю
+результат: 5
+```
+Смотри порядок: `считаю` появилось **после** `future создан`. Вызов `add(2, 3)` ничего не посчитал — он только создал Future.
+
+:: quiz
+Что произойдёт, если вызвать `async fn` и не сделать `.await` (и не отдать в среду)?
+[ ] Функция выполнится в фоне => Без опроса Future ничего не делает.
+[x] Ничего: тело функции не запустится => Верно. Future ленивый.
+[ ] Ошибка компиляции => Скомпилируется, но компилятор предупредит, что Future не используется.
+
+:: text Что делает .await
+`.await` внутри другой `async fn` значит: «опрашивай этот Future. Если он `Pending` — я тоже `Pending`, отдай управление среде».
+
+Так получается цепочка: среда опрашивает внешний Future, тот — внутренний, и так до самого низа. Где-то внизу — настоящее ожидание: таймер, сеть, файл.
+
+:: code
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn price() -> u32 { 100 }
+async fn tax(p: u32) -> u32 { p / 5 }
+
+async fn total() -> u32 {
+    let p = price().await;
+    let t = tax(p).await;
+    p + t
+}
+
+fn main() {
+    println!("{}", block_on(total()));
+}
+```
+```out
+120
+```
+
+:: deep Waker: как не опрашивать впустую
+Наша `block_on` опрашивает Future в бесконечном цикле. Если Future ждёт сеть секунду, процессор крутится вхолостую.
+
+Настоящие среды умнее. В `Context` лежит **Waker** — «будильник». Future, который вернул `Pending`, сохраняет его и вызывает `wake()`, когда данные пришли. Среда опрашивает только те Future, которые «разбудили».
+
+`Waker::noop()` в нашем примере — будильник, который ничего не делает. Для учебной среды сойдёт: мы всё равно опрашиваем постоянно.
+
+А `pin!` нужен потому, что Future, созданный из `async fn`, может хранить ссылки **на самого себя** (на свои же локальные переменные). Такой объект нельзя двигать в памяти после первого `poll`. `Pin` — обещание «не двину». Подробнее — в уроке про `select`.
+
+:: recap
+- `async fn` возвращает Future — «результат будет потом».
+- Future ленивый: работает, только пока его опрашивают (`poll`).
+- Опрашивает среда выполнения. `.await` передаёт опрос вглубь.
+
+## LESSON a09-2 | tokio и join! | 8
+:: goals
+- Запустить async-программу на tokio
+- Выполнять несколько ожиданий одновременно через `join!`
+
+:: text tokio — настоящая среда
+`tokio` умеет всё, чего нет в нашей игрушечной `block_on`: таймеры, сеть, файлы, много потоков. Подключается одной строкой над `main`:
+
+```rust
+#[tokio::main]
+async fn main() {
+    // тут можно писать .await
+}
+```
+Атрибут превращает `async fn main` в обычную `main`, которая запускает среду.
+
+:: code
+```rust
+use std::time::Duration;
+use tokio::time::sleep;
+
+async fn cook(name: &str, secs: u64) -> String {
+    sleep(Duration::from_millis(secs * 100)).await;
+    format!("{name} готов")
+}
+
+#[tokio::main]
+async fn main() {
+    let start = std::time::Instant::now();
+    let a = cook("чай", 3).await;
+    let b = cook("тост", 2).await;
+    println!("{a}, {b}");
+    println!("по очереди: ~{} мс", start.elapsed().as_millis() / 100 * 100);
+}
+```
+crates: yes
+```out
+чай готов, тост готов
+по очереди: ~500 мс
+```
+`.await` одно за другим — **по очереди**: 300 + 200 = 500 мс.
+
+:: text join! — ждать всё сразу
+`tokio::join!(a, b, c)` запускает несколько Future **одновременно** и ждёт, пока закончатся все. Возвращает кортеж результатов.
+
+> **Аналогия:** поставить чайник и включить тостер одновременно, а не ждать чайник, чтобы потом включить тостер.
+
+:: code
+```rust
+use std::time::Duration;
+use tokio::time::sleep;
+
+async fn cook(name: &str, secs: u64) -> String {
+    sleep(Duration::from_millis(secs * 100)).await;
+    format!("{name} готов")
+}
+
+#[tokio::main]
+async fn main() {
+    let start = std::time::Instant::now();
+    let (a, b) = tokio::join!(cook("чай", 3), cook("тост", 2));
+    println!("{a}, {b}");
+    println!("вместе: ~{} мс", start.elapsed().as_millis() / 100 * 100);
+}
+```
+crates: yes
+```out
+чай готов, тост готов
+вместе: ~300 мс
+```
+300 мс, а не 500: пока ждали чай, тост тоже жарился.
+
+:: quiz
+Три запроса по 1 секунде. Сколько займёт `join!` для всех трёх?
+[ ] 3 секунды => Это если делать `.await` по очереди.
+[x] Около 1 секунды => Верно. Они ждут одновременно.
+[ ] 0 секунд => Ждать всё равно придётся.
+
+:: text Важно: join! — это не потоки
+`join!` работает в **одном** потоке. Задачи по очереди продвигаются, пока другие ждут. Поэтому это помогает при **ожидании** (сеть, таймеры), но не ускоряет тяжёлые вычисления. Для вычислений — rayon или потоки.
+
+:: recap
+- `#[tokio::main]` — запустить async `main` на tokio.
+- `.await` по очереди — время складывается.
+- `tokio::join!(a, b)` — ждать одновременно, время = самое долгое.
+
+## LESSON a09-3 | spawn и каналы | 8
+:: goals
+- Запускать независимые задачи через `tokio::spawn`
+- Передавать данные между задачами через канал
+
+:: text spawn — отдельная задача
+`tokio::spawn(future)` отдаёт Future среде как **самостоятельную задачу**. Она начинает работать сразу, даже если ты ещё не ждёшь её результат. Возвращает `JoinHandle` — через него можно дождаться результата.
+
+Похоже на `thread::spawn`, но задачи **лёгкие**: их можно запускать тысячами.
+
+:: code
+```rust
+use std::time::Duration;
+use tokio::time::sleep;
+
+#[tokio::main]
+async fn main() {
+    let mut handles = Vec::new();
+    for id in 1..=3 {
+        handles.push(tokio::spawn(async move {
+            sleep(Duration::from_millis(30 * (4 - id))).await;
+            println!("задача {id} закончила");
+            id * 10
+        }));
+    }
+    let mut sum = 0;
+    for h in handles {
+        sum += h.await.unwrap();
+    }
+    println!("сумма: {sum}");
+}
+```
+crates: yes
+```out
+задача 3 закончила
+задача 2 закончила
+задача 1 закончила
+сумма: 60
+```
+Задачи закончились в обратном порядке (у третьей самый короткий сон), а результаты мы собрали по порядку.
+
+:: text Почему async move
+`tokio::spawn` требует `'static`, как и `thread::spawn`: задача может пережить функцию. Поэтому почти всегда пишут `async move { ... }` — забрать нужные данные внутрь.
+
+:: text Каналы между задачами
+У tokio свои каналы: `tokio::sync::mpsc`. Как в потоках, только отправка и получение — с `.await`.
+
+```rust
+let (tx, mut rx) = tokio::sync::mpsc::channel(16); // 16 — размер очереди
+tx.send(значение).await.unwrap();
+while let Some(v) = rx.recv().await { ... }
+```
+Когда все отправители (`tx`) удалены, `recv()` вернёт `None` — цикл закончится.
+
+:: code
+```rust
+use tokio::sync::mpsc;
+
+#[tokio::main]
+async fn main() {
+    let (tx, mut rx) = mpsc::channel(8);
+    for worker in 1..=3 {
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            tx.send(worker * worker).await.unwrap();
+        });
+    }
+    drop(tx); // главный отправитель больше не нужен
+
+    let mut got = Vec::new();
+    while let Some(v) = rx.recv().await {
+        got.push(v);
+    }
+    got.sort();
+    println!("{got:?}");
+}
+```
+crates: yes
+```out
+[1, 4, 9]
+```
+Без `drop(tx)` цикл ждал бы вечно: пока хоть один отправитель жив, канал открыт.
+
+:: quiz
+Почему после цикла `for` с `tx.clone()` пишут `drop(tx)`?
+[x] Чтобы канал закрылся, когда задачи отправят своё, и `recv()` вернул `None` => Верно.
+[ ] Чтобы освободить память => Не главное.
+[ ] Иначе задачи не запустятся => Запустятся, но цикл приёма не закончится.
+
+:: recap
+- `tokio::spawn(async move { ... })` — независимая лёгкая задача.
+- `handle.await` — дождаться её результата.
+- `mpsc::channel` + `send().await` / `recv().await`. Все `tx` удалены → `None`.
+
+## LESSON a09-4 | select! и тайм-ауты | 7
+:: goals
+- Ждать «что случится первым» через `select!`
+- Ставить ограничение по времени через `timeout`
+
+:: text select! — кто первый
+`tokio::select!` ждёт **несколько** Future и берёт результат **первого**, кто закончил. Остальные отменяются.
+
+```rust
+tokio::select! {
+    v = задача_a => println!("первой была A: {v}"),
+    v = задача_b => println!("первой была B: {v}"),
+}
+```
+> **Аналогия:** ждёшь автобус на двух остановках сразу. Какой придёт первым — на том и едешь.
+
+:: code
+```rust
+use std::time::Duration;
+use tokio::time::sleep;
+
+async fn server(name: &str, ms: u64) -> String {
+    sleep(Duration::from_millis(ms)).await;
+    format!("ответ от {name}")
+}
+
+#[tokio::main]
+async fn main() {
+    tokio::select! {
+        r = server("Европа", 120) => println!("{r}"),
+        r = server("Азия", 40) => println!("{r}"),
+    }
+}
+```
+crates: yes
+```out
+ответ от Азия
+```
+Медленный сервер даже не дождались: его Future просто удалили.
+
+:: text timeout — ограничить ожидание
+Частый случай `select!` — «результат или время вышло». Для этого есть готовая функция:
+
+```rust
+use tokio::time::{timeout, Duration};
+
+match timeout(Duration::from_secs(2), запрос()).await {
+    Ok(ответ) => ...,
+    Err(_) => println!("слишком долго"),
+}
+```
+
+:: code
+```rust
+use std::time::Duration;
+use tokio::time::{sleep, timeout};
+
+async fn slow_answer() -> u32 {
+    sleep(Duration::from_millis(500)).await;
+    42
+}
+
+#[tokio::main]
+async fn main() {
+    match timeout(Duration::from_millis(100), slow_answer()).await {
+        Ok(v) => println!("ответ: {v}"),
+        Err(_) => println!("время вышло"),
+    }
+    match timeout(Duration::from_millis(900), slow_answer()).await {
+        Ok(v) => println!("ответ: {v}"),
+        Err(_) => println!("время вышло"),
+    }
+}
+```
+crates: yes
+```out
+время вышло
+ответ: 42
+```
+
+:: quiz
+Что происходит с остальными ветками `select!`, когда одна закончилась?
+[ ] Продолжают работать в фоне => Нет, их Future удаляются.
+[x] Отменяются => Верно. Поэтому важно, чтобы отмена в середине не ломала данные.
+[ ] Ждут своей очереди => `select!` берёт только один результат.
+
+:: deep Отмена и Pin
+В async-Rust отменить задачу = **перестать её опрашивать и удалить** Future. Отмена может случиться на любом `.await`. Поэтому пиши код так, чтобы между двумя `.await` данные оставались в порядке. Например, не держи «полузаписанный» файл на момент ожидания.
+
+Про `Pin`: Future из `async fn` хранит свои локальные переменные внутри себя. Если одна переменная — ссылка на другую, а сам Future передвинуть в памяти, ссылка указала бы в пустоту. `Pin<&mut F>` гарантирует: «больше не двину». `tokio::pin!` или `std::pin::pin!` закрепляют Future на месте, когда его нужно опрашивать несколько раз (например, в `select!` внутри цикла).
+
+:: recap
+- `select!` — первый закончивший побеждает, остальные отменяются.
+- `timeout(время, future)` → `Ok(результат)` или `Err(время вышло)`.
+- Отмена может случиться на любом `.await`.
+
+## LESSON a09-p | Практика: async | 15 | practice
+:: goals
+- Написать async-код со своей мини-средой и с tokio
+
+:: task
+Используй готовую `block_on`. Напиши `async fn double(x)` и `async fn sum_doubled(v)`, которая через `.await` удваивает каждое число и складывает.
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+// твой код
+
+fn main() {
+    println!("{}", block_on(sum_doubled(vec![1, 2, 3])));
+}
+```
+```solution
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn double(x: i32) -> i32 {
+    x * 2
+}
+
+async fn sum_doubled(v: Vec<i32>) -> i32 {
+    let mut total = 0;
+    for x in v {
+        total += double(x).await;
+    }
+    total
+}
+
+fn main() {
+    println!("{}", block_on(sum_doubled(vec![1, 2, 3])));
+}
+```
+```expect
+12
+```
+hint: `async fn double(x: i32) -> i32 { x * 2 }`.
+hint: В `sum_doubled` в цикле: `total += double(x).await;`.
+
+:: task
+С tokio: запусти три загрузки одновременно через `join!` и напечатай их результаты в одну строку через запятую.
+```rust
+use std::time::Duration;
+use tokio::time::sleep;
+
+async fn fetch(name: &str, ms: u64) -> String {
+    sleep(Duration::from_millis(ms)).await;
+    name.to_uppercase()
+}
+
+#[tokio::main]
+async fn main() {
+    // твой код
+}
+```
+```solution
+use std::time::Duration;
+use tokio::time::sleep;
+
+async fn fetch(name: &str, ms: u64) -> String {
+    sleep(Duration::from_millis(ms)).await;
+    name.to_uppercase()
+}
+
+#[tokio::main]
+async fn main() {
+    let (a, b, c) = tokio::join!(fetch("cat", 30), fetch("dog", 10), fetch("fox", 20));
+    println!("{a}, {b}, {c}");
+}
+```
+crates: yes
+```expect
+CAT, DOG, FOX
+```
+hint: `let (a, b, c) = tokio::join!(fetch("cat", 30), fetch("dog", 10), fetch("fox", 20));`.
+
+:: task
+С tokio: «быстрый ответ или запасной». Если `slow()` не успела за 50 мс, напечатай `запасной ответ`. Используй `timeout`.
+```rust
+use std::time::Duration;
+use tokio::time::{sleep, timeout};
+
+async fn slow() -> &'static str {
+    sleep(Duration::from_millis(300)).await;
+    "настоящий ответ"
+}
+
+#[tokio::main]
+async fn main() {
+    // твой код
+}
+```
+```solution
+use std::time::Duration;
+use tokio::time::{sleep, timeout};
+
+async fn slow() -> &'static str {
+    sleep(Duration::from_millis(300)).await;
+    "настоящий ответ"
+}
+
+#[tokio::main]
+async fn main() {
+    let answer = timeout(Duration::from_millis(50), slow()).await.unwrap_or("запасной ответ");
+    println!("{answer}");
+}
+```
+crates: yes
+```expect
+запасной ответ
+```
+hint: `timeout(...)` возвращает `Result`. `unwrap_or("запасной ответ")` даст запасной вариант при ошибке.
+
+:: recap
+- `async fn` + `.await` работает даже в самодельной среде.
+- `join!` — всё сразу, `timeout` — с ограничением по времени.
