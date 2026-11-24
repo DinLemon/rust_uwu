@@ -1,0 +1,424 @@
+# MODULE a12 | Speed and tools | Measure, allocate less, clippy, docs and your own crate
+
+## LESSON a12-1 | Measure first | 7
+:: goals
+- Time a piece of code
+- Remember `--release` and `black_box`
+
+:: text The main rule of speed
+Don't guess where it's slow. **Measure.** Programmers are wrong all the time about where things "lag". It's often a completely different place.
+
+> **Analogy:** a doctor doesn't treat by eye. Tests first, pills later.
+
+:: text Debug and release
+Rust builds a program in two ways:
+- `cargo run` — **debug**: builds quickly, many checks, runs slowly.
+- `cargo run --release` — **release**: builds longer, runs several times (sometimes dozens of times) faster.
+
+Measuring speed makes sense **only** in release. In the Playground the switch is called **Debug / Release** — top left.
+
+:: code
+`std::time::Instant` is a stopwatch:
+```rust
+use std::time::Instant;
+
+fn slow_sum(n: u64) -> u64 {
+    let mut s = 0;
+    for i in 0..n {
+        s += i % 7;
+    }
+    s
+}
+
+fn main() {
+    let start = Instant::now();
+    let r = slow_sum(10_000_000);
+    let took = start.elapsed();
+    println!("result {r}, took {took:?}");
+}
+```
+The time will differ on every run. Try switching the Playground to **Release** and compare.
+
+:: text A trap: the compiler is too clever
+In release the compiler may **throw away** a computation if nobody uses the result. Or compute it in advance. Then the measurement shows zero.
+
+`std::hint::black_box(x)` tells the compiler: "hands off, compute it honestly".
+
+```rust
+use std::hint::black_box;
+let r = slow_sum(black_box(10_000_000));
+```
+
+:: text Tools for serious measurements
+- **criterion** (a crate) — runs the code many times, computes the average and spread, draws charts. The standard for benchmarks.
+- **flamegraph** (`cargo flamegraph`) — a picture of "where the program spends its time". A wide bar is a hot spot.
+
+:: quiz
+You measured speed in debug mode and it came out slow. What do you do first?
+[ ] Rewrite everything with unsafe => Too early. Check in release first.
+[x] Measure again in release => Right. Debug measurements are almost meaningless.
+[ ] Add threads => First you need to know where it's slow.
+
+:: recap
+- Measure first, then speed up.
+- Measure only in release.
+- `Instant::now()` + `elapsed()`; `black_box` against a "clever" compiler.
+
+## LESSON a12-2 | Fewer allocations | 8
+:: goals
+- Know that heap allocation is an expensive operation
+- Use `with_capacity`, `&str` and buffer reuse
+
+:: text An allocation is a trip to the warehouse
+Every `String::new()` with data, every `Vec::push` past its room, every `clone()` asks the system "give me memory". That's **slower** than arithmetic, by tens or hundreds of times.
+
+Common sources of extra allocations:
+- a `Vec` that grows one element at a time;
+- `clone()` where a reference would do;
+- `format!` and `to_string()` in a hot loop.
+
+> **Analogy:** going to the warehouse for one plate at a time. Better to take a stack at once.
+
+:: code
+A `Vec` grows by doubling its room. `with_capacity` allocates as much as needed right away:
+```rust
+fn main() {
+    let mut a = Vec::new();
+    let mut grows = 0;
+    let mut cap = a.capacity();
+    for i in 0..1000 {
+        a.push(i);
+        if a.capacity() != cap {
+            grows += 1;
+            cap = a.capacity();
+        }
+    }
+    println!("without with_capacity: {grows} moves");
+
+    let mut b = Vec::with_capacity(1000);
+    let before = b.capacity();
+    for i in 0..1000 {
+        b.push(i);
+    }
+    println!("with with_capacity: {} moves", if b.capacity() == before { 0 } else { 1 });
+}
+```
+```out
+without with_capacity: 9 moves
+with with_capacity: 0 moves
+```
+Each "move" is a new allocation plus copying every element.
+
+:: text A reference instead of a copy
+A function that only **reads** a string should take `&str`, not `String`:
+
+```rust
+fn count_a(s: &str) -> usize { s.matches('a').count() } // good
+fn count_a(s: String) -> usize { ... }                   // forces a clone
+```
+`&str` works for a `String` (via `&s`) and for literals. It's both more flexible and faster.
+
+:: text One buffer, many uses
+If a loop needs a temporary string or vector, create it **once** before the loop and empty it with `clear()`. `clear()` keeps the allocated memory — the next step won't have to ask for it again.
+
+```rust
+let mut line = String::new();
+for item in items {
+    line.clear();
+    line.push_str(item.name());
+    // ...
+}
+```
+
+:: quiz
+You know in advance that 10,000 elements will go into a vector. How do you create it?
+[ ] `Vec::new()` => It will move many times as it grows.
+[x] `Vec::with_capacity(10_000)` => Right. One allocation for everything.
+[ ] `vec![0; 10_000]` and then `push` => Then it would hold 20,000 elements.
+
+:: task
+The `join_upper` function joins words into one uppercase string separated by spaces. Make the result string get created **once** with the right capacity, without `format!` in the loop.
+```rust
+fn join_upper(words: &[&str]) -> String {
+    let mut out = String::new();
+    for w in words {
+        out = format!("{out}{} ", w.to_uppercase());
+    }
+    out.trim_end().to_string()
+}
+
+fn main() {
+    println!("{}", join_upper(&["rust", "is", "fast"]));
+}
+```
+```solution
+fn join_upper(words: &[&str]) -> String {
+    let total: usize = words.iter().map(|w| w.len() + 1).sum();
+    let mut out = String::with_capacity(total);
+    for (i, w) in words.iter().enumerate() {
+        if i > 0 {
+            out.push(' ');
+        }
+        for c in w.chars() {
+            out.extend(c.to_uppercase());
+        }
+    }
+    out
+}
+
+fn main() {
+    println!("{}", join_upper(&["rust", "is", "fast"]));
+}
+```
+```expect
+RUST IS FAST
+```
+contains: with_capacity
+hint: First compute the length: the sum of word lengths plus the spaces. Then `String::with_capacity(total)`.
+hint: Inside the loop, append with `push(' ')` and `push_str` (or `extend` for chars).
+
+:: recap
+- Allocation is expensive. Fewer allocations — faster code.
+- `with_capacity` when the size is known in advance.
+- Only reading? Take `&str`/`&[T]`. A temporary buffer — one per loop, `clear()`.
+
+## LESSON a12-3 | clippy, rustfmt and docs | 7
+:: goals
+- Know three tools every Rust programmer has
+- Write docs with examples that get checked
+
+:: text rustfmt — one style
+`cargo fmt` sets indentation, line breaks and spaces in a common style. No arguing about looks: everyone's code is the same.
+
+In the Playground: **Tools → Rustfmt**.
+
+:: text clippy — an attentive helper
+`cargo clippy` knows hundreds of tips: "this could be simpler", "this clone is unnecessary", "this might be a bug".
+
+```rust
+if x == true { ... }        // clippy: just write `if x`
+let v = vec.len() == 0;     // clippy: there's `vec.is_empty()`
+for i in 0..v.len() { v[i] } // clippy: better `for x in &v`
+```
+In the Playground: **Tools → Clippy**.
+
+> **Analogy:** rustfmt is a typesetter who lines up the text. clippy is an editor who says "this phrase could be said more simply".
+
+:: text Documentation is code too
+A `///` comment above a function is documentation. `cargo doc --open` turns it into a nice website, like the ones on docs.rs.
+
+```rust
+/// Doubles a number.
+///
+/// # Example
+/// ```
+/// assert_eq!(mylib::double(4), 8);
+/// ```
+pub fn double(x: i32) -> i32 { x * 2 }
+```
+The example inside ```` ``` ```` **runs** with `cargo test`. Docs can't lie: an outdated example breaks the tests.
+
+:: text Usual sections
+Docs often have these headings:
+- `# Examples` — usage examples;
+- `# Errors` — when the function returns `Err`;
+- `# Panics` — when it panics;
+- `# Safety` — for an `unsafe fn`: what the caller must guarantee.
+
+`//!` at the top of a file documents the whole module or crate.
+
+:: quiz
+What happens to a code example in a `///` comment on `cargo test`?
+[ ] Nothing, it's just text => It's not just text.
+[x] It compiles and runs as a test => Right. It's a doc test.
+[ ] It gets printed to the console => No, it runs as a test.
+
+:: quiz
+Which command will tell you that `if x == true` can be written more simply?
+[ ] `cargo fmt` => It only handles spaces and line breaks.
+[x] `cargo clippy` => Right.
+[ ] `cargo doc` => It builds documentation.
+
+:: recap
+- `cargo fmt` — one style.
+- `cargo clippy` — tips and bugs found.
+- `///` — documentation; the examples in it are tests.
+
+## LESSON a12-4 | Your own crate | 7
+:: goals
+- See what a crate consists of and how it's released
+- Know about semantic versions and features
+
+:: text Cargo.toml up close
+```toml
+[package]
+name = "tiny-calc"
+version = "0.1.0"
+edition = "2024"
+description = "A tiny calculator"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+```
+`description` and `license` are required to publish a crate on crates.io.
+
+:: text Semantic versions
+The version is `MAJOR.MINOR.PATCH`, for example `1.4.2`:
+- `PATCH` (1.4.**3**) — fixed a bug, broke nothing;
+- `MINOR` (1.**5**.0) — added something new, the old stuff works;
+- `MAJOR` (**2**.0.0) — broke something, users will have to change their code.
+
+When you write `serde = "1"`, Cargo takes the latest `1.x.y`, but not `2.0`. That way updates don't break your project.
+
+> **Analogy:** PATCH — sewed on a button. MINOR — added a pocket. MAJOR — turned the jacket into a vest.
+
+:: text Features — optional parts
+A crate can have optional pieces that are switched on by choice:
+
+```toml
+[features]
+default = []
+json = ["dep:serde_json"]
+```
+In the code:
+```rust
+#[cfg(feature = "json")]
+pub fn to_json(...) { ... }
+```
+A user writes `tiny-calc = { version = "0.1", features = ["json"] }` and gets the function. If they don't need it, they don't pay for extra dependencies.
+
+:: text How to publish
+1. Log in to crates.io with GitHub and get a token.
+2. `cargo login` — save the token.
+3. `cargo publish --dry-run` — check that everything builds.
+4. `cargo publish` — release it.
+
+A published version **can't be deleted**, only marked as withdrawn (`cargo yank`). So check before releasing.
+
+:: text Workspace — several crates together
+A big project is often split into crates: `core`, `cli`, `web`. They live in one folder and build together:
+
+```toml
+# Cargo.toml at the root
+[workspace]
+members = ["core", "cli"]
+```
+One shared `Cargo.lock`, one shared `target` folder, one `cargo test` command checks everything.
+
+:: quiz
+You added a new function to a library and didn't touch the old ones. Which part of the version do you bump?
+[ ] MAJOR => Nothing broke, so no MAJOR bump.
+[x] MINOR => Right. Something new was added, the old stuff works.
+[ ] PATCH => PATCH is for fixes without new features.
+
+:: quiz
+What does `features = ["json"]` do in a dependency?
+[x] Turns on the crate's optional part called `json` => Right.
+[ ] Converts the crate to JSON => No, it's just the name of a part of the crate.
+[ ] Speeds up the build => More likely the opposite: it brings in more code.
+
+:: recap
+- `Cargo.toml`: name, version, license, dependencies.
+- Versions: PATCH — a fix, MINOR — something new, MAJOR — breaking.
+- Features are optional parts. `cargo publish` releases; you can't delete a release.
+
+## LESSON a12-p | Practice: speed and style | 12 | practice
+:: goals
+- Fix typical "slow" and "ugly" spots
+
+:: task
+clippy complains about this code in three places. Rewrite it: `is_empty()` instead of comparing the length, `for x in &v` instead of indexes, and no `== false`.
+```rust
+fn main() {
+    let v = vec![3, 1, 4];
+    let mut sum = 0;
+    for i in 0..v.len() {
+        sum += v[i];
+    }
+    let empty = v.len() == 0;
+    if empty == false {
+        println!("sum {sum}");
+    }
+}
+```
+```solution
+fn main() {
+    let v = vec![3, 1, 4];
+    let mut sum = 0;
+    for x in &v {
+        sum += x;
+    }
+    let empty = v.is_empty();
+    if !empty {
+        println!("sum {sum}");
+    }
+}
+```
+```expect
+sum 8
+```
+contains: is_empty()
+hint: `for x in &v { sum += x; }`.
+hint: `v.is_empty()` and `if !empty`.
+
+:: task
+The `longest_len` function takes a `Vec<String>`, which forces the caller to clone. Make it take a slice `&[String]`, and remove the `clone()` in `main`.
+```rust
+fn longest_len(words: Vec<String>) -> usize {
+    words.iter().map(|w| w.chars().count()).max().unwrap_or(0)
+}
+
+fn main() {
+    let words = vec![String::from("crab"), String::from("ferris")];
+    println!("{}", longest_len(words.clone()));
+    println!("words: {}", words.len());
+}
+```
+```solution
+fn longest_len(words: &[String]) -> usize {
+    words.iter().map(|w| w.chars().count()).max().unwrap_or(0)
+}
+
+fn main() {
+    let words = vec![String::from("crab"), String::from("ferris")];
+    println!("{}", longest_len(&words));
+    println!("words: {}", words.len());
+}
+```
+```expect
+6
+words: 2
+```
+hint: The signature: `fn longest_len(words: &[String]) -> usize`. The call: `longest_len(&words)`.
+
+:: task
+Build a string from the numbers `1..=5` in the form `"1-2-3-4-5"`, using one `String::with_capacity` buffer and `push_str`. No `format!` in the loop.
+```rust
+fn main() {
+    // your code
+}
+```
+```solution
+fn main() {
+    let mut out = String::with_capacity(16);
+    for i in 1..=5 {
+        if i > 1 {
+            out.push('-');
+        }
+        out.push_str(&i.to_string());
+    }
+    println!("{out}");
+}
+```
+```expect
+1-2-3-4-5
+```
+contains: with_capacity
+hint: `let mut out = String::with_capacity(16);` — more than enough room.
+hint: Before every number except the first, `out.push('-')`.
+
+:: recap
+- clippy teaches you to write simpler and more correct code.
+- Take slices, not owning types, if you only read.
+- A roomy buffer + `push_str` instead of `format!` in a loop.
