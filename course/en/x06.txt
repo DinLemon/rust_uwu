@@ -1,0 +1,795 @@
+# MODULE x06 | Memory and allocators | Size and alignment, your own global allocator, arenas and small tricks
+
+## LESSON x06-1 | Size, alignment and Layout | 8
+:: goals
+- See why a struct can be bigger than the sum of its fields
+- Find size and alignment with `size_of` and `align_of`
+
+:: text Alignment
+The processor reads a number faster when its address is a **multiple** of its size: a `u32` from an address divisible by 4, a `u64` — by 8. This is **alignment**.
+
+So empty bytes are sometimes inserted between struct fields — **padding**. Rust reorders fields by itself to reduce padding. With `#[repr(C)]` the order stays as written — the C language requires that.
+
+> **Analogy:** boxes on a shelf that can only stand on marks every 4 cm. A small box between big ones sometimes has to stand with a gap.
+
+:: code
+```rust
+use std::mem::{align_of, size_of};
+
+#[allow(dead_code)]
+struct Rusty {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+struct LikeC {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+fn main() {
+    println!("u8: {} / {}", size_of::<u8>(), align_of::<u8>());
+    println!("u32: {} / {}", size_of::<u32>(), align_of::<u32>());
+    println!("Rusty: {}", size_of::<Rusty>());
+    println!("LikeC: {}", size_of::<LikeC>());
+}
+```
+```out
+u8: 1 / 1
+u32: 4 / 4
+Rusty: 8
+LikeC: 12
+```
+Same fields, different sizes. In `LikeC` there are 3 bytes of padding after `a` and 3 more after `c`. In `Rusty`, Rust put `b` first.
+
+:: text Layout
+`std::alloc::Layout` is a pair "size + alignment". That's exactly what an allocator needs to know:
+
+```rust
+use std::alloc::Layout;
+let l = Layout::new::<u64>();          // 8 bytes, alignment 8
+let arr = Layout::array::<u16>(10);    // 20 bytes, alignment 2
+```
+It'll come in handy in the next lessons, when we allocate memory by hand.
+
+:: quiz
+Why can a `#[repr(C)]` struct be bigger than a normal one?
+[x] Rust doesn't reorder its fields, so there's more padding => Right.
+[ ] `repr(C)` adds a service header => There are no headers.
+[ ] The fields become 64-bit => Field types don't change.
+
+:: task
+Predict and check: print the sizes of three types: `(u8, u64)`, `[u16; 3]` and `Option<u32>`.
+```rust
+use std::mem::size_of;
+
+fn main() {
+    // your code
+}
+```
+```solution
+use std::mem::size_of;
+
+fn main() {
+    println!("{}", size_of::<(u8, u64)>());
+    println!("{}", size_of::<[u16; 3]>());
+    println!("{}", size_of::<Option<u32>>());
+}
+```
+```expect
+16
+6
+8
+```
+hint: `size_of::<Type>()`. The tuple `(u8, u64)` has alignment 8, so the `u8` takes a full 8 bytes with padding.
+hint: `Option<u32>` has to store "present or not" somewhere — hence 8, not 4.
+
+:: recap
+- Alignment: the address is a multiple of the size. There can be padding between fields.
+- Rust reorders fields itself; `#[repr(C)]` keeps the C order.
+- `Layout` = size + alignment.
+
+## LESSON x06-2 | Your own global allocator | 9
+:: goals
+- Replace the allocator of the whole program
+- Count how many times the program asks for memory
+
+:: text Who hands out memory
+When a `Vec` or a `Box` wants heap memory, they call the **global allocator**. By default it's the system one (`malloc` on Linux, `HeapAlloc` on Windows).
+
+You can replace it with your own: implement the `GlobalAlloc` trait and mark a static variable with `#[global_allocator]`. That's how fast allocators (`mimalloc`, `jemalloc`) are plugged in, or allocations are counted.
+
+> **Analogy:** a warehouse that hands out boxes to the whole factory. You can put your own clerk at the gate who writes down who took how much and passes the request on to the real warehouse.
+
+:: code
+```rust
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Counting;
+
+static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+static BYTES: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        BYTES.fetch_add(layout.size(), Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: Counting = Counting;
+
+fn measure(f: impl FnOnce()) -> (usize, usize) {
+    let (a0, b0) = (ALLOCS.load(Ordering::Relaxed), BYTES.load(Ordering::Relaxed));
+    f();
+    (ALLOCS.load(Ordering::Relaxed) - a0, BYTES.load(Ordering::Relaxed) - b0)
+}
+
+fn main() {
+    let grow = measure(|| {
+        let mut v = Vec::new();
+        for i in 0..100u32 {
+            v.push(i);
+        }
+    });
+    let once = measure(|| {
+        let mut v = Vec::with_capacity(100);
+        for i in 0..100u32 {
+            v.push(i);
+        }
+    });
+    println!("push one by one: {} allocations", grow.0);
+    println!("with_capacity: {} allocation, {} bytes", once.0, once.1);
+}
+```
+```out
+push one by one: 6 allocations
+with_capacity: 1 allocation, 400 bytes
+```
+The measurement confirms the Level 2 speed module: `with_capacity` — one allocation instead of six.
+
+:: text Why unsafe
+`GlobalAlloc` is an `unsafe` trait: the compiler can't check that the allocator hands out correct memory. A mistake here breaks the **whole** program. That's why a custom allocator usually just **wraps** the system one, like ours.
+
+:: quiz
+What does the `#[global_allocator]` attribute do?
+[ ] Makes the program faster => Not by itself.
+[x] Says "the whole program gets memory through this allocator" => Right.
+[ ] Turns the heap off => The heap stays; only who hands it out changes.
+
+:: task
+Using the ready counting allocator, find out how many allocations `format!("{}-{}", a, b)` makes and how many `String::with_capacity` + two `push_str` make. Print both numbers.
+```rust
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Counting;
+static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: Counting = Counting;
+
+fn count(f: impl FnOnce()) -> usize {
+    let a0 = ALLOCS.load(Ordering::Relaxed);
+    f();
+    ALLOCS.load(Ordering::Relaxed) - a0
+}
+
+fn main() {
+    let a = "привет";
+    let b = "мир";
+    // your code: two measurements and a print
+}
+```
+```solution
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Counting;
+static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: Counting = Counting;
+
+fn count(f: impl FnOnce()) -> usize {
+    let a0 = ALLOCS.load(Ordering::Relaxed);
+    f();
+    ALLOCS.load(Ordering::Relaxed) - a0
+}
+
+fn main() {
+    let a = "привет";
+    let b = "мир";
+    let with_format = count(|| {
+        let s = format!("{}-{}", a, b);
+        std::hint::black_box(s);
+    });
+    let with_cap = count(|| {
+        let mut s = String::with_capacity(a.len() + b.len() + 1);
+        s.push_str(a);
+        s.push('-');
+        s.push_str(b);
+        std::hint::black_box(s);
+    });
+    println!("format!: {with_format}");
+    println!("with_capacity: {with_cap}");
+}
+```
+```expect
+format!: 2
+with_capacity: 1
+```
+hint: Wrap each variant in `count(|| { ... })`.
+hint: `black_box(s)` keeps the compiler from throwing the string away as unused.
+hint: `format!` estimates the length in advance, but with multi-byte text and insertions it often guesses low and allocates a second time. An exact capacity — just once. Measuring beats guessing.
+
+:: recap
+- `GlobalAlloc` + `#[global_allocator]` — your own allocator for the whole program.
+- Most often it wraps `System` and counts something.
+- Measure first, then optimize — measurements can surprise you.
+
+## LESSON x06-3 | Arenas | 9
+:: goals
+- Understand the arena idea: allocate a lot, free everything at once
+- Make an index-based arena and try the bumpalo crate
+
+:: text Why an arena
+Sometimes a program creates **lots of small objects** with the same lifetime: nodes of a parse tree, the objects of one game frame, the data of one request. Allocating each one separately is expensive. Freeing them one by one is too.
+
+An **arena** allocates a big chunk and hands it out in pieces. Everything is freed **at once** when the arena dies.
+
+> **Analogy:** a disposable tablecloth at a picnic. You don't wash every plate — at the end you roll everything up together.
+
+:: text An index-based arena
+The simplest and safest arena: all objects live in one `Vec`, and **indexes** replace references. Indexes don't get in the way of borrow checking, and you can build graphs and trees with links in both directions.
+
+:: code
+```rust
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct NodeId(usize);
+
+struct Node {
+    value: i32,
+    parent: Option<NodeId>,
+    children: Vec<NodeId>,
+}
+
+struct Tree {
+    nodes: Vec<Node>,
+}
+
+impl Tree {
+    fn add(&mut self, value: i32, parent: Option<NodeId>) -> NodeId {
+        let id = NodeId(self.nodes.len());
+        self.nodes.push(Node { value, parent, children: vec![] });
+        if let Some(p) = parent {
+            self.nodes[p.0].children.push(id);
+        }
+        id
+    }
+    fn path_to_root(&self, mut id: NodeId) -> Vec<i32> {
+        let mut path = vec![self.nodes[id.0].value];
+        while let Some(p) = self.nodes[id.0].parent {
+            path.push(self.nodes[p.0].value);
+            id = p;
+        }
+        path
+    }
+}
+
+fn main() {
+    let mut t = Tree { nodes: vec![] };
+    let root = t.add(1, None);
+    let a = t.add(2, Some(root));
+    let b = t.add(3, Some(a));
+    println!("{:?}", t.path_to_root(b));
+    println!("root's children: {}", t.nodes[root.0].children.len());
+}
+```
+```out
+[3, 2, 1]
+root's children: 1
+```
+A link "up" to the parent without `Rc`, `Weak` and `RefCell` — just a number.
+
+:: code
+**bumpalo** is a real bump allocator: it allocates from a big chunk by simply moving a pointer. Very fast.
+```rust
+use bumpalo::Bump;
+
+fn main() {
+    let bump = Bump::new();
+    let x: &mut u32 = bump.alloc(10);
+    *x += 5;
+    let name: &str = bump.alloc_str("crab");
+    let nums: &[i32] = bump.alloc_slice_copy(&[1, 2, 3]);
+    println!("{x} {name} {nums:?}");
+    println!("allocated in the arena: at least that many bytes {}", bump.allocated_bytes() >= 4 + 4 + 12);
+}
+```
+crates: yes
+```out
+15 crab [1, 2, 3]
+allocated in the arena: at least that many bytes true
+```
+All references live as long as `bump` lives. When the arena goes, everything is freed at once.
+
+:: quiz
+Why is an index-based arena handy for trees with a link to the parent?
+[x] An index is just a number; it doesn't get in the way of borrow checking => Right.
+[ ] Indexes are faster than pointers => The speed is similar; the point is simplicity.
+[ ] The arena drops nodes one by one => The opposite: all at once.
+
+:: task
+Add a `depth(id)` method to the arena tree that returns a node's depth (the root is 0), and a `sum_subtree(id)` method that adds up the values of a node and all its descendants.
+```rust
+#[derive(Clone, Copy)]
+struct NodeId(usize);
+
+struct Node {
+    value: i32,
+    parent: Option<NodeId>,
+    children: Vec<NodeId>,
+}
+
+struct Tree {
+    nodes: Vec<Node>,
+}
+
+impl Tree {
+    fn add(&mut self, value: i32, parent: Option<NodeId>) -> NodeId {
+        let id = NodeId(self.nodes.len());
+        self.nodes.push(Node { value, parent, children: vec![] });
+        if let Some(p) = parent {
+            self.nodes[p.0].children.push(id);
+        }
+        id
+    }
+    // your code: depth and sum_subtree
+}
+
+fn main() {
+    let mut t = Tree { nodes: vec![] };
+    let root = t.add(1, None);
+    let a = t.add(2, Some(root));
+    let _b = t.add(3, Some(root));
+    let c = t.add(4, Some(a));
+    println!("{}", t.depth(c));
+    println!("{}", t.sum_subtree(root));
+    println!("{}", t.sum_subtree(a));
+}
+```
+```solution
+#[derive(Clone, Copy)]
+struct NodeId(usize);
+
+struct Node {
+    value: i32,
+    parent: Option<NodeId>,
+    children: Vec<NodeId>,
+}
+
+struct Tree {
+    nodes: Vec<Node>,
+}
+
+impl Tree {
+    fn add(&mut self, value: i32, parent: Option<NodeId>) -> NodeId {
+        let id = NodeId(self.nodes.len());
+        self.nodes.push(Node { value, parent, children: vec![] });
+        if let Some(p) = parent {
+            self.nodes[p.0].children.push(id);
+        }
+        id
+    }
+    fn depth(&self, mut id: NodeId) -> usize {
+        let mut d = 0;
+        while let Some(p) = self.nodes[id.0].parent {
+            d += 1;
+            id = p;
+        }
+        d
+    }
+    fn sum_subtree(&self, id: NodeId) -> i32 {
+        let node = &self.nodes[id.0];
+        node.value + node.children.iter().map(|&c| self.sum_subtree(c)).sum::<i32>()
+    }
+}
+
+fn main() {
+    let mut t = Tree { nodes: vec![] };
+    let root = t.add(1, None);
+    let a = t.add(2, Some(root));
+    let _b = t.add(3, Some(root));
+    let c = t.add(4, Some(a));
+    println!("{}", t.depth(c));
+    println!("{}", t.sum_subtree(root));
+    println!("{}", t.sum_subtree(a));
+}
+```
+```expect
+2
+10
+6
+```
+hint: `depth` — walk to the parent while there is one, counting steps.
+hint: `sum_subtree` — the node's value plus the sum of `sum_subtree` over its children (recursion).
+
+:: recap
+- An arena: allocate many small things, free everything at once.
+- An index-based arena — a `Vec` + `struct Id(usize)` instead of references.
+- `bumpalo` — a fast bump allocator with ordinary references.
+
+## LESSON x06-4 | Small memory tricks | 8
+:: goals
+- Learn about the "niche" optimization
+- Save the heap: data on the stack and `Box<[T]>`
+
+:: text A niche: Option for free
+`Option<Box<T>>` takes **as much** space as `Box<T>`. Why? A `Box` is never a null pointer — so zero can be used for `None`. This is called the **niche optimization**.
+
+`Option<&T>`, `Option<NonZeroU32>`, `Option<Vec<T>>` are free in the same way.
+
+:: code
+```rust
+use std::mem::size_of;
+use std::num::NonZeroU32;
+
+fn main() {
+    println!("{} {}", size_of::<Box<u64>>(), size_of::<Option<Box<u64>>>());
+    println!("{} {}", size_of::<u32>(), size_of::<Option<u32>>());
+    println!("{} {}", size_of::<NonZeroU32>(), size_of::<Option<NonZeroU32>>());
+    println!("{} {}", size_of::<Vec<u8>>(), size_of::<Box<[u8]>>());
+}
+```
+```out
+8 8
+4 8
+4 4
+24 16
+```
+- `Option<u32>` got bigger: a `u32` has no "forbidden" values.
+- `NonZeroU32` is never zero — and `Option` is free again.
+- `Box<[u8]>` is 8 bytes smaller than `Vec<u8>`: it needs no capacity, only a length.
+
+:: text Data on the stack
+Small collections can live **without the heap**:
+- `[T; N]` — a fixed-size array;
+- the `arrayvec::ArrayVec<T, N>` crate — like `Vec`, but at most `N` items, all on the stack;
+- the `smallvec::SmallVec<[T; N]>` crate — up to `N` items on the stack; more moves to the heap.
+
+Useful when there are millions of collections, each usually holding 2–3 items.
+
+:: code
+```rust
+use smallvec::SmallVec;
+
+fn main() {
+    let mut v: SmallVec<[u32; 4]> = SmallVec::new();
+    for i in 0..4 {
+        v.push(i);
+    }
+    println!("{:?} on the heap? {}", v, v.spilled());
+    v.push(99);
+    println!("{} items, on the heap? {}", v.len(), v.spilled());
+}
+```
+crates: yes
+```out
+[0, 1, 2, 3] on the heap? false
+5 items, on the heap? true
+```
+
+:: quiz
+Why isn't `Option<&T>` bigger than `&T`?
+[x] A reference is never null, and null is used for `None` => Right. That's a niche.
+[ ] `Option` weighs nothing at all => `Option<u32>` weighs more than `u32`.
+[ ] The compiler stores `None` in a separate table => There's no table.
+
+:: task
+The `freeze` function turns a `Vec<String>` into a `Box<[String]>` — an immutable list without extra capacity. Print the length and the difference between the two "headers" via `size_of_val`.
+```rust
+use std::mem::size_of_val;
+
+fn freeze(v: Vec<String>) -> Box<[String]> {
+    // your code
+}
+
+fn main() {
+    let mut v = Vec::with_capacity(100);
+    v.push(String::from("a"));
+    v.push(String::from("b"));
+    let header_vec = size_of_val(&v);
+    let frozen = freeze(v);
+    println!("{} {}", frozen.len(), header_vec - size_of_val(&frozen));
+}
+```
+```solution
+use std::mem::size_of_val;
+
+fn freeze(v: Vec<String>) -> Box<[String]> {
+    v.into_boxed_slice()
+}
+
+fn main() {
+    let mut v = Vec::with_capacity(100);
+    v.push(String::from("a"));
+    v.push(String::from("b"));
+    let header_vec = size_of_val(&v);
+    let frozen = freeze(v);
+    println!("{} {}", frozen.len(), header_vec - size_of_val(&frozen));
+}
+```
+```expect
+2 8
+```
+hint: `Vec` has an `into_boxed_slice()` method. It also gives back the extra capacity.
+
+:: recap
+- Niche: `Option<Box<T>>`, `Option<&T>`, `Option<NonZero*>` are free.
+- `Box<[T]>` — a list without capacity; its header is 8 bytes smaller.
+- `SmallVec`, `ArrayVec` — small collections on the stack.
+
+## LESSON x06-p | Practice: memory | 25 | practice
+:: goals
+- Measure and reduce work with memory
+
+:: task
+A counting allocator + a comparison: build a string of 1000 numbers with `write!` into `String::new()` and into `String::with_capacity(4000)`. Print how many times fewer allocations the second way makes (integer division).
+```rust
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::fmt::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Counting;
+static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: Counting = Counting;
+
+fn count(f: impl FnOnce()) -> usize {
+    let a0 = ALLOCS.load(Ordering::Relaxed);
+    f();
+    ALLOCS.load(Ordering::Relaxed) - a0
+}
+
+fn main() {
+    // your code
+}
+```
+```solution
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::fmt::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Counting;
+static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: Counting = Counting;
+
+fn count(f: impl FnOnce()) -> usize {
+    let a0 = ALLOCS.load(Ordering::Relaxed);
+    f();
+    ALLOCS.load(Ordering::Relaxed) - a0
+}
+
+fn main() {
+    let slow = count(|| {
+        let mut s = String::new();
+        for i in 0..1000 {
+            write!(s, "{i}").unwrap();
+        }
+        std::hint::black_box(s);
+    });
+    let fast = count(|| {
+        let mut s = String::with_capacity(4000);
+        for i in 0..1000 {
+            write!(s, "{i}").unwrap();
+        }
+        std::hint::black_box(s);
+    });
+    println!("{}", slow / fast);
+}
+```
+```expect
+10
+```
+check: number
+hint: Write the numbers into the string with `write!(s, "{i}")` — you need `use std::fmt::Write`.
+hint: `realloc` counts too: as the string grows, it "moves" through it.
+
+:: task
+A string arena: `Interner` stores each distinct string once and hands out its number. A repeated string gets the same number. Write `intern` and `lookup`.
+```rust
+use std::collections::HashMap;
+
+struct Interner {
+    map: HashMap<String, u32>,
+    names: Vec<String>,
+}
+
+impl Interner {
+    fn new() -> Self {
+        Interner { map: HashMap::new(), names: Vec::new() }
+    }
+    fn intern(&mut self, s: &str) -> u32 {
+        // your code
+    }
+    fn lookup(&self, id: u32) -> &str {
+        // your code
+    }
+}
+
+fn main() {
+    let mut i = Interner::new();
+    let ids: Vec<u32> = ["cat", "dog", "cat", "ox", "dog"].iter().map(|s| i.intern(s)).collect();
+    println!("{ids:?}");
+    println!("{} {}", i.lookup(2), i.names.len());
+}
+```
+```solution
+use std::collections::HashMap;
+
+struct Interner {
+    map: HashMap<String, u32>,
+    names: Vec<String>,
+}
+
+impl Interner {
+    fn new() -> Self {
+        Interner { map: HashMap::new(), names: Vec::new() }
+    }
+    fn intern(&mut self, s: &str) -> u32 {
+        if let Some(&id) = self.map.get(s) {
+            return id;
+        }
+        let id = self.names.len() as u32;
+        self.names.push(s.to_string());
+        self.map.insert(s.to_string(), id);
+        id
+    }
+    fn lookup(&self, id: u32) -> &str {
+        &self.names[id as usize]
+    }
+}
+
+fn main() {
+    let mut i = Interner::new();
+    let ids: Vec<u32> = ["cat", "dog", "cat", "ox", "dog"].iter().map(|s| i.intern(s)).collect();
+    println!("{ids:?}");
+    println!("{} {}", i.lookup(2), i.names.len());
+}
+```
+```expect
+[0, 1, 0, 2, 1]
+ox 3
+```
+hint: In the map — return the number. Not there — the number is the length of `names`; add the string to both places.
+
+:: task
+A compact record: the struct `Pixel { visible: bool, x: u16, color: u32, y: u16 }`. Compare its size with a `#[repr(C)]` version with the same field order and print both numbers.
+```rust
+use std::mem::size_of;
+
+#[allow(dead_code)]
+struct Pixel {
+    visible: bool,
+    x: u16,
+    color: u32,
+    y: u16,
+}
+
+// your code: PixelC with #[repr(C)]
+
+fn main() {
+    println!("{} {}", size_of::<Pixel>(), size_of::<PixelC>());
+}
+```
+```solution
+use std::mem::size_of;
+
+#[allow(dead_code)]
+struct Pixel {
+    visible: bool,
+    x: u16,
+    color: u32,
+    y: u16,
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+struct PixelC {
+    visible: bool,
+    x: u16,
+    color: u32,
+    y: u16,
+}
+
+fn main() {
+    println!("{} {}", size_of::<Pixel>(), size_of::<PixelC>());
+}
+```
+```expect
+12 12
+```
+hint: Copy the struct and add `#[repr(C)]`.
+hint: A surprise: the sizes are equal. In C: `bool` + 1 byte of padding + `u16` + `u32` + `u16` + 2 trailing bytes = 12. Rust will reorder the fields, but 9 bytes still round up to 12 because of the `u32` alignment.
+
+:: homework Profiling memory
+Look at the allocations of a real program.
+
+1. Take any project of yours (or the Level 2 final project) and add the `dhat` crate:
+```sh
+cargo add dhat
+```
+2. Following the `dhat` documentation, plug it in as the global allocator behind a `dhat-heap` feature.
+3. Run: `cargo run --release --features dhat-heap`. A `dhat-heap.json` file appears.
+4. Open it in the **DHAT Viewer** (the dh_view page from the Valgrind docs) and find the place with the most allocations.
+5. Try to reduce them: `with_capacity`, `&str` instead of `String`, reusing a buffer.
+[ ] `dhat-heap.json` is created after the run
+[ ] The place with the most allocations is found
+[ ] After the fix the allocation count went down, and the new report shows it
+
+:: recap
+- A counting allocator is a quick way to measure allocations.
+- String interning — an arena with lookup by value.
+- Sometimes reordering fields gains nothing — check, don't guess.
