@@ -1,0 +1,1168 @@
+# MODULE x04 | Свой async | Future руками, настоящий Waker, мини-исполнитель, Pin и асинхронные замыкания
+
+## LESSON x04-1 | Future своими руками | 9
+:: goals
+- Реализовать трейт `Future` для своей структуры
+- Понять, зачем Future сам себя «будит»
+
+:: text Повторим контракт
+У `Future` один метод:
+
+```rust
+fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+```
+- готово — `Poll::Ready(значение)`;
+- не готово — `Poll::Pending`, **и** пообещать разбудить исполнителя, когда стоит опросить снова.
+
+Обещание выполняют через `cx.waker()`. Если вернуть `Pending` и никого не разбудить, честный исполнитель **больше не придёт** — задача зависнет навсегда.
+
+> **Аналогия:** звонишь в поддержку, тебе говорят «перезвоним». Если они не запишут твой номер (Waker), звонка не будет никогда.
+
+:: code
+Future, который трижды говорит «ещё нет» и каждый раз сразу просит опросить снова:
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct Countdown(u32);
+
+impl Future for Countdown {
+    type Output = &'static str;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<&'static str> {
+        if self.0 == 0 {
+            Poll::Ready("пуск!")
+        } else {
+            println!("осталось {}", self.0);
+            self.0 -= 1;
+            cx.waker().wake_by_ref(); // «опроси меня ещё раз»
+            Poll::Pending
+        }
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    println!("{}", block_on(Countdown(3)));
+}
+```
+```out
+осталось 3
+осталось 2
+осталось 1
+пуск!
+```
+`mut self: Pin<&mut Self>` — менять поля можно, потому что `Countdown` — `Unpin` (в нём нет ссылок на самого себя). Об этом в уроке про Pin.
+
+:: quiz
+Future вернул `Poll::Pending` и не сохранил и не вызвал Waker. Что будет в настоящем исполнителе вроде tokio?
+[ ] Исполнитель опросит его через секунду => Исполнитель не опрашивает «на всякий случай».
+[x] Задача зависнет: её больше никто не разбудит => Верно.
+[ ] Ошибка компиляции => Компилятор такое не проверяет.
+
+:: task
+Напиши `YieldNow`: при первом опросе он возвращает `Pending` и сразу будит себя, при втором — `Ready(())`. Это «уступить очередь другим задачам».
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct YieldNow {
+    yielded: bool,
+}
+
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        // твой код
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> (F::Output, u32) {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    let mut polls = 0;
+    loop {
+        polls += 1;
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return (v, polls);
+        }
+    }
+}
+
+fn main() {
+    let (_, polls) = block_on(async {
+        YieldNow { yielded: false }.await;
+        YieldNow { yielded: false }.await;
+    });
+    println!("опросов: {polls}");
+}
+```
+```solution
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct YieldNow {
+    yielded: bool,
+}
+
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.yielded {
+            Poll::Ready(())
+        } else {
+            self.yielded = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> (F::Output, u32) {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    let mut polls = 0;
+    loop {
+        polls += 1;
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return (v, polls);
+        }
+    }
+}
+
+fn main() {
+    let (_, polls) = block_on(async {
+        YieldNow { yielded: false }.await;
+        YieldNow { yielded: false }.await;
+    });
+    println!("опросов: {polls}");
+}
+```
+```expect
+опросов: 3
+```
+hint: Если `self.yielded` — `Ready(())`. Иначе поставь флаг, вызови `cx.waker().wake_by_ref()` и верни `Pending`.
+hint: Два `YieldNow` → два `Pending` → третий опрос завершает всё.
+
+:: recap
+- `impl Future`: `type Output` + `fn poll`.
+- `Pending` — только вместе с обещанием разбудить через `cx.waker()`.
+- `wake_by_ref()` — «опроси меня снова».
+
+## LESSON x04-2 | Настоящий Waker | 9
+:: goals
+- Сделать Waker из своей структуры через трейт `Wake`
+- Написать `block_on`, которая спит, пока её не разбудят
+
+:: text Не крутиться впустую
+Наша прежняя `block_on` опрашивала Future в бесконечном цикле. Если ждём таймер на секунду — процессор целую секунду крутится зря.
+
+Правильно: вернули `Pending` — **уснуть**. Проснуться, когда кто-то вызовет `wake()`.
+
+В стандартной библиотеке есть всё нужное:
+- `std::task::Wake` — трейт: «что делать при пробуждении»;
+- `Waker::from(Arc<T>)` — сделать Waker из своей структуры;
+- `thread::park()` / `thread.unpark()` — уснуть и разбудить поток.
+
+> **Аналогия:** не стоять у плиты, глядя на кастрюлю, а поставить таймер и прилечь. Таймер разбудит.
+
+:: code
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+use std::time::Duration;
+
+struct ThreadWaker(Thread);
+
+impl Wake for ThreadWaker {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(ThreadWaker(thread::current())));
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+        thread::park(); // спим, пока не позовут
+    }
+}
+
+// Таймер: при первом опросе запускает поток, который через время будит задачу
+struct Sleep {
+    dur: Duration,
+    state: Arc<Mutex<(bool, Option<Waker>)>>, // (готово?, кого будить)
+    started: bool,
+}
+
+impl Future for Sleep {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let mut st = self.state.lock().unwrap();
+        if st.0 {
+            return Poll::Ready(());
+        }
+        st.1 = Some(cx.waker().clone());
+        drop(st);
+        if !self.started {
+            self.started = true;
+            let (dur, state) = (self.dur, Arc::clone(&self.state));
+            thread::spawn(move || {
+                thread::sleep(dur);
+                let mut st = state.lock().unwrap();
+                st.0 = true;
+                if let Some(w) = st.1.take() {
+                    w.wake();
+                }
+            });
+        }
+        Poll::Pending
+    }
+}
+
+fn sleep(ms: u64) -> Sleep {
+    Sleep { dur: Duration::from_millis(ms), state: Arc::new(Mutex::new((false, None))), started: false }
+}
+
+fn main() {
+    block_on(async {
+        println!("ставлю таймер");
+        sleep(50).await;
+        println!("проснулись");
+    });
+}
+```
+```out
+ставлю таймер
+проснулись
+```
+Пока таймер идёт, главный поток спит в `park()` и не тратит процессор.
+
+:: quiz
+Что делает `Waker::from(Arc::new(ThreadWaker(...)))`?
+[x] Делает Waker, который при `wake()` вызовет наш метод `Wake::wake` => Верно.
+[ ] Запускает новый поток => Поток здесь не запускается.
+[ ] Сразу будит текущий поток => Будит только при вызове `wake()`.
+
+:: task
+Напиши `Wake` для `CountingWaker`: при каждом `wake()` (и `wake_by_ref()`) счётчик `AtomicUsize` увеличивается на 1. Проверь на `YieldNow`, вызванном трижды.
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+
+struct CountingWaker(AtomicUsize);
+
+// твой код: impl Wake for CountingWaker
+
+struct YieldNow(bool);
+
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            return Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+fn main() {
+    let counter = Arc::new(CountingWaker(AtomicUsize::new(0)));
+    let waker = Waker::from(Arc::clone(&counter));
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(async {
+        for _ in 0..3 {
+            YieldNow(false).await;
+        }
+    });
+    while fut.as_mut().poll(&mut cx).is_pending() {}
+    println!("будили: {}", counter.0.load(Ordering::SeqCst));
+}
+```
+```solution
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+
+struct CountingWaker(AtomicUsize);
+
+impl Wake for CountingWaker {
+    fn wake(self: Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+struct YieldNow(bool);
+
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            return Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+fn main() {
+    let counter = Arc::new(CountingWaker(AtomicUsize::new(0)));
+    let waker = Waker::from(Arc::clone(&counter));
+    let mut cx = Context::from_waker(&waker);
+    let mut fut = pin!(async {
+        for _ in 0..3 {
+            YieldNow(false).await;
+        }
+    });
+    while fut.as_mut().poll(&mut cx).is_pending() {}
+    println!("будили: {}", counter.0.load(Ordering::SeqCst));
+}
+```
+```expect
+будили: 3
+```
+hint: `impl Wake for CountingWaker { fn wake(self: Arc<Self>) { self.0.fetch_add(1, Ordering::SeqCst); } }`.
+hint: `wake_by_ref` по умолчанию клонирует `Arc` и зовёт `wake` — можно не писать, но своя версия экономнее.
+
+:: deep Как устроены настоящие исполнители
+tokio и другие исполнители делают то же самое, только масштабнее:
+- **реактор** — один поток (или системный механизм вроде epoll/kqueue/IOCP) следит за сокетами и таймерами и вызывает `wake()`, когда что-то готово;
+- **планировщик** — очередь задач, готовых к опросу; рабочие потоки берут из неё задачи;
+- **кража работы** — свободный поток забирает задачи у занятого.
+
+Waker в tokio — это, по сути, «положи эту задачу обратно в очередь». Именно это мы сделаем в следующем уроке.
+
+:: recap
+- `impl Wake` + `Waker::from(Arc<..>)` — свой Waker.
+- `thread::park` / `unpark` — спать, пока не разбудят.
+- Таймер хранит Waker и вызывает `wake()`, когда время вышло.
+
+## LESSON x04-3 | Мини-исполнитель задач | 10
+:: goals
+- Написать исполнитель, который крутит много задач на одном потоке
+- Понять, как Waker возвращает задачу в очередь
+
+:: text Устройство
+1. **Задача** — Future в коробке плюс ссылка на очередь.
+2. **Очередь** — канал `mpsc`: туда кладут задачи, готовые к опросу.
+3. **Waker задачи** — при `wake()` кладёт **эту** задачу обратно в очередь.
+4. **Цикл** — берём задачу из очереди, опрашиваем. `Pending` — она сама вернётся, когда её разбудят. `Ready` — готово.
+
+> **Аналогия:** кассир и очередь. Покупатель, которому нужно сходить за забытым товаром, отходит. Когда он вернулся (wake), он снова встаёт в очередь.
+
+:: code
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+
+type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+struct Task {
+    fut: Mutex<Option<BoxFuture>>,
+    queue: Sender<Arc<Task>>,
+}
+
+impl Wake for Task {
+    fn wake(self: Arc<Self>) {
+        let q = self.queue.clone();
+        q.send(self).unwrap(); // вернуть задачу в очередь
+    }
+}
+
+struct Executor {
+    tx: Sender<Arc<Task>>,
+    rx: Receiver<Arc<Task>>,
+    alive: usize,
+}
+
+impl Executor {
+    fn new() -> Self {
+        let (tx, rx) = channel();
+        Executor { tx, rx, alive: 0 }
+    }
+    fn spawn(&mut self, f: impl Future<Output = ()> + Send + 'static) {
+        self.alive += 1;
+        let task = Arc::new(Task { fut: Mutex::new(Some(Box::pin(f))), queue: self.tx.clone() });
+        self.tx.send(task).unwrap();
+    }
+    fn run(&mut self) {
+        while self.alive > 0 {
+            let task = self.rx.recv().unwrap();
+            let mut slot = task.fut.lock().unwrap();
+            if let Some(mut f) = slot.take() {
+                let waker = Waker::from(Arc::clone(&task));
+                let mut cx = Context::from_waker(&waker);
+                if f.as_mut().poll(&mut cx).is_pending() {
+                    *slot = Some(f);
+                } else {
+                    self.alive -= 1;
+                }
+            }
+        }
+    }
+}
+
+struct YieldNow(bool);
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            return Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+fn main() {
+    let mut ex = Executor::new();
+    for name in ["A", "B"] {
+        ex.spawn(async move {
+            for step in 1..=3 {
+                println!("{name}{step}");
+                YieldNow(false).await;
+            }
+        });
+    }
+    ex.run();
+    println!("все задачи готовы");
+}
+```
+```out
+A1
+B1
+A2
+B2
+A3
+B3
+все задачи готовы
+```
+Задачи **по очереди** уступают друг другу на одном потоке. Это и есть кооперативная многозадачность — так работает async.
+
+:: quiz
+Что делает `wake()` у задачи в нашем исполнителе?
+[ ] Сразу опрашивает Future => Нет, он только ставит задачу в очередь.
+[x] Кладёт задачу обратно в очередь канала => Верно. Цикл `run` опросит её, когда дойдёт.
+[ ] Удаляет задачу => Удаляется задача после `Ready`.
+
+:: task
+Добавь в исполнитель счётчик опросов: поле `polls: usize`, которое растёт при каждом вызове `poll`, и напечатай его после `run`. Две задачи по 2 шага с уступками.
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+
+type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+struct Task {
+    fut: Mutex<Option<BoxFuture>>,
+    queue: Sender<Arc<Task>>,
+}
+
+impl Wake for Task {
+    fn wake(self: Arc<Self>) {
+        let q = self.queue.clone();
+        q.send(self).unwrap();
+    }
+}
+
+struct Executor {
+    tx: Sender<Arc<Task>>,
+    rx: Receiver<Arc<Task>>,
+    alive: usize,
+    // добавь поле polls
+}
+
+impl Executor {
+    fn new() -> Self {
+        let (tx, rx) = channel();
+        Executor { tx, rx, alive: 0 }
+    }
+    fn spawn(&mut self, f: impl Future<Output = ()> + Send + 'static) {
+        self.alive += 1;
+        let task = Arc::new(Task { fut: Mutex::new(Some(Box::pin(f))), queue: self.tx.clone() });
+        self.tx.send(task).unwrap();
+    }
+    fn run(&mut self) {
+        while self.alive > 0 {
+            let task = self.rx.recv().unwrap();
+            let mut slot = task.fut.lock().unwrap();
+            if let Some(mut f) = slot.take() {
+                let waker = Waker::from(Arc::clone(&task));
+                let mut cx = Context::from_waker(&waker);
+                if f.as_mut().poll(&mut cx).is_pending() {
+                    *slot = Some(f);
+                } else {
+                    self.alive -= 1;
+                }
+            }
+        }
+    }
+}
+
+struct YieldNow(bool);
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            return Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+fn main() {
+    let mut ex = Executor::new();
+    for _ in 0..2 {
+        ex.spawn(async {
+            YieldNow(false).await;
+            YieldNow(false).await;
+        });
+    }
+    ex.run();
+    println!("опросов: {}", ex.polls);
+}
+```
+```solution
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+
+type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+struct Task {
+    fut: Mutex<Option<BoxFuture>>,
+    queue: Sender<Arc<Task>>,
+}
+
+impl Wake for Task {
+    fn wake(self: Arc<Self>) {
+        let q = self.queue.clone();
+        q.send(self).unwrap();
+    }
+}
+
+struct Executor {
+    tx: Sender<Arc<Task>>,
+    rx: Receiver<Arc<Task>>,
+    alive: usize,
+    polls: usize,
+}
+
+impl Executor {
+    fn new() -> Self {
+        let (tx, rx) = channel();
+        Executor { tx, rx, alive: 0, polls: 0 }
+    }
+    fn spawn(&mut self, f: impl Future<Output = ()> + Send + 'static) {
+        self.alive += 1;
+        let task = Arc::new(Task { fut: Mutex::new(Some(Box::pin(f))), queue: self.tx.clone() });
+        self.tx.send(task).unwrap();
+    }
+    fn run(&mut self) {
+        while self.alive > 0 {
+            let task = self.rx.recv().unwrap();
+            let mut slot = task.fut.lock().unwrap();
+            if let Some(mut f) = slot.take() {
+                let waker = Waker::from(Arc::clone(&task));
+                let mut cx = Context::from_waker(&waker);
+                self.polls += 1;
+                if f.as_mut().poll(&mut cx).is_pending() {
+                    *slot = Some(f);
+                } else {
+                    self.alive -= 1;
+                }
+            }
+        }
+    }
+}
+
+struct YieldNow(bool);
+impl Future for YieldNow {
+    type Output = ();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            return Poll::Ready(());
+        }
+        self.0 = true;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+fn main() {
+    let mut ex = Executor::new();
+    for _ in 0..2 {
+        ex.spawn(async {
+            YieldNow(false).await;
+            YieldNow(false).await;
+        });
+    }
+    ex.run();
+    println!("опросов: {}", ex.polls);
+}
+```
+```expect
+опросов: 6
+```
+hint: Добавь `polls: usize` в структуру и `polls: 0` в `new`.
+hint: Увеличивай `self.polls += 1;` прямо перед `f.as_mut().poll(...)`. Каждая задача: 2 уступки + финальный опрос = 3.
+
+:: recap
+- Задача = Future в коробке + ссылка на очередь.
+- Waker задачи кладёт её обратно в очередь.
+- Цикл исполнителя: взять, опросить, вернуть или завершить.
+
+## LESSON x04-4 | Pin, Unpin и асинхронные замыкания | 9
+:: goals
+- Понять, зачем Future закрепляют на месте
+- Пользоваться асинхронными замыканиями `async |x| ...`
+
+:: text Почему async-блоки нельзя двигать
+`async`-блок превращается в **машину состояний**: структуру, где хранятся все его локальные переменные между `.await`. Если одна переменная — ссылка на другую в той же структуре, получается структура, которая **ссылается на саму себя**.
+
+Такую структуру нельзя переносить в памяти: ссылка внутри продолжит указывать на старое место. `Pin` — обещание: «после закрепления больше не сдвину».
+
+> **Аналогия:** палатка с колышками. Пока колышки вбиты (Pin), палатку не передвигают, иначе верёвки повиснут в воздухе.
+
+:: text Unpin
+Большинство типов **можно** безопасно двигать, даже закреплёнными: числа, `String`, `Vec`, наш `Countdown`. Они реализуют авто-трейт `Unpin`, и `Pin` для них ничего не запрещает.
+
+Способы закрепить:
+- `std::pin::pin!(fut)` — на стеке, в текущей функции;
+- `Box::pin(fut)` — в куче, можно хранить и передавать;
+- `Pin::new(&mut x)` — только для `Unpin`-типов.
+
+:: code
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll, Waker};
+
+fn is_unpin<T: Unpin>(_: &T) -> bool { true }
+
+fn main() {
+    let n = 5;
+    println!("i32 Unpin: {}", is_unpin(&n));
+
+    let fut = async { 40 + 2 };
+    // is_unpin(&fut); // ошибка: async-блок не Unpin
+    let mut boxed: Pin<Box<dyn Future<Output = i32>>> = Box::pin(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    if let Poll::Ready(v) = boxed.as_mut().poll(&mut cx) {
+        println!("готово: {v}");
+    }
+}
+```
+```out
+i32 Unpin: true
+готово: 42
+```
+
+:: quiz
+Почему для опроса async-блока нужен `Pin`?
+[x] Он может ссылаться на свои же поля, и двигать его после первого опроса нельзя => Верно.
+[ ] Он слишком большой для стека => Размер тут ни при чём.
+[ ] Так быстрее => Pin не про скорость, а про безопасность.
+
+:: text Асинхронные замыкания
+Замыкание тоже может быть `async`. Пишется `async |x| ...`, а принимают его через трейты `AsyncFn`, `AsyncFnMut`, `AsyncFnOnce`:
+
+```rust
+async fn twice<F: AsyncFn(i32) -> i32>(f: F) -> i32 {
+    f(1).await + f(2).await
+}
+```
+Раньше писали `F: Fn(i32) -> Fut, Fut: Future<Output = i32>` — длинно, и не работало, если замыкание одалживает что-то у себя. Асинхронные замыкания это исправили.
+
+:: code
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn twice<F: AsyncFn(i32) -> i32>(f: F) -> i32 {
+    f(1).await + f(2).await
+}
+
+fn main() {
+    let bonus = 100;
+    let r = block_on(twice(async |x| x * 10 + bonus));
+    println!("{r}");
+}
+```
+```out
+230
+```
+(1·10 + 100) + (2·10 + 100) = 230.
+
+:: task
+Напиши `retry`: вызывает асинхронное замыкание до `n` раз, пока оно не вернёт `Ok`. Возвращает первый `Ok` или последнюю ошибку.
+```rust
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+use std::cell::Cell;
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn retry<F: AsyncFn() -> Result<u32, String>>(n: u32, f: F) -> Result<u32, String> {
+    // твой код
+}
+
+fn main() {
+    let tries = Cell::new(0);
+    let r = block_on(retry(5, async || {
+        tries.set(tries.get() + 1);
+        if tries.get() < 3 { Err(format!("попытка {}", tries.get())) } else { Ok(tries.get() * 10) }
+    }));
+    println!("{r:?} за {} попытки", tries.get());
+    let bad = block_on(retry(2, async || Err::<u32, _>(String::from("сеть лежит"))));
+    println!("{bad:?}");
+}
+```
+```solution
+use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+use std::cell::Cell;
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+async fn retry<F: AsyncFn() -> Result<u32, String>>(n: u32, f: F) -> Result<u32, String> {
+    let mut last = Err(String::from("ни одной попытки"));
+    for _ in 0..n {
+        last = f().await;
+        if last.is_ok() {
+            break;
+        }
+    }
+    last
+}
+
+fn main() {
+    let tries = Cell::new(0);
+    let r = block_on(retry(5, async || {
+        tries.set(tries.get() + 1);
+        if tries.get() < 3 { Err(format!("попытка {}", tries.get())) } else { Ok(tries.get() * 10) }
+    }));
+    println!("{r:?} за {} попытки", tries.get());
+    let bad = block_on(retry(2, async || Err::<u32, _>(String::from("сеть лежит"))));
+    println!("{bad:?}");
+}
+```
+```expect
+Ok(30) за 3 попытки
+Err("сеть лежит")
+```
+hint: Храни последний результат в `last`. В цикле `last = f().await;` и выходи при `Ok`.
+
+:: recap
+- async-блок — машина состояний, которая может ссылаться на себя. Поэтому `Pin`.
+- `Unpin` — тип можно двигать, `Pin` ему не мешает.
+- `pin!` — на стеке, `Box::pin` — в куче.
+- `async |x| ...` + `AsyncFn` — асинхронные замыкания.
+
+## LESSON x04-p | Практика: свой async | 25 | practice
+:: goals
+- Написать несколько своих Future и комбинаторов
+
+:: task
+`Ready<T>`: Future, который сразу возвращает готовое значение. Храни его в `Option`, при опросе забирай через `take()`.
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct Ready<T>(Option<T>);
+
+impl<T: Unpin> Future for Ready<T> {
+    type Output = T;
+    fn poll(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<T> {
+        // твой код
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    let v = block_on(async {
+        let a = Ready(Some(20)).await;
+        let b = Ready(Some(22)).await;
+        a + b
+    });
+    println!("{v}");
+}
+```
+```solution
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct Ready<T>(Option<T>);
+
+impl<T: Unpin> Future for Ready<T> {
+    type Output = T;
+    fn poll(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<T> {
+        Poll::Ready(self.0.take().expect("Ready опрошен после завершения"))
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    let v = block_on(async {
+        let a = Ready(Some(20)).await;
+        let b = Ready(Some(22)).await;
+        a + b
+    });
+    println!("{v}");
+}
+```
+```expect
+42
+```
+hint: `Poll::Ready(self.0.take().unwrap())`.
+
+:: task
+Свой `join`: `Join2` опрашивает два Future, пока оба не завершатся, и возвращает пару результатов. Future внутри — в `Pin<Box<...>>`, результаты — в `Option`.
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct YieldN(u32);
+impl Future for YieldN {
+    type Output = u32;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<u32> {
+        if self.0 == 0 {
+            return Poll::Ready(7);
+        }
+        self.0 -= 1;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+struct Join2<A: Future, B: Future> {
+    a: Pin<Box<A>>,
+    b: Pin<Box<B>>,
+    ra: Option<A::Output>,
+    rb: Option<B::Output>,
+}
+
+impl<A: Future, B: Future> Future for Join2<A, B>
+where
+    A::Output: Unpin,
+    B::Output: Unpin,
+{
+    type Output = (A::Output, B::Output);
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // твой код
+    }
+}
+
+fn join2<A: Future, B: Future>(a: A, b: B) -> Join2<A, B> {
+    Join2 { a: Box::pin(a), b: Box::pin(b), ra: None, rb: None }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    let (x, y) = block_on(join2(YieldN(1), async { 35 }));
+    println!("{x} + {y} = {}", x + y);
+}
+```
+```solution
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct YieldN(u32);
+impl Future for YieldN {
+    type Output = u32;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<u32> {
+        if self.0 == 0 {
+            return Poll::Ready(7);
+        }
+        self.0 -= 1;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+struct Join2<A: Future, B: Future> {
+    a: Pin<Box<A>>,
+    b: Pin<Box<B>>,
+    ra: Option<A::Output>,
+    rb: Option<B::Output>,
+}
+
+impl<A: Future, B: Future> Future for Join2<A, B>
+where
+    A::Output: Unpin,
+    B::Output: Unpin,
+{
+    type Output = (A::Output, B::Output);
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
+        if this.ra.is_none() {
+            if let Poll::Ready(v) = this.a.as_mut().poll(cx) {
+                this.ra = Some(v);
+            }
+        }
+        if this.rb.is_none() {
+            if let Poll::Ready(v) = this.b.as_mut().poll(cx) {
+                this.rb = Some(v);
+            }
+        }
+        if this.ra.is_some() && this.rb.is_some() {
+            Poll::Ready((this.ra.take().unwrap(), this.rb.take().unwrap()))
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+fn join2<A: Future, B: Future>(a: A, b: B) -> Join2<A, B> {
+    Join2 { a: Box::pin(a), b: Box::pin(b), ra: None, rb: None }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    let (x, y) = block_on(join2(YieldN(1), async { 35 }));
+    println!("{x} + {y} = {}", x + y);
+}
+```
+```expect
+7 + 35 = 42
+```
+hint: `Join2` — `Unpin` (поля в `Box` и `Option` с `Unpin`-результатами), поэтому можно взять `let this = &mut *self;`.
+hint: Опрашивай `a`, только если `ra` ещё `None`; то же для `b`. Оба готовы — верни пару через `take()`.
+
+:: task
+Future с ограничением: `Limited` опрашивает внутренний Future не больше `max` раз. Не успел — `Err("лимит")`.
+```rust
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct YieldN(u32);
+impl Future for YieldN {
+    type Output = &'static str;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<&'static str> {
+        if self.0 == 0 {
+            return Poll::Ready("готово");
+        }
+        self.0 -= 1;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+struct Limited<F> {
+    inner: Pin<Box<F>>,
+    left: u32,
+}
+
+impl<F: Future> Future for Limited<F> {
+    type Output = Result<F::Output, &'static str>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // твой код
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    println!("{:?}", block_on(Limited { inner: Box::pin(YieldN(2)), left: 5 }));
+    println!("{:?}", block_on(Limited { inner: Box::pin(YieldN(10)), left: 5 }));
+}
+```
+```solution
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::task::{Context, Poll, Waker};
+
+struct YieldN(u32);
+impl Future for YieldN {
+    type Output = &'static str;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<&'static str> {
+        if self.0 == 0 {
+            return Poll::Ready("готово");
+        }
+        self.0 -= 1;
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
+struct Limited<F> {
+    inner: Pin<Box<F>>,
+    left: u32,
+}
+
+impl<F: Future> Future for Limited<F> {
+    type Output = Result<F::Output, &'static str>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.left == 0 {
+            return Poll::Ready(Err("лимит"));
+        }
+        self.left -= 1;
+        match self.inner.as_mut().poll(cx) {
+            Poll::Ready(v) => Poll::Ready(Ok(v)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+fn block_on<F: Future>(fut: F) -> F::Output {
+    let mut fut = pin!(fut);
+    let mut cx = Context::from_waker(Waker::noop());
+    loop {
+        if let Poll::Ready(v) = fut.as_mut().poll(&mut cx) {
+            return v;
+        }
+    }
+}
+
+fn main() {
+    println!("{:?}", block_on(Limited { inner: Box::pin(YieldN(2)), left: 5 }));
+    println!("{:?}", block_on(Limited { inner: Box::pin(YieldN(10)), left: 5 }));
+}
+```
+```expect
+Ok("готово")
+Err("лимит")
+```
+hint: Если `left == 0` — сразу `Ready(Err("лимит"))`. Иначе уменьши `left` и опроси `inner`.
+hint: Когда `inner` вернул `Pending`, он уже разбудил задачу сам — просто верни `Pending`.
+
+:: homework Async на tokio по-взрослому
+Перенеси знания на настоящий исполнитель.
+
+1. Создай проект и добавь tokio:
+```sh
+cargo new async-lab
+cd async-lab
+cargo add tokio --features full
+```
+2. Напиши программу, которая запускает через `tokio::spawn` 100 задач. Каждая спит случайное время до 50 мс (`tokio::time::sleep`) и отправляет свой номер в канал `tokio::sync::mpsc`.
+3. Главная задача собирает все номера и печатает, сколько получено и за сколько миллисекунд.
+4. Добавь `tokio::time::timeout` на сбор: если за 1 секунду не собрали все — печатай, сколько успели.
+5. Запусти: `cargo run --release`.
+[ ] Программа собирается и печатает `получено 100`
+[ ] Общее время близко к 50 мс, а не к 100 × 25 мс
+[ ] Если поставить тайм-аут 10 мс, программа честно печатает, сколько успела
+[ ] Ни одного `unwrap` на `send` без объяснения в комментарии, почему он не упадёт
+
+:: recap
+- Свои Future: `Ready`, `Join2`, `Limited` — всё через `poll`.
+- Комбинатор опрашивает внутренние Future и сам решает, когда готов.
+- На практике пользуются tokio, но понимание `poll` и Waker помогает чинить зависания.
