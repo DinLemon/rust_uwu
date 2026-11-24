@@ -1,0 +1,676 @@
+# MODULE x10 | The command line and databases | clap, how a CLI program is built, SQLite through rusqlite, sqlx and migrations
+
+## LESSON x10-1 | clap: command-line arguments | 8
+:: goals
+- Describe a program's arguments as a struct with `derive(Parser)`
+- Make subcommands, like `git add` and `git commit`
+
+:: text Arguments are types
+Parsing `std::env::args()` by hand is boring and error-prone. The **clap** crate does it from a **struct** description:
+
+```rust
+#[derive(Parser)]
+struct Cli {
+    /// The file name
+    path: String,
+    /// Verbose output
+    #[arg(short, long)]
+    verbose: bool,
+}
+```
+A field without an attribute is a required argument. `#[arg(short, long)]` is a `-v` / `--verbose` flag. `///` comments become the `--help` text.
+
+> **Analogy:** a form. You describe the fields, and clap checks that everything is filled in and that numbers are numbers.
+
+:: code
+`parse_from` takes a list of strings instead of the real command line — handy for checking:
+```rust
+use clap::{Parser, Subcommand};
+
+#[derive(Parser, Debug)]
+#[command(name = "todo", about = "A to-do list")]
+struct Cli {
+    #[arg(short, long)]
+    verbose: bool,
+    #[command(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Subcommand, Debug)]
+enum Cmd {
+    /// Add an item
+    Add {
+        text: String,
+        #[arg(short, long, default_value_t = 1)]
+        priority: u8,
+    },
+    /// Show the list
+    List,
+    /// Mark as done
+    Done { id: u32 },
+}
+
+fn main() {
+    let cli = Cli::parse_from(["todo", "add", "buy milk", "-p", "3"]);
+    println!("{cli:?}");
+    let cli = Cli::parse_from(["todo", "-v", "done", "7"]);
+    println!("{cli:?}");
+    let err = Cli::try_parse_from(["todo", "done"]).unwrap_err();
+    println!("{:?}", err.kind());
+}
+```
+crates: yes
+```out
+Cli { verbose: false, cmd: Add { text: "buy milk", priority: 3 } }
+Cli { verbose: true, cmd: Done { id: 7 } }
+MissingRequiredArgument
+```
+In a real program you just write `Cli::parse()` — clap reads the arguments itself and prints a hint on error.
+
+:: quiz
+How do you make an optional argument with a default value in clap?
+[ ] A `String` field with no attributes => That's a required argument.
+[x] `#[arg(default_value_t = ...)]` or a field of type `Option<T>` => Right.
+[ ] Write `?` after the field name => There's no such syntax.
+
+:: task
+Describe the CLI of a temperature converter: a required number `value: f64`, a `--to-f` flag (by default we convert Fahrenheit to Celsius; with the flag, the other way) and `--digits` with a default of 1. Print the result with the right number of digits.
+```rust
+use clap::Parser;
+
+// your code: struct Args
+
+fn convert(a: &Args) -> String {
+    let v = if a.to_f { a.value * 9.0 / 5.0 + 32.0 } else { (a.value - 32.0) * 5.0 / 9.0 };
+    format!("{:.*}", a.digits, v)
+}
+
+fn main() {
+    println!("{}", convert(&Args::parse_from(["temp", "100"])));
+    println!("{}", convert(&Args::parse_from(["temp", "--to-f", "36.6", "--digits", "2"])));
+}
+```
+```solution
+use clap::Parser;
+
+#[derive(Parser)]
+struct Args {
+    value: f64,
+    #[arg(long)]
+    to_f: bool,
+    #[arg(long, default_value_t = 1)]
+    digits: usize,
+}
+
+fn convert(a: &Args) -> String {
+    let v = if a.to_f { a.value * 9.0 / 5.0 + 32.0 } else { (a.value - 32.0) * 5.0 / 9.0 };
+    format!("{:.*}", a.digits, v)
+}
+
+fn main() {
+    println!("{}", convert(&Args::parse_from(["temp", "100"])));
+    println!("{}", convert(&Args::parse_from(["temp", "--to-f", "36.6", "--digits", "2"])));
+}
+```
+crates: yes
+```expect
+37.8
+97.88
+```
+hint: `#[derive(Parser)] struct Args { value: f64, #[arg(long)] to_f: bool, #[arg(long, default_value_t = 1)] digits: usize }`.
+hint: clap turns the `to_f` field into the `--to-f` flag by itself: the underscore becomes a hyphen.
+
+:: recap
+- `#[derive(Parser)]` — arguments as struct fields.
+- `#[command(subcommand)]` + an `enum` with `#[derive(Subcommand)]` — subcommands.
+- `parse_from` / `try_parse_from` — handy for checks.
+
+## LESSON x10-2 | How to structure a CLI program | 9
+:: goals
+- Split a program into logic and input/output
+- Use stdout, stderr and exit codes correctly
+
+:: text A thin main
+A good CLI program is built like this:
+- `main` is **thin**: parse the arguments, call `run`, print the error and return an exit code;
+- `run(args) -> Result<..>` holds all the logic; it's easy to test;
+- the result goes to **stdout**, error messages go to **stderr** (`eprintln!`). Then `program > file` saves only the result.
+
+The **exit code**: 0 — success, non-zero — error. Scripts check it: `if program; then ...`.
+
+> **Analogy:** a restaurant. The kitchen (logic) doesn't come out into the dining room. The waiter (main) takes the order and brings the dish — or apologizes if something went wrong.
+
+:: code
+```rust
+use std::process::ExitCode;
+
+#[derive(Debug)]
+enum Cmd {
+    Sum(Vec<i64>),
+    Max(Vec<i64>),
+}
+
+fn parse(args: &[&str]) -> Result<Cmd, String> {
+    let (name, rest) = args.split_first().ok_or("no command")?;
+    let nums: Result<Vec<i64>, _> = rest.iter().map(|s| s.parse::<i64>()).collect();
+    let nums = nums.map_err(|e| format!("bad number: {e}"))?;
+    match *name {
+        "sum" => Ok(Cmd::Sum(nums)),
+        "max" => Ok(Cmd::Max(nums)),
+        other => Err(format!("unknown command \"{other}\"")),
+    }
+}
+
+fn run(cmd: Cmd) -> Result<String, String> {
+    match cmd {
+        Cmd::Sum(v) => Ok(v.iter().sum::<i64>().to_string()),
+        Cmd::Max(v) => v.into_iter().max().map(|m| m.to_string()).ok_or_else(|| String::from("empty list")),
+    }
+}
+
+fn main_with(args: &[&str]) -> ExitCode {
+    match parse(args).and_then(run) {
+        Ok(out) => {
+            println!("{out}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            println!("error: {e}"); // in a real program — eprintln!
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn main() {
+    main_with(&["sum", "1", "2", "3"]);
+    main_with(&["max"]);
+    main_with(&["avg", "1"]);
+    main_with(&["sum", "x"]);
+}
+```
+```out
+6
+error: empty list
+error: unknown command "avg"
+error: bad number: invalid digit found in string
+```
+`main` can return an `ExitCode` — then the program exits with that code.
+
+:: quiz
+Where should a CLI program print an error message?
+[ ] To stdout with `println!` => Then the error ends up in the file with `program > file`.
+[x] To stderr with `eprintln!` => Right. stdout is only for the result.
+[ ] Nowhere, the exit code is enough => A person needs a clear message.
+
+:: task
+Add an `avg` command to the calculator: the average, rounded down. An empty list is the error `"empty list"`. Tests for `run` are included.
+```rust
+#[derive(Debug)]
+pub enum Cmd {
+    Sum(Vec<i64>),
+    Avg(Vec<i64>),
+}
+
+pub fn run(cmd: Cmd) -> Result<i64, String> {
+    match cmd {
+        Cmd::Sum(v) => Ok(v.iter().sum()),
+        // your code
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn avg_works() {
+        assert_eq!(run(Cmd::Avg(vec![1, 2, 4])), Ok(2));
+    }
+
+    #[test]
+    fn avg_empty() {
+        assert_eq!(run(Cmd::Avg(vec![])), Err(String::from("empty list")));
+    }
+}
+```
+```solution
+#[derive(Debug)]
+pub enum Cmd {
+    Sum(Vec<i64>),
+    Avg(Vec<i64>),
+}
+
+pub fn run(cmd: Cmd) -> Result<i64, String> {
+    match cmd {
+        Cmd::Sum(v) => Ok(v.iter().sum()),
+        Cmd::Avg(v) => {
+            if v.is_empty() {
+                return Err(String::from("empty list"));
+            }
+            Ok(v.iter().sum::<i64>() / v.len() as i64)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn avg_works() {
+        assert_eq!(run(Cmd::Avg(vec![1, 2, 4])), Ok(2));
+    }
+
+    #[test]
+    fn avg_empty() {
+        assert_eq!(run(Cmd::Avg(vec![])), Err(String::from("empty list")));
+    }
+}
+```
+tests: yes
+hint: The branch `Cmd::Avg(v) => { ... }`: check for emptiness, then `sum / len`.
+
+:: recap
+- A thin `main`, all logic in `run` — easy to test.
+- The result to stdout, errors to stderr.
+- `ExitCode`: 0 — success, non-zero — error.
+
+## LESSON x10-3 | SQLite through rusqlite | 9
+:: goals
+- Create a table, insert and read data
+- Pass values only as parameters, never by gluing strings
+
+:: text SQLite — a database in one file
+**SQLite** is a database that lives in a single file (or right in memory). No server needed. The **rusqlite** crate gives Rust access to it.
+
+The main rule of working with SQL: **never glue** a query together with values via `format!`. Only **parameters** `?1, ?2`. Otherwise a user types `'; DROP TABLE books; --` — and that's **SQL injection**.
+
+> **Analogy:** a form with empty boxes. Values go into the boxes; they don't get appended to the form itself.
+
+:: code
+```rust
+use rusqlite::{params, Connection, Result};
+
+#[derive(Debug)]
+struct Book {
+    id: i64,
+    title: String,
+    year: i32,
+}
+
+fn main() -> Result<()> {
+    let conn = Connection::open_in_memory()?;
+    conn.execute_batch(
+        "CREATE TABLE books (
+            id    INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            year  INTEGER NOT NULL
+        );",
+    )?;
+    for (t, y) in [("Dune", 1965), ("The Hobbit", 1937), ("The Three-Body Problem", 2006)] {
+        conn.execute("INSERT INTO books (title, year) VALUES (?1, ?2)", params![t, y])?;
+    }
+
+    let mut stmt = conn.prepare("SELECT id, title, year FROM books WHERE year < ?1 ORDER BY year")?;
+    let old = stmt.query_map([2000], |r| Ok(Book { id: r.get(0)?, title: r.get(1)?, year: r.get(2)? }))?;
+    for b in old {
+        println!("{:?}", b?);
+    }
+
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM books", [], |r| r.get(0))?;
+    println!("books in total: {count}");
+    Ok(())
+}
+```
+crates: yes
+```out
+Book { id: 2, title: "The Hobbit", year: 1937 }
+Book { id: 1, title: "Dune", year: 1965 }
+books in total: 3
+```
+- `execute` — change data; returns the number of affected rows;
+- `query_map` — turn each result row into your own struct;
+- `query_row` — when you expect exactly one row.
+
+:: text Transactions
+Several changes that must succeed **all together or not at all** are wrapped in a transaction:
+
+```rust
+let tx = conn.transaction()?;
+tx.execute("UPDATE accounts SET balance = balance - 100 WHERE id = 1", [])?;
+tx.execute("UPDATE accounts SET balance = balance + 100 WHERE id = 2", [])?;
+tx.commit()?; // without commit everything rolls back when tx is dropped
+```
+If an error happens between the two `execute`s, `tx` is dropped without `commit` — and no money disappears.
+
+:: quiz
+Why can't you write `format!("SELECT * FROM users WHERE name = '{name}'")`?
+[x] A user can type a piece of SQL into `name` and run anything => Right. That's SQL injection.
+[ ] It's slower => The main problem is security.
+[ ] Rust can't `format!` with quotes => It can; the problem isn't Rust.
+
+:: task
+A task table: create `tasks(id, title, done)`, add three tasks, mark the second one as done with `UPDATE ... WHERE id = ?1` and print the unfinished ones.
+```rust
+use rusqlite::{params, Connection, Result};
+
+fn main() -> Result<()> {
+    let conn = Connection::open_in_memory()?;
+    // your code
+    Ok(())
+}
+```
+```solution
+use rusqlite::{params, Connection, Result};
+
+fn main() -> Result<()> {
+    let conn = Connection::open_in_memory()?;
+    conn.execute_batch(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);",
+    )?;
+    for t in ["learn Rust", "pet the cat", "go to bed"] {
+        conn.execute("INSERT INTO tasks (title) VALUES (?1)", params![t])?;
+    }
+    conn.execute("UPDATE tasks SET done = 1 WHERE id = ?1", params![2])?;
+    let mut stmt = conn.prepare("SELECT title FROM tasks WHERE done = 0 ORDER BY id")?;
+    let titles = stmt.query_map([], |r| r.get::<_, String>(0))?;
+    for t in titles {
+        println!("{}", t?);
+    }
+    Ok(())
+}
+```
+crates: yes
+```expect
+learn Rust
+go to bed
+```
+hint: `done INTEGER NOT NULL DEFAULT 0` — SQLite stores booleans as numbers.
+hint: Reading one column: `query_map([], |r| r.get::<_, String>(0))`.
+
+:: recap
+- rusqlite: `execute`, `query_map`, `query_row`.
+- Values only as `?1` parameters, never by gluing strings.
+- A transaction: all or nothing, `commit()` at the end.
+
+## LESSON x10-4 | sqlx and migrations | 7
+:: goals
+- See how sqlx differs from rusqlite
+- Understand what database migrations are
+
+:: text sqlx: async and checked
+**sqlx** is a popular crate for PostgreSQL, MySQL and SQLite:
+- **asynchronous** — works with tokio and doesn't block a thread while waiting for the database;
+- the `sqlx::query!` macro **checks SQL at compile time**: a typo in a column name is a build error, not a crash in production;
+- `query_as!` collects rows straight into your struct.
+
+```rust
+let books = sqlx::query_as!(Book, "SELECT id, title, year FROM books WHERE year < $1", 2000)
+    .fetch_all(&pool)
+    .await?;
+```
+For the compile-time check, sqlx needs a live database or a saved description of the schema (`cargo sqlx prepare`).
+
+:: text Migrations
+A database schema changes along with the program: a new column, a new table. A **migration** is a SQL file that moves the database from version N to N+1. Migrations live in a `migrations/` folder and are applied in order.
+
+```sh
+sqlx migrate add create_books   # create a migration file
+sqlx migrate run                # apply all the new ones
+```
+That way every developer and the server have a database of the same shape.
+
+> **Analogy:** an apartment renovation log. "1 — built the walls. 2 — wired the lights. 3 — added a shelf". A new apartment goes through all the steps in order.
+
+:: quiz
+What does `sqlx::query!` give you compared to a plain query string?
+[x] Checking the SQL and column types at compile time => Right.
+[ ] Queries 10 times faster => Same speed; the win is reliability.
+[ ] Protection from SQL injection that's otherwise missing => Parameters protect you either way; `query!` adds checking.
+
+:: homework Your own CLI tool with a database
+Build a real program out of this module's lessons.
+
+1. `cargo new notes && cd notes`, add the dependencies:
+```sh
+cargo add clap --features derive
+cargo add rusqlite --features bundled
+cargo add anyhow
+```
+2. Commands: `notes add "text" [--tag t]`, `notes list [--tag t]`, `notes done <id>`, `notes search <word>`.
+3. The database is a `notes.db` file in the program's folder (`Connection::open`).
+4. `main` is thin: `Cli::parse()` → `run(cli)` → on error, `eprintln!` and `ExitCode::FAILURE`.
+5. Tests for `run` use an in-memory database (`Connection::open_in_memory`).
+6. Optional: rewrite storage with `sqlx` + tokio and migrations.
+[ ] All four commands work, and `--help` is clear
+[ ] Errors go to stderr, and the exit code isn't 0
+[ ] Search uses `?1` parameters, not `format!`
+[ ] There are tests on an in-memory database, and `cargo test` passes
+
+:: recap
+- sqlx: async; `query!` checks SQL at compile time.
+- Migrations — the history of schema changes, applied in order.
+- For small tools rusqlite is simpler; for servers, sqlx.
+
+## LESSON x10-p | Practice: CLI and data | 25 | practice
+:: goals
+- Parse arguments, handle errors and work with SQLite
+
+:: task
+Parsing flags by hand, without clap: `parse_flags` turns `["-n", "5", "--loud", "file.txt"]` into `Opts { n: 5, loud: true, file: "file.txt" }`. `-n` without a number is an error.
+```rust
+#[derive(Debug, PartialEq)]
+struct Opts {
+    n: u32,
+    loud: bool,
+    file: String,
+}
+
+fn parse_flags(args: &[&str]) -> Result<Opts, String> {
+    // your code
+}
+
+fn main() {
+    println!("{:?}", parse_flags(&["-n", "5", "--loud", "file.txt"]));
+    println!("{:?}", parse_flags(&["data.csv"]));
+    println!("{:?}", parse_flags(&["-n"]));
+}
+```
+```solution
+#[derive(Debug, PartialEq)]
+struct Opts {
+    n: u32,
+    loud: bool,
+    file: String,
+}
+
+fn parse_flags(args: &[&str]) -> Result<Opts, String> {
+    let mut opts = Opts { n: 1, loud: false, file: String::new() };
+    let mut it = args.iter();
+    while let Some(&a) = it.next() {
+        match a {
+            "-n" => {
+                let v = it.next().ok_or("-n needs a number")?;
+                opts.n = v.parse().map_err(|_| format!("bad number: {v}"))?;
+            }
+            "--loud" => opts.loud = true,
+            other => opts.file = other.to_string(),
+        }
+    }
+    Ok(opts)
+}
+
+fn main() {
+    println!("{:?}", parse_flags(&["-n", "5", "--loud", "file.txt"]));
+    println!("{:?}", parse_flags(&["data.csv"]));
+    println!("{:?}", parse_flags(&["-n"]));
+}
+```
+```expect
+Ok(Opts { n: 5, loud: true, file: "file.txt" })
+Ok(Opts { n: 1, loud: false, file: "data.csv" })
+Err("-n needs a number")
+```
+hint: Walk the arguments with an iterator. When you see `-n`, take the **next** one with `it.next()`.
+hint: `ok_or("...")?` turns a missing value into an error.
+
+:: task
+A transaction in rusqlite: moving money between accounts. If the sender doesn't have enough, return an error and change **nothing** (the transaction rolls back by itself).
+```rust
+use rusqlite::{params, Connection};
+
+fn transfer(conn: &mut Connection, from: i64, to: i64, amount: i64) -> Result<(), String> {
+    // your code
+}
+
+fn balances(conn: &Connection) -> Vec<i64> {
+    let mut st = conn.prepare("SELECT balance FROM acc ORDER BY id").unwrap();
+    st.query_map([], |r| r.get(0)).unwrap().map(|x| x.unwrap()).collect()
+}
+
+fn main() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch("CREATE TABLE acc (id INTEGER PRIMARY KEY, balance INTEGER NOT NULL); INSERT INTO acc (balance) VALUES (100), (20);").unwrap();
+    println!("{:?}", transfer(&mut conn, 1, 2, 30));
+    println!("{:?}", balances(&conn));
+    println!("{:?}", transfer(&mut conn, 2, 1, 500));
+    println!("{:?}", balances(&conn));
+}
+```
+```solution
+use rusqlite::{params, Connection};
+
+fn transfer(conn: &mut Connection, from: i64, to: i64, amount: i64) -> Result<(), String> {
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let have: i64 = tx
+        .query_row("SELECT balance FROM acc WHERE id = ?1", params![from], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if have < amount {
+        return Err(format!("not enough: have {have}, need {amount}"));
+    }
+    tx.execute("UPDATE acc SET balance = balance - ?1 WHERE id = ?2", params![amount, from]).map_err(|e| e.to_string())?;
+    tx.execute("UPDATE acc SET balance = balance + ?1 WHERE id = ?2", params![amount, to]).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())
+}
+
+fn balances(conn: &Connection) -> Vec<i64> {
+    let mut st = conn.prepare("SELECT balance FROM acc ORDER BY id").unwrap();
+    st.query_map([], |r| r.get(0)).unwrap().map(|x| x.unwrap()).collect()
+}
+
+fn main() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch("CREATE TABLE acc (id INTEGER PRIMARY KEY, balance INTEGER NOT NULL); INSERT INTO acc (balance) VALUES (100), (20);").unwrap();
+    println!("{:?}", transfer(&mut conn, 1, 2, 30));
+    println!("{:?}", balances(&conn));
+    println!("{:?}", transfer(&mut conn, 2, 1, 500));
+    println!("{:?}", balances(&conn));
+}
+```
+crates: yes
+```expect
+Ok(())
+[70, 50]
+Err("not enough: have 50, need 500")
+[70, 50]
+```
+hint: `let tx = conn.transaction()...?;` — every query goes through `tx`.
+hint: An early `return Err(...)` drops `tx` without `commit` — the rollback happens by itself.
+
+:: task
+clap with subcommands for notes: `add <text> [--tag <t>]` and `list [--tag <t>]`. Write `apply`, which applies a command to a vector of `(text, tag)` notes and returns the lines to print.
+```rust
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    Add {
+        text: String,
+        #[arg(long)]
+        tag: Option<String>,
+    },
+    List {
+        #[arg(long)]
+        tag: Option<String>,
+    },
+}
+
+fn apply(notes: &mut Vec<(String, Option<String>)>, cmd: Cmd) -> Vec<String> {
+    // your code
+}
+
+fn main() {
+    let mut notes = Vec::new();
+    for line in [vec!["n", "add", "buy bread", "--tag", "home"], vec!["n", "add", "report"], vec!["n", "add", "water plants", "--tag", "home"], vec!["n", "list", "--tag", "home"]] {
+        for out in apply(&mut notes, Cli::parse_from(line).cmd) {
+            println!("{out}");
+        }
+    }
+}
+```
+```solution
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    Add {
+        text: String,
+        #[arg(long)]
+        tag: Option<String>,
+    },
+    List {
+        #[arg(long)]
+        tag: Option<String>,
+    },
+}
+
+fn apply(notes: &mut Vec<(String, Option<String>)>, cmd: Cmd) -> Vec<String> {
+    match cmd {
+        Cmd::Add { text, tag } => {
+            notes.push((text, tag));
+            vec![format!("added #{}", notes.len())]
+        }
+        Cmd::List { tag } => notes
+            .iter()
+            .filter(|(_, t)| tag.is_none() || *t == tag)
+            .map(|(text, _)| format!("- {text}"))
+            .collect(),
+    }
+}
+
+fn main() {
+    let mut notes = Vec::new();
+    for line in [vec!["n", "add", "buy bread", "--tag", "home"], vec!["n", "add", "report"], vec!["n", "add", "water plants", "--tag", "home"], vec!["n", "list", "--tag", "home"]] {
+        for out in apply(&mut notes, Cli::parse_from(line).cmd) {
+            println!("{out}");
+        }
+    }
+}
+```
+crates: yes
+```expect
+added #1
+added #2
+added #3
+- buy bread
+- water plants
+```
+hint: `match cmd { Cmd::Add { text, tag } => ..., Cmd::List { tag } => ... }`.
+hint: The filter: if the command has no tag, everything fits; otherwise the note's tag must match: `tag.is_none() || *t == tag`.
+
+:: recap
+- Parsing by hand: an iterator over the arguments, `next()` for a flag's value.
+- A transaction + an early `return` — an automatic rollback.
+- clap + a `match` on subcommands — the skeleton of any CLI tool.

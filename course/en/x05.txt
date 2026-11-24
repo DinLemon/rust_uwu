@@ -580,7 +580,7 @@ fn main() {
     println!("it got warmer {rises} times");
 
     let words = ["cat", "cow", "fox", "fig", "ox"];
-    for (letter, group) in &words.iter().chunk_by(|w| w.chars().next().unwrap()) {
+    for (letter, mut group) in &words.iter().chunk_by(|w| w.chars().next().unwrap()) {
         println!("{letter}: {}", group.join(", "));
     }
 

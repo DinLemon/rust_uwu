@@ -145,7 +145,8 @@ fn main() {
 
     let mut name: String<8> = String::new();
     name.push_str("Ferris").unwrap();
-    println!("{} {}", name, name.push_str("Crab").is_err());
+    let too_long = name.push_str("Crab").is_err();
+    println!("{name} {too_long}");
 }
 ```
 crates: yes

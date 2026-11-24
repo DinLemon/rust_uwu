@@ -580,7 +580,7 @@ fn main() {
     println!("потеплело {rises} раза");
 
     let words = ["кот", "кит", "лис", "лев", "ёж"];
-    for (letter, group) in &words.iter().chunk_by(|w| w.chars().next().unwrap()) {
+    for (letter, mut group) in &words.iter().chunk_by(|w| w.chars().next().unwrap()) {
         println!("{letter}: {}", group.join(", "));
     }
 
